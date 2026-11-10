@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="workbench-token" content="__SESSION_TOKEN__">
+  <title>OUTLANDS · Agent Workbench</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">O</span><div>OUTLANDS<small>AGENT WORKBENCH</small></div></div>
+    <button id="new-task" class="new-task">＋ New task</button>
+    <div class="section-label">TASK HISTORY <span id="history-count">0</span></div>
+    <nav id="history" aria-label="Task history"><p class="empty-small">Your runs will appear here.</p></nav>
+    <div class="sidebar-footer"><span class="status-dot"></span> Local workspace<small>One task at a time. Your source stays in place.</small></div>
+  </aside>
+  <main>
+    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.1</span></h1><p>A clear view from task to reviewed patch.</p></div><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></header>
+    <div id="alert" role="alert" hidden></div>
+    <section class="composer panel" aria-labelledby="compose-title">
+      <div class="panel-heading"><h2 id="compose-title">Start a task</h2><span class="muted">Explicit scope. Private working copy.</span></div>
+      <form id="task-form">
+        <div class="form-grid"><label>Project<select id="project" required></select></label><label>Model<select id="model" required></select></label></div>
+        <label class="goal-label">Task<textarea id="goal" maxlength="2000" rows="3" required placeholder="Describe the change and how to check it."></textarea></label>
+        <div class="scope"><span class="section-label">SELECTED FILES</span><div id="scope-files"></div></div>
+        <div class="composer-bottom"><p id="scope-note" class="muted">Tests are protected. Edits stay in a private copy.</p><button id="start" class="primary" type="submit">Run task <span aria-hidden="true">↗</span></button></div>
+      </form>
+      <p id="admission" class="admission" hidden></p>
+    </section>
+    <section id="run-panel" class="run-panel panel" aria-labelledby="run-title" hidden>
+      <div class="run-heading"><div><div class="eyebrow" id="run-project"></div><h2 id="run-title">Task</h2><div id="run-meta" class="muted"></div></div><div class="run-actions"><span id="run-state" class="state-pill">Ready</span><button id="stop" class="danger" disabled>Stop task</button></div></div>
+      <div class="budget"><div><span id="budget-label">0 / 10 model turns</span><span id="run-mode"></span></div><progress id="budget-bar" max="10" value="0"></progress></div>
+      <div class="tabs" role="tablist" aria-label="Run details">
+        <button role="tab" aria-selected="true" aria-controls="activity-pane" id="activity-tab" data-pane="activity">Activity</button>
+        <button role="tab" aria-selected="false" aria-controls="diff-pane" id="diff-tab" data-pane="diff">Diff</button>
+        <button role="tab" aria-selected="false" aria-controls="checks-pane" id="checks-tab" data-pane="checks">Checks</button>
+        <button role="tab" aria-selected="false" aria-controls="review-pane" id="review-tab" data-pane="review">Review &amp; export</button>
+      </div>
+      <div id="activity-pane" class="pane activity-grid" role="tabpanel" aria-labelledby="activity-tab"><div><h3>Plan</h3><ol id="plan" class="plan"><li class="muted">Waiting for the agent’s plan.</li></ol></div><div><h3>Run activity</h3><ol id="events" class="events"></ol><p id="activity-empty" class="muted">Activity appears when the task starts.</p></div></div>
+      <div id="diff-pane" class="pane" role="tabpanel" aria-labelledby="diff-tab" hidden><div class="pane-heading"><h3>Candidate patch</h3><span class="muted">Original source has not been updated</span></div><pre id="diff" class="code-view">The patch will appear after the task finishes.</pre></div>
+      <div id="checks-pane" class="pane" role="tabpanel" aria-labelledby="checks-tab" hidden><h3>Observed checks</h3><p class="muted">Baseline failures stay visible. Final checks run independently of the agent’s summary.</p><div id="checks"></div></div>
+      <div id="review-pane" class="pane" role="tabpanel" aria-labelledby="review-tab" hidden><div class="review-layout"><div><h3>Review before export</h3><p class="muted">Inspect the diff and check results first. Acceptance records your decision for these exact hashes; it does not apply changes.</p><dl class="hashes"><dt>Result SHA-256</dt><dd id="result-hash">Pending</dd><dt>Patch SHA-256</dt><dd id="patch-hash">Pending</dd></dl><label>Review note<textarea id="review-note" rows="3" maxlength="2000" placeholder="What did you verify?"></textarea></label><div class="review-buttons"><button id="accept" class="primary" disabled>Accept patch</button><button id="reject" class="secondary" disabled>Reject patch</button></div></div><div class="export-card"><span class="export-symbol" aria-hidden="true">↓</span><h3>Reviewed patch</h3><p id="review-status" class="muted">Available after a completed task and an accepted review.</p><button id="export" class="secondary" disabled>Download reviewed patch</button><p class="small muted">Export is checked again against the current source, candidate and recorded hashes.</p></div></div></div>
+    </section>
+    <section id="welcome" class="welcome"><div class="welcome-icon" aria-hidden="true">⌘</div><h2>Your next change starts here.</h2><p>Choose a configured project and a model.<br>Follow the work, inspect the evidence, then decide what to keep.</p><div class="workflow"><span>01 · Plan</span><i>→</i><span>02 · Edit &amp; test</span><i>→</i><span>03 · Review</span></div></section>
+    <footer>OUTLANDS <span>·</span> Local agent tools <span>·</span> Runtime data stays outside the source package</footer>
+  </main>
+</body>
+</html>
