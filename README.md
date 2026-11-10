@@ -5,8 +5,9 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-This first milestone completes the path from submission to reviewed patch. It is
-a small Linux prototype with a Python engine and a compatible Java launcher.
+Version 0.2 adds a project setup wizard and isolated Java compilation/test-main
+checks to the local task-to-reviewed-patch workflow. It remains a small Linux
+prototype with a Python engine and a compatible Java launcher.
 See [validation and limits](VALIDATION.md) and [origins](ORIGINS.md).
 
 ## Requirements
@@ -75,25 +76,73 @@ project content. The provider protocol follows Ollama's official
 
 ## Configure another small project
 
-Copy [config.example.json](config.example.json) to a private location outside this
-repository and replace its generic absolute paths. Configuration is loaded at
-server startup. Each project points to a source directory and a separate task
-JSON using the schema in [task.example.json](task.example.json).
+Start from the demo workspace, then click **Set up project**. Enter a local
+absolute source directory, project name/ID, language, explicit relative file list,
+editable subset, protected test entry point, and initial task. One path per line
+is accepted; the wizard does not recursively scan your repository. Review every
+selected path, size, SHA-256 and editable/protected label, then **Save project**.
+Saving writes private configuration and a task definition; it does not start a
+model. Files are rehashed before saving, starting a task, reviewing and exporting.
+A changed source or externally changed config refuses the corresponding action.
 
-The task declares exact relative file paths and SHA-256 hashes, editable files,
-protected test modules, named checks, and budgets. For each selected file, obtain
-the current digest with `sha256sum path/to/file.py`; put the 64 lowercase hex
-characters in the task's `files` map. Review the selected content before allowing
-inference. Files omitted from the task are neither copied nor visible to tools.
-After deliberately changing source, update the task hashes and restart the
-server. A stale hash refuses a new task or patch export.
+The wizard adds a private project entry to the external config and stores its
+task under `DATA/projects/PROJECT_ID.json`. Existing entries are not overwritten.
+Drafts expire after five minutes or server restart. Configuration parents and
+source directories must be trusted and stable while saving; this is not a
+transactional multiuser configuration service. Keep all runtime configuration
+outside the public source tree. There is no model picker that downloads models:
+approved model names still come from the private config's `models` list.
 
-Current bounds: 32 UTF-8 files, 16 KiB per file, 128 KiB total source; 1–4 named
-Python unittest modules; 1–16 model requests; 1–120 seconds per request and a
-600-second model-loop ceiling. The UI displays the request budget. This is not a
-token or currency accounting system, a whole-repository index, or a Maven/Gradle
-test runner. Selected Java text can be edited, but executable check support in
-this milestone is limited to the declared Python unittest modules.
+Two fixed check profiles are supported:
+
+- **Python:** choose a protected root-level `test_example.py` unittest module.
+  Only selected project files are copied, so include any helpers it imports.
+- **Java:** start the server with `--jdk-home /absolute/jdk`, list every required
+  `.java` source, and enter the fully qualified protected test main class, such
+  as `selection.SelectionOrderTest`. Its matching source path must be selected
+  and protected. The runner compiles with `--release 17 -proc:none` into temporary
+  classes, then runs that main program. A nonzero exit fails the check. No Maven,
+  Gradle, JUnit dependency download, annotation processor, shell, or arbitrary
+  command is provided. One reported Java test means one executed protected main
+  program, not its number of assertions. Missing JDK configuration refuses a Java
+  task before launching its engine child.
+
+For example, enable Java when starting your existing private workspace:
+
+```sh
+python3 -B workbench.py serve \
+  --config /absolute/private-workbench-demo/config.json \
+  --data-dir /absolute/private-workbench-demo/data \
+  --jdk-home /absolute/jdk
+```
+
+The new [Python manifest fixture](examples/python_manifest/manifest_guard.py) and
+[Java selection fixture](examples/java_selection/selection/SelectionOrder.java)
+are deliberately broken, invented projects for practicing setup. For Python,
+select `manifest_guard.py` and protected `test_manifest_guard.py` from its fixture
+root. For Java, select `selection/SelectionOrder.java` and protected
+`selection/SelectionOrderTest.java` from its fixture root, with main class
+`selection.SelectionOrderTest`. Copy a fixture to a private directory outside
+this repository before setup; do not use the tool's own source root as a project.
+
+Manual configs still use [config.example.json](config.example.json). Legacy tasks
+in [task.example.json](task.example.json) use `outlands-coding-agent-v1` with named
+Python test strings. The wizard creates `outlands-coding-agent-v2` tasks with the
+same top-level fields and typed `checks`, for example:
+
+```json
+{"unit":{"kind":"python-unittest","pattern":"test_example.py"}}
+```
+
+```json
+{"unit":{"kind":"java-main","sources":["Example.java","ExampleTest.java"],"main_class":"ExampleTest"}}
+```
+
+Current bounds remain 32 UTF-8 files, 16 KiB per file, 128 KiB total source;
+1–4 declared checks; 1–16 requests per task; 1–120 seconds per request and a
+600-second model-loop ceiling. Wizard tasks use 12 requests. The UI displays the
+request budget; it does not account for tokens or currency. No whole-repository
+index or unattended task queue is included.
 
 The model receives only four tools: `set_plan`, `read_file`, `replace_text`, and
 `run_check`. An edit requires the current file hash and one exact, unique text
@@ -122,15 +171,16 @@ and is not configured for a reverse proxy, LAN exposure, or Internet hosting.
 Local users with account access can inspect the private records.
 
 Checks run with a read-only working copy, separate network/PID/user namespaces,
-empty environment, temporary `/tmp`, closed stdin, a 10-second timeout, 1 GiB
-address-space limit, and bounded output. Original home/service roots are not
+empty environment, temporary `/tmp`, closed stdin, a 10-second timeout and bounded output. Python checks have a 1 GiB
+address-space limit; Java checks have 2 GiB address space with a 128 MiB heap
+limit per compiler/runtime JVM and constrained JVM worker counts. Original home/service roots are not
 mounted. This is a prototype boundary, not a hardened hostile-code service: the
 kernel and `/usr` are shared, and there are no cgroup CPU/process-count quotas.
 
 ## Python and Java entry points
 
-The browser delegates to the same foreground Python engine. Its task format
-remains `outlands-coding-agent-v1` and its CLI remains compatible with
+The browser delegates to the same foreground Python engine. Legacy `outlands-coding-agent-v1` tasks remain supported, typed checks use
+`outlands-coding-agent-v2`, and its CLI remains compatible with
 [OutlandsAgentClient.java](OutlandsAgentClient.java):
 
 ```sh
@@ -155,9 +205,10 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 65 unit methods, compiles the Java client with Java 17 compatibility and
+This runs 79 unit methods, compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results, and exercises real
-Bubblewrap checks, namespace boundaries, time/output limits, and patch handling.
+Bubblewrap checks, namespace boundaries, time/output limits, and patch handling. It also checks Java compilation diagnostics, protected-main
+execution, namespace boundaries and Java timeout/output limits.
 It makes no AI inference requests. The demo's `test_calculator.py` is intentionally
 failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.

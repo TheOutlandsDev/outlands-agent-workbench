@@ -4,7 +4,11 @@ OUTLANDS Agent Workbench was developed for TheOutlandsDev with AI-assisted codin
 and review. Its Python engine, Linux check runner, Java launcher, arithmetic
 fixture, and baseline tests adapt selected source from the owner's earlier
 OUTLANDS Coding Agent prototype. The web controller, browser interface, targeted
-edit support, and additional tests were developed for this milestone.
+edit support, and additional tests were developed for these milestones. Version 0.2 adds the
+explicit-file project setup wizard, typed task checks, a fixed Java compile/main
+runner, acceptance probes and two new invented example projects. The examples
+illustrate digest verification and stable selection ordering; they contain no
+real project or user data.
 
 Only this reviewed adaptation is being published. No private repository history,
 operational records, existing host control scripts, model prompts/responses,

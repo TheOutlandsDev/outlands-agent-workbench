@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
 from isolation import check as isolated_check
+from java_check import check as isolated_java_check
 
 FORMAT = "outlands-coding-agent-v1"
 MAX_FILE = 16384
@@ -142,7 +143,7 @@ def validate_task(task):
         },
         "TASK_FIELDS",
     )
-    require(task["format"] == FORMAT, "TASK_FORMAT")
+    require(task["format"] in [FORMAT, "outlands-coding-agent-v2"], "TASK_FORMAT")
     require(
         isinstance(task["goal"], str) and 1 <= len(task["goal"]) <= 2000, "GOAL_LIMIT"
     )
@@ -175,7 +176,21 @@ def validate_task(task):
     checks = task["checks"]
     require(isinstance(checks, dict) and 1 <= len(checks) <= 4, "CHECK_LIMIT")
     for name, pattern in checks.items():
-        require(re.fullmatch("[a-z][a-z0-9_]{0,31}", name) is not None, "CHECK_NAME")
+        require(isinstance(name, str) and re.fullmatch("[a-z][a-z0-9_]{0,31}", name) is not None, "CHECK_NAME")
+        if task["format"] == "outlands-coding-agent-v2":
+            require(isinstance(pattern, dict), "CHECK_SPEC")
+            if pattern.get("kind") == "java-main":
+                require(set(pattern) == {"kind", "sources", "main_class"}, "CHECK_SPEC")
+                sources, main = pattern["sources"], pattern["main_class"]
+                require(isinstance(sources, list) and 1 <= len(sources) <= 32 and all(isinstance(s, str) for s in sources), "JAVA_SOURCES")
+                require(len(sources) == len(set(sources)) and set(sources) <= set(names), "JAVA_SOURCES")
+                require(all(s.endswith(".java") for s in sources), "JAVA_SOURCES")
+                require(isinstance(main, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:[.][A-Za-z_][A-Za-z0-9_]*)*", main) is not None, "JAVA_MAIN")
+                harness = main.replace(".", "/") + ".java"
+                require(harness in sources and harness not in editable, "CHECK_PROTECTED")
+                continue
+            require(set(pattern) == {"kind", "pattern"} and pattern["kind"] == "python-unittest", "CHECK_SPEC")
+            pattern = pattern["pattern"]
         require(
             isinstance(pattern, str)
             and re.fullmatch("test_[a-z0-9_]+[.]py", pattern) is not None,
@@ -366,13 +381,14 @@ class ScriptedDemo:
 
 
 class Session:
-    def __init__(self, task, source, run_dir, checker=isolated_check):
+    def __init__(self, task, source, run_dir, checker=isolated_check, jdk_home=None):
         require(
             source.is_absolute() and run_dir.is_absolute(), "ABSOLUTE_PATH_REQUIRED"
         )
         require(not source.is_symlink() and not run_dir.is_symlink(), "ROOT_SYMLINK")
         source, run_dir = source.resolve(strict=True), run_dir.resolve()
         self.task, self.source, self.root, self.checker = task, source, run_dir, checker
+        self.jdk_home = jdk_home
         self.events, self.planned = [], False
         self.work = run_dir / "work"
         self.baseline = run_dir / "baseline"
@@ -419,10 +435,18 @@ class Session:
             if n not in self.task["editable"]:
                 require(sha(raw) == digest, "PROTECTED_FILE_CHANGED")
 
+    def invoke_check(self, spec):
+        if isinstance(spec, dict):
+            if spec["kind"] == "java-main":
+                require(self.jdk_home is not None, "JDK_REQUIRED")
+                return isolated_java_check(self.work, spec, 10, self.jdk_home)
+            spec = spec["pattern"]
+        return self.checker(self.work, spec, 10)
+
     def checks(self, label):
         self.verify_copy()
         results = {
-            name: self.checker(self.work, pattern, 10)
+            name: self.invoke_check(pattern)
             for name, pattern in self.task["checks"].items()
         }
         self.emit(label, results)
@@ -505,7 +529,7 @@ class Session:
                 "CHECK_SCOPE",
             )
             self.verify_copy()
-            result = self.checker(self.work, self.task["checks"][args["check_id"]], 10)
+            result = self.invoke_check(self.task["checks"][args["check_id"]])
             require(
                 not result["infrastructure_error"]
                 and not result["timed_out"]
@@ -525,7 +549,7 @@ class Session:
             patch += review_diff(n, before, after)
         write_new(self.root / "changes.diff", patch.encode())
         result = {
-            "format": FORMAT,
+            "format": self.task["format"],
             "status": status,
             "reason": reason,
             "backend": backend,
@@ -689,6 +713,7 @@ def main(argv=None):
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--backend", choices=["scripted-demo", "ollama"], required=True)
     parser.add_argument("--model")
+    parser.add_argument("--jdk-home", type=Path)
     parser.add_argument("--allow-local-inference", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -737,12 +762,12 @@ def main(argv=None):
         with gate(args.state_dir) as hold:
             if args.backend == "ollama":
                 provider.preflight()
-            session = Session(task, args.source, args.run_dir)
+            session = Session(task, args.source, args.run_dir, jdk_home=args.jdk_home)
             result = session.run(provider, hold, args.backend)
         print(
             canonical(
                 {
-                    "format": FORMAT,
+                    "format": result["format"],
                     "status": result["status"],
                     "reason": result["reason"],
                     "result_sha256": sha(canonical(result)),
