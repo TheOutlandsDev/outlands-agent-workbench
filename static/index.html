@@ -12,13 +12,27 @@
   <aside class="sidebar">
     <div class="brand"><span class="brand-mark">O</span><div>OUTLANDS<small>AGENT WORKBENCH</small></div></div>
     <button id="new-task" class="new-task">＋ New task</button>
+    <button id="setup-open" class="setup-open">Set up project</button>
     <div class="section-label">TASK HISTORY <span id="history-count">0</span></div>
     <nav id="history" aria-label="Task history"><p class="empty-small">Your runs will appear here.</p></nav>
     <div class="sidebar-footer"><span class="status-dot"></span> Local workspace<small>One task at a time. Your source stays in place.</small></div>
   </aside>
   <main>
-    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.1</span></h1><p>A clear view from task to reviewed patch.</p></div><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></header>
+    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.2</span></h1><p>A clear view from task to reviewed patch.</p></div><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></header>
     <div id="alert" role="alert" hidden></div>
+    <section id="setup-panel" class="composer panel setup-panel" aria-labelledby="setup-title" hidden>
+      <div class="panel-heading"><h2 id="setup-title">Set up a project</h2><button id="setup-close" type="button" class="secondary">Close setup</button></div>
+      <p class="muted">Select only the files this task needs. Review their hashes before saving. Your project is not scanned or changed.</p>
+      <form id="setup-form">
+        <label>Source directory<input id="setup-source" placeholder="/absolute/project" required autocomplete="off"></label>
+        <div class="form-grid setup-row"><label>Project name<input id="setup-name" maxlength="80" required></label><label>Project ID<input id="setup-id" pattern="[a-z][a-z0-9_-]{0,31}" maxlength="32" placeholder="my-project" required></label></div>
+        <div class="form-grid setup-row"><label>Project language<select id="setup-language"><option value="python">Python · unittest</option><option value="java">Java · compile and test main</option></select></label><label><span id="setup-check-label">Protected test module</span><input id="setup-check" placeholder="test_example.py" required></label></div>
+        <div class="form-grid setup-row"><label>Selected files<textarea id="setup-files" rows="4" placeholder="module.py&#10;test_example.py" required></textarea><small class="muted">Relative paths, one per line. Only these files are copied.</small></label><label>Editable files<textarea id="setup-editable" rows="4" placeholder="module.py" required></textarea><small class="muted">A subset of selected files. The test entry point stays protected.</small></label></div>
+        <label class="goal-label">Initial task<textarea id="setup-goal" maxlength="2000" rows="3" required placeholder="Describe the change and the expected behavior."></textarea></label>
+        <div class="composer-bottom"><span class="muted">12 model turns · one named check</span><button type="submit" id="setup-preview" class="secondary">Review selected scope</button></div>
+      </form>
+      <section id="setup-review" class="setup-review" aria-label="Project scope review" hidden><h3>Review selected scope</h3><p id="setup-summary" class="muted"></p><ul id="setup-scope"></ul><p class="muted">Saving adds a private configuration entry. It does not start inference.</p><button id="setup-save" class="primary">Save project</button></section>
+    </section>
     <section class="composer panel" aria-labelledby="compose-title">
       <div class="panel-heading"><h2 id="compose-title">Start a task</h2><span class="muted">Explicit scope. Private working copy.</span></div>
       <form id="task-form">

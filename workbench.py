@@ -17,6 +17,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from java_check import validate_jdk
+from project_setup import prepare
+
 from agent import (
     Refused,
     canonical,
@@ -127,8 +130,12 @@ def load_config(path):
 
 
 class Manager:
-    def __init__(self, config, data):
+    def __init__(self, config, data, jdk_home=None):
         self.projects, self.models = load_config(config)
+        self.config_path = config
+        self.config_raw = read_file(config.parent, config.name, 262144)
+        self.jdk_home = validate_jdk(jdk_home) if jdk_home is not None else None
+        self.drafts = {}
         require(data.is_absolute() and not data.is_symlink(), "DATA_DIRECTORY")
         self.data = data.resolve()
         for source in [HERE] + [p["source"] for p in self.projects.values()]:
@@ -139,7 +146,7 @@ class Manager:
                 "DATA_OUTSIDE_SOURCE",
             )
         private_dir(self.data)
-        for name in ["jobs", "tasks", "runs", "state"]:
+        for name in ["jobs", "tasks", "runs", "state", "projects"]:
             private_dir(self.data / name)
         self.server_lock = os.open(
             self.data / "server.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
@@ -152,6 +159,46 @@ class Manager:
             raise Refused("SERVER_ALREADY_RUNNING") from None
         self.lock = threading.RLock()
         self.children = {}
+
+    def project_preview(self, request):
+        with self.lock:
+            blocked = self.admission()
+            require(blocked is None, blocked or "ADMISSION")
+            source, task, rows = prepare(request, self.jdk_home is not None)
+            require(request["id"] not in self.projects and len(self.projects) < 16, "PROJECT_EXISTS_OR_LIMIT")
+            for root in [HERE, self.data]:
+                require(source != root and source not in root.parents and root not in source.parents, "PROJECT_OVERLAP")
+            self.drafts = {key: value for key, value in self.drafts.items() if value["expires"] > time.monotonic()}
+            require(len(self.drafts) < 16, "DRAFT_LIMIT")
+            draft_id = secrets.token_hex(8)
+            self.drafts[draft_id] = {"request": copy.deepcopy(request), "task": task,
+                                     "source": source, "expires": time.monotonic() + 300}
+            return {"draft": draft_id, "name": request["name"], "files": rows,
+                    "checks": task["checks"], "max_turns": task["max_turns"], "total_bytes": sum(r["bytes"] for r in rows)}
+
+    def project_save(self, request):
+        with self.lock:
+            require(isinstance(request, dict) and set(request) == {"draft"}
+                    and isinstance(request["draft"], str), "DRAFT_REQUIRED")
+            draft = self.drafts.get(request["draft"])
+            require(draft is not None and draft["expires"] > time.monotonic(), "DRAFT_EXPIRED")
+            blocked = self.admission()
+            require(blocked is None, blocked or "ADMISSION")
+            source, task, _ = prepare(draft["request"], self.jdk_home is not None)
+            require(source == draft["source"] and task == draft["task"], "SETUP_SOURCE_CHANGED")
+            require(read_file(self.config_path.parent, self.config_path.name, 262144) == self.config_raw, "CONFIG_CHANGED")
+            name = draft["request"]["id"]
+            require(name not in self.projects and len(self.projects) < 16, "PROJECT_EXISTS_OR_LIMIT")
+            task_path = self.data / "projects" / (name + ".json")
+            row = {"id": name, "name": draft["request"]["name"], "source": str(source), "task": str(task_path)}
+            config = parse(self.config_raw)
+            config["projects"].append(row)
+            write_new(task_path, canonical(task))
+            replace_json(self.config_path, config)
+            self.config_raw = canonical(config)
+            self.projects[name] = {**row, "source": source, "task": task_path, "definition": task}
+            del self.drafts[request["draft"]]
+            return {"id": name, "name": row["name"]}
 
     def meta_path(self, run_id):
         require(isinstance(run_id, str) and ID.fullmatch(run_id), "RUN_ID")
@@ -259,6 +306,9 @@ class Manager:
             require(blocked is None, blocked or "ADMISSION")
             project = self.projects[request["project"]]
             task = copy.deepcopy(project["definition"])
+            require(self.jdk_home is not None or not any(
+                isinstance(spec, dict) and spec.get("kind") == "java-main"
+                for spec in task["checks"].values()), "JDK_REQUIRED")
             require(
                 isinstance(request["goal"], str) and 1 <= len(request["goal"]) <= 2000,
                 "GOAL_LIMIT",
@@ -311,6 +361,8 @@ class Manager:
             ]
             if backend == "ollama":
                 command += ["--model", request["model"], "--allow-local-inference"]
+            if self.jdk_home is not None:
+                command += ["--jdk-home", str(self.jdk_home)]
             log_path = self.data / "jobs" / (run_id + ".log")
             fd = os.open(
                 log_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
@@ -543,10 +595,12 @@ class Manager:
                     "files": sorted(p["definition"]["files"]),
                     "editable": p["definition"]["editable"],
                     "checks": sorted(p["definition"]["checks"]),
+                    "scripted_available": p["definition"] == json_file(HERE / "task.example.json"),
                 }
                 for p in self.projects.values()
             ],
             "models": self.models,
+            "java_available": self.jdk_home is not None,
             "admission_block": self.admission(),
         }
 
@@ -676,6 +730,10 @@ def make_handler(manager, token, origin):
                 path = urlsplit(self.path).path
                 if path == "/api/start":
                     result = manager.start(request)
+                elif path == "/api/project-preview":
+                    result = manager.project_preview(request)
+                elif path == "/api/project-save":
+                    result = manager.project_save(request)
                 elif path == "/api/stop":
                     require(
                         isinstance(request, dict) and set(request) == {"id"},
@@ -744,12 +802,13 @@ def main():
     serve.add_argument("--config", type=Path, required=True)
     serve.add_argument("--data-dir", type=Path, required=True)
     serve.add_argument("--port", type=int, default=0)
+    serve.add_argument("--jdk-home", type=Path)
     args = parser.parse_args()
     if args.command == "init-demo":
         print(json.dumps(init_demo(args.workspace, args.model)))
         return
     require(0 <= args.port <= 65535, "PORT_RANGE")
-    manager = Manager(args.config, args.data_dir)
+    manager = Manager(args.config, args.data_dir, args.jdk_home)
     token = secrets.token_urlsafe(32)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), BaseHTTPRequestHandler)
     server.daemon_threads = True
