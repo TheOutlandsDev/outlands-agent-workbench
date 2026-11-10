@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.class
+.venv/
+.ruff_cache/
+data/
+runs/
+state/
+private-review/
+config.json
+*.log

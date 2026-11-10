@@ -1,0 +1,16 @@
+{
+  "format": "outlands-coding-agent-v1",
+  "goal": "Fix calculator.add so it returns the sum of its two integer arguments. Preserve the interface and the supplied tests. Read the relevant files, make the smallest correction, run unit, and finish with observed results.",
+  "files": {
+    "calculator.py": "28b4e3b57146871d73cd7c64e2fc05841a64f77bd2345dda1bc722e179678e08",
+    "test_calculator.py": "c62b3b87623b11a95c1ed1cbb099849d95d354d12c290e923343c6610053bfe7"
+  },
+  "editable": [
+    "calculator.py"
+  ],
+  "checks": {
+    "unit": "test_calculator.py"
+  },
+  "max_turns": 10,
+  "request_seconds": 120
+}

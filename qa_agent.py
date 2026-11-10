@@ -1,0 +1,189 @@
+"""Offline acceptance: Python/Java launch, real Bubblewrap checks, no AI inference."""
+
+import argparse
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+from agent import review_diff
+from isolation import check
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--jdk-home", type=Path, required=True)
+    parser.add_argument("--work-dir", type=Path, required=True)
+    args = parser.parse_args()
+    here = Path(__file__).resolve().parent
+    work = args.work_dir.resolve()
+    if work == here or here in work.parents:
+        parser.error("choose a new work directory outside source")
+    work.mkdir(mode=0o700, exist_ok=False)
+    jdk = args.jdk_home.resolve()
+    classes = work / "classes"
+    classes.mkdir()
+    commands = [
+        [sys.executable, "-B", str(here / "agent.py")],
+        [
+            str(jdk / "bin/java"),
+            "-cp",
+            str(classes),
+            "OutlandsAgentClient",
+            sys.executable,
+            str(here / "agent.py"),
+        ],
+    ]
+    subprocess.run(
+        [
+            str(jdk / "bin/javac"),
+            "--release",
+            "17",
+            "-Xlint:all",
+            "-Werror",
+            "-d",
+            str(classes),
+            str(here / "OutlandsAgentClient.java"),
+        ],
+        capture_output=True,
+        timeout=30,
+        check=True,
+    )
+    for pattern in ["test_agent.py", "test_workbench.py"]:
+        tests = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                str(here),
+                "-p",
+                pattern,
+                "-v",
+            ],
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        (work / (pattern + ".log")).write_bytes(tests.stdout + tests.stderr)
+        assert tests.returncode == 0, "offline unit tests failed"
+    task = json.loads((here / "task.example.json").read_text())
+    original = {
+        n: hashlib.sha256((here / n).read_bytes()).hexdigest() for n in task["files"]
+    }
+    results = []
+    for i, command in enumerate(commands):
+        run = work / ("run-" + str(i))
+        cmd = command + [
+            "--task",
+            str(here / "task.example.json"),
+            "--source",
+            str(here),
+            "--run-dir",
+            str(run),
+            "--state-dir",
+            str(work / "state"),
+            "--backend",
+            "scripted-demo",
+        ]
+        outcome = subprocess.run(cmd, capture_output=True, timeout=60, check=False)
+        (work / ("client-" + str(i) + ".log")).write_bytes(
+            outcome.stdout + outcome.stderr
+        )
+        assert outcome.returncode == 0 and not outcome.stderr, "scripted client failed"
+        result = json.loads((run / "result.json").read_text())
+        assert result["status"] == "REVIEW_READY" and not result["ai_inference"]
+        assert not result["source_adopted"] and result["turns"] == 6
+        assert (run / "work/calculator.py").read_text() == (
+            here / "calculator.py"
+        ).read_text().replace("return a - b", "return a + b")
+        assert (run / "work/test_calculator.py").read_bytes() == (
+            here / "test_calculator.py"
+        ).read_bytes()
+        events = [json.loads(p.read_text()) for p in sorted(run.glob("event-*.json"))]
+        baseline = next(e["value"] for e in events if e["kind"] == "baseline_checks")[
+            "unit"
+        ]
+        final = next(
+            e["value"] for e in events if e["kind"] == "independent_final_checks"
+        )["unit"]
+        assert (
+            baseline["exit_code"] == 1
+            and final["exit_code"] == 0
+            and baseline["tests_ran"] == final["tests_ran"] == 4
+        )
+        assert original == {
+            n: hashlib.sha256((here / n).read_bytes()).hexdigest()
+            for n in task["files"]
+        }
+        assert (
+            json.loads(outcome.stdout)["result_sha256"]
+            == hashlib.sha256((run / "result.json").read_bytes()).hexdigest()
+        )
+        results.append(result)
+    assert results[0] == results[1], "Java and Python client result parity failed"
+    patch_check = work / "patch-check"
+    patch_check.mkdir()
+    before = (here / "calculator.py").read_bytes()
+    (patch_check / "calculator.py").write_bytes(before)
+    unterminated = before.replace(b"return a - b", b"return a + b").rstrip(b"\n")
+    patch_file = work / "unterminated.diff"
+    patch_file.write_text(review_diff("calculator.py", before, unterminated))
+    subprocess.run(
+        ["/usr/bin/git", "-C", str(patch_check), "apply", "--check", str(patch_file)],
+        capture_output=True,
+        timeout=10,
+        check=True,
+    )
+    probe = work / "probe"
+    probe.mkdir()
+    (probe / "test_boundary.py").write_text("""import pathlib, socket, unittest
+class Boundary(unittest.TestCase):
+    def test_original_roots_hidden(self):
+        for name in ["/home", "/srv", "/run", "/etc"]:
+            self.assertFalse(pathlib.Path(name).exists())
+    def test_read_only_work(self):
+        with self.assertRaises(OSError):
+            pathlib.Path("/work/forbidden").write_text("x")
+    def test_loopback_is_separate(self):
+        with socket.socket() as s:
+            s.settimeout(1)
+            self.assertNotEqual(s.connect_ex(("127.0.0.1", 11434)), 0)
+""")
+    boundary = check(probe, "test_boundary.py", 10)
+    assert boundary["exit_code"] == 0 and boundary["tests_ran"] == 3, (
+        "sandbox boundary failed"
+    )
+    (probe / "test_slow.py").write_text(
+        "import time, unittest\nclass Slow(unittest.TestCase):\n def test_wait(self): time.sleep(20)\n"
+    )
+    timeout = check(probe, "test_slow.py", 1)
+    assert timeout["timed_out"], "timeout was not enforced"
+    (probe / "test_loud.py").write_text(
+        "import unittest\nclass Loud(unittest.TestCase):\n def test_output(self): print('x' * 100000)\n"
+    )
+    loud = check(probe, "test_loud.py", 10)
+    assert loud["output_limited"], "output bound not enforced"
+    report = {
+        "status": "PASS",
+        "ai_inference": False,
+        "client_runs": 2,
+        "client_result_parity": True,
+        "baseline_tests_per_run": 4,
+        "final_tests_per_run": 4,
+        "boundary_tests": 3,
+        "timeout_enforced": True,
+        "output_limit_enforced": True,
+        "source_unchanged": True,
+        "unterminated_diff_git_check": True,
+        "patch_sha256": results[0]["patch_sha256"],
+    }
+    (work / "acceptance.json").write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps(report, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

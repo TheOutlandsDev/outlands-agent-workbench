@@ -1,0 +1,12 @@
+{
+  "format": "outlands-workbench-config-v1",
+  "projects": [
+    {
+      "id": "example",
+      "name": "Example project",
+      "source": "/absolute/private-project",
+      "task": "/absolute/private-workbench/task.json"
+    }
+  ],
+  "models": []
+}
