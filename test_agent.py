@@ -460,7 +460,7 @@ class TransportTests(unittest.TestCase):
         for messages in [[], [{"role": "assistant", "tool_calls": [{"function": {"name": "set_plan"}}]}], [{"role": "tool", "tool_name": "read_file"}]]:
             self.assertEqual([t["function"]["name"] for t in tools_for_messages(messages)], ["set_plan"])
         offered = tools_for_messages([{"role": "tool", "tool_name": "set_plan", "content": "recorded"}])
-        self.assertEqual([t["function"]["name"] for t in offered], ["read_file", "replace_text", "run_check"])
+        self.assertEqual([t["function"]["name"] for t in offered], ["read_file", "replace_text", "run_check", "search_text", "read_lines"])
 
     def test_preflight_other_model_refused(self):
         with patch("agent.http.client.HTTPConnection") as connection:

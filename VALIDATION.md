@@ -1,71 +1,63 @@
-# Version 0.4 validation
+# Version 0.5 validation
 
 Observed on 10 November 2026 (America/New_York) on one Linux development host.
-This milestone was tested offline with invented inputs, scripted exercises,
-mocked transports and an owned simulated waiting provider. It made no real
-model requests. Private configs, histories, prompts, responses and review
-receipts remain outside this public package.
+Qualification was offline only: invented Python/Java text fixtures, deterministic
+navigation exercises and mocked HTTP transports. No real model request was sent.
+Private project data, runtime histories and review receipts remain excluded.
 
 | Area | Observed result |
 | --- | --- |
 | Engine unit suite | 55 methods passed |
 | Workbench/controller/HTTP suite | 25 methods passed |
-| Project setup and typed-check suite | 14 methods passed |
-| Git workspace suite | 10 methods passed |
-| Launcher suite | 9 methods passed |
+| Setup / Git workspace / launcher suites | 14 / 10 / 9 methods passed |
 | Run Diagnostics suite | 15 methods passed |
-| Java client compatibility | Compiled with `--release 17 -Xlint:all -Werror`; Python and compiled Java scripted results matched |
-| Python/Java isolated checks | Baseline/final exercises, namespace probes, diagnostics, timeout and output limits passed |
-| Git/launcher integration | Actual owned Git worker, accepted-patch recheck, original-state preservation and prerequisite probe passed |
-| Browser diagnostics | Owned simulated request shown as active; stopping its worker preserved an uncertain result/hold and blocked new tasks |
-| Legacy and completed runs | Missing measurements stayed Not recorded; completed scripted turns retained recorded timing and no-inference labeling |
-| Present unassociated hold | Shown as present and blocking, rather than absent |
-| Keyboard and layout | Diagnostics/Diff arrow navigation passed; desktop and 390-pixel viewport inspected, document width matched client width |
-| Persistence | Recorded interruption and blocked admission survived browser reload |
+| Pure project context suite | 31 methods passed |
+| Context/request-size integration suite | 14 methods passed |
+| Existing offline integration | Actual isolated Python/Java checks, Java-client parity, namespace/time/output limits, Git worker and prerequisites passed |
+| Browser Context | Scoped search hits, Unicode text, grouped file hashes, numbered focused reads and explicit truncation inspected |
+| Browser size refusal | Initial refusal showed zero attempted requests and no new hold; a later refusal retained its prior attempted request and recorded response |
+| Legacy and keyboard behavior | Empty historical context remained empty; keyboard tab navigation worked |
+| Persistence / layout | Saved context survived reload; desktop and 390-pixel viewport inspected with no horizontal page overflow |
 
-All **128 unit methods** passed. The offline integration runner made zero model
-requests. New transport tests cover send/header/body timeouts, connection,
-protocol and operating-system errors, malformed responses, interruption,
-unknown refusal text, invalid metrics and failures while writing evidence.
-They check a single attempt, closed clients, finite sanitized metadata, durable
-response ordering and retained uncertainty holds. An error while recording a
-finish does not cause a retry or release an unsettled hold.
+All **173 unit methods** passed in the final offline acceptance run. Python AST,
+JSON parsing and JavaScript syntax checks also passed. The tests cover exact
+literal matching and stable order, case sensitivity, Unicode columns and clipping,
+LF/CRLF/CR, empty files, no-final-newline inputs, per-line/result limits, exact
+serialized JSON sizes, whole-file hashes and input immutability. Supplied source
+is treated as text and is not executed by the context helpers.
 
-Controller tests distinguish an owned live worker from an unknown process after
-restart. They also cover corrupt request events, missing finish records,
-response claims without durable response evidence, legacy history, malformed
-holds, finite summary bounds and exclusion of raw private text. Inspecting a
-run does not rewrite its result or clear its hold.
+Integration checks enforce planning, declared-file scope, symlink refusal,
+protected-test immutability and stale edit hashes. A deterministic task searched
+for the relevant expression, derived a focused read from the actual hit, made a
+small hash-bound edit and passed the existing final checks without altering its
+original source. This is an offline exercise, not a model competence benchmark.
 
-## Evidence and qualification boundaries
+## Request-size and privacy evidence
 
-New diagnostics record UTC start time, monotonic elapsed milliseconds, the
-configured request timeout, actual serialized Ollama payload bytes when known,
-recorded phase and fixed error category. Only six optional provider integer
-counters are retained; booleans, strings, floats, negative values and values
-outside the safe integer range are excluded. No raw exception text, source,
-prompt, path or model name is copied into these new diagnostic fields. Existing
-private run evidence remains private.
+The full Ollama JSON request body is capped at 131,072 bytes. Boundary tests
+verified that an exactly sized body can be sent through a mocked transport, and
+one byte over is refused before opening the chat connection or creating a new
+request hold. A growing valid snapshot history reached the same guard after five
+prior mocked attempts; the refused sixth candidate was not counted as a sent
+attempt. Earlier response evidence and any pre-existing hold remained unchanged.
+The existing CLI loaded-model GET preflight remains separate and can run earlier.
+No claim of zero provider GETs, tokenizer-based limits or universal model context
+fitness is made.
 
-The request/response wire settings, file scope, checks, budgets, plan requirement,
-review bindings and no-retry behavior remain unchanged. Viewing diagnostics does
-not contact a provider. A saved response is distinct from a successful task.
-An active request may have no recorded finish yet; older missing measurements
-are not reconstructed. Summaries are limited to 16 turns and 256 events, with
-an explicit inspection note if that event limit is exceeded.
+`request_refused` stores bounded size/ceiling fields and a fixed reason, without
+the candidate payload or model name. The Context view intentionally shows private
+selected source; unknown extra tool-result fields and unselected paths are
+excluded from that view. Excerpts use text rendering, with no HTML interpretation
+or source execution. Search/read results stay within 8,192 serialized JSON bytes;
+search returns at most 20 matching lines and each focused read requests at most
+80 lines. The view retains only eight recent context results. Limits and omitted
+content are explicit.
 
-The browser exercise used an invented waiting provider in an owned local child,
-with no HTTP/model call. Stop task interrupted that child; the engine retained
-its result, finish evidence and request hold. This exercises the local lifecycle,
-not proof that stopping a real HTTP client stops provider inference.
-
-The earlier real-model Java trial from version 0.3 remains **UNCERTAIN**. Its
-fourth request had no durable response; its generic error and 120-second timing
-do not establish the precise cause or provider completion. Both earlier Java
-outcomes and the original hold were preserved unchanged during this milestone.
-No new Java or Python real-model qualification is claimed. The final version 0.4
-engine has offline acceptance only. Historical model results are recorded in
-[version 0.3 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/d6d115bee1e94a1bede0288e418e2cc243badf38/VALIDATION.md).
+The original uncertain Java run and its hold were preserved byte-for-byte. Its
+cause and provider completion remain unknown. No replay, recovery, hold clearing,
+model eviction or new real-model qualification occurred. The final v0.5 engine
+has offline acceptance only. Prior limitations and model observations remain in
+[version 0.4 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/ccf3184d2a74eb2c6a9f7c193c08125831e05248/VALIDATION.md).
 
 ## Practical limits
 

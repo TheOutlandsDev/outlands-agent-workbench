@@ -14,6 +14,9 @@ invoked as a separately installed prerequisite; no Git implementation is bundled
 Version 0.4 adds private request measurements, sanitized diagnostic summaries,
 the read-only Run Diagnostics interface, active/unresolved admission copy and
 offline regression tests. These additions do not replay or resolve old requests.
+Version 0.5 adds pure bounded snapshot search and line-range helpers, selected-file
+tool integration, serialized chat-body limits, a read-only Context view and
+offline regression tests. All new fixture snippets are invented source text.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.
