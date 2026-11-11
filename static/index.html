@@ -14,12 +14,13 @@
     <button id="new-task" class="new-task">＋ New task</button>
     <button id="setup-open" class="setup-open">Set up project</button>
     <button id="comparison-open" class="comparison-open" type="button" aria-controls="comparison-panel" aria-expanded="false" disabled>Compare runs</button>
+    <button id="readiness-open" class="readiness-open" type="button" aria-controls="readiness-panel" aria-expanded="false" disabled>Project readiness</button>
     <div class="section-label">TASK HISTORY <span id="history-count">0</span></div>
     <nav id="history" aria-label="Task history"><p class="empty-small">Your runs will appear here.</p></nav>
     <div class="sidebar-footer"><span class="status-dot"></span> Local workspace<small>One task at a time. Your source stays in place.</small></div>
   </aside>
   <main>
-    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.7</span></h1><p>A clear view from task to reviewed patch.</p></div><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></header>
+    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.8</span></h1><p>A clear view from task to reviewed patch.</p></div><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></header>
     <div id="alert" role="alert" hidden></div>
     <section id="comparison-panel" class="composer panel comparison-panel" aria-labelledby="comparison-title" hidden>
       <div class="panel-heading"><div><div class="eyebrow">PRIVATE SAVED EVIDENCE</div><h2 id="comparison-title">Compare runs</h2></div><button id="comparison-close" class="secondary" type="button">Close comparison</button></div>
@@ -28,6 +29,12 @@
       <div id="comparison-history-notes"></div>
       <form id="comparison-form"><div class="form-grid"><label>Left saved run<select id="comparison-left" required disabled></select></label><label>Right saved run<select id="comparison-right" required disabled></select></label></div><div class="composer-bottom"><p id="comparison-status" class="muted" role="status">Choose two different saved runs, then compare.</p><button id="comparison-submit" class="primary" type="submit" disabled>Compare saved runs</button></div></form>
       <div id="comparison-result" hidden></div>
+    </section>
+    <section id="readiness-panel" class="composer panel readiness-panel" aria-labelledby="readiness-title" hidden>
+      <div class="panel-heading"><div><div class="eyebrow">READ-ONLY STATIC OBSERVATIONS</div><h2 id="readiness-title">Project readiness</h2></div><button id="readiness-close" class="secondary" type="button">Close readiness</button></div>
+      <p class="muted readiness-boundary">Inspect one configured project without starting a task or changing records. Static checks passing does not authorize Run, qualify a provider or establish source correctness. Run rechecks its authoritative guards. Live run updates pause until you close this panel.</p>
+      <form id="readiness-form"><label>Configured project<select id="readiness-project" required disabled></select></label><div class="composer-bottom"><p id="readiness-status" class="muted" role="status">Choose a project, then inspect its static evidence.</p><button id="readiness-submit" class="primary" type="submit" disabled>Inspect selected project</button></div></form>
+      <div id="readiness-result" hidden></div>
     </section>
     <div id="normal-workspace">
     <section id="setup-panel" class="composer panel setup-panel" aria-labelledby="setup-title" hidden>
