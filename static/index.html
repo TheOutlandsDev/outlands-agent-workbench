@@ -20,7 +20,7 @@
     <div class="sidebar-footer"><span class="status-dot"></span> Local workspace<small>One task at a time. Your source stays in place.</small></div>
   </aside>
   <main>
-    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.12</span></h1><p>A clear view from task to reviewed patch.</p></div><div class="header-actions"><button id="bundle-workspace-open" class="secondary" type="button" aria-controls="bundle-workspace-panel" aria-expanded="false" disabled>Bundle review workspace</button><button id="project-check-open" class="secondary" type="button" aria-controls="project-check-panel" aria-expanded="false" disabled>Check bundle against project</button><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></div></header>
+    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.13</span></h1><p>A clear view from task to reviewed patch.</p></div><div class="header-actions"><button id="bundle-workspace-open" class="secondary" type="button" aria-controls="bundle-workspace-panel" aria-expanded="false" disabled>Bundle review workspace</button><button id="project-check-open" class="secondary" type="button" aria-controls="project-check-panel" aria-expanded="false" disabled>Check bundle against project</button><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></div></header>
     <div id="alert" role="alert" hidden></div>
     <section id="comparison-panel" class="composer panel comparison-panel" aria-labelledby="comparison-title" hidden>
       <div class="panel-heading"><div><div class="eyebrow">PRIVATE SAVED EVIDENCE</div><h2 id="comparison-title">Compare runs</h2></div><button id="comparison-close" class="secondary" type="button">Close comparison</button></div>
@@ -73,6 +73,19 @@
         <div id="workspace-recheck-receipt" hidden></div>
         <div class="review-buttons"><button id="workspace-recheck-stop" class="danger" type="button" disabled>Stop owned recheck</button></div>
         <p class="small muted">Only the selected owned active recheck worker is polled or stoppable. Closing this panel stops updates without stopping a worker. There is no automatic retry, recovery, commit or hold clearing.</p>
+        <section id="snapshot-export-section" class="snapshot-export-section" aria-labelledby="snapshot-export-title">
+          <div class="pane-heading"><h4 id="snapshot-export-title">Reviewed snapshot export</h4><button id="snapshot-export-review" class="secondary" type="button" disabled>Review snapshot export</button></div>
+          <p class="muted">Export the selected verified recheck’s tested snapshot against the original bundle baseline. Its diff includes the initial bundle changes and subsequent tested edits. This records a separate private acceptance; it runs no checks, Git commands or model requests and changes no source or workspace files.</p>
+          <p id="snapshot-export-status" class="muted" role="status">Select a verified recheck attempt to review its snapshot export.</p>
+          <div id="snapshot-export-preview" hidden></div>
+          <div class="snapshot-export-accept-card"><label>Private acceptance note · optional<textarea id="snapshot-export-note" maxlength="2000" rows="2" disabled aria-describedby="snapshot-export-note-status"></textarea></label><p id="snapshot-export-note-status" class="muted">Up to 1,000 characters and 2,000 UTF-8 bytes; no NUL characters.</p><button id="snapshot-export-accept" class="primary" type="button" disabled>Accept reviewed snapshot</button><p class="small muted">Acceptance consumes the five-minute pinned preview. It does not authorize applying or committing a patch and does not clear any hold. A changed note does not change the artifact being reviewed.</p></div>
+          <div class="pane-heading snapshot-export-history-heading"><h5>Saved snapshot export acceptances</h5><button id="snapshot-export-history-refresh" class="secondary" type="button" disabled>Refresh accepted exports history</button></div>
+          <p id="snapshot-export-history-status" class="muted" role="status">Accepted export history is read only after an explicit review or refresh.</p>
+          <label>Selected saved acceptance<select id="snapshot-export-history-select" disabled></select></label>
+          <div id="snapshot-export-acceptance" hidden></div>
+          <div class="review-buttons"><button id="snapshot-export-download" class="secondary" type="button" disabled>Download private patch bundle</button></div>
+          <p class="small muted">The ZIP contains private filenames, patch text and verification data. Acceptance notes remain in private saved records. The ZIP is unencrypted and unsigned. Embedded hashes establish byte integrity, not authenticity. Keep it private and preserve the whole archive SHA-256 through a trusted channel. Download revalidates fresh server pins; no older acceptance is substituted automatically.</p>
+        </section>
       </section>
     </section>
     <div id="normal-workspace">

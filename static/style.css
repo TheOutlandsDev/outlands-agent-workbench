@@ -35,3 +35,19 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 #workspace-recheck-status,#workspace-recheck-admission,#workspace-recheck-history-status{overflow-wrap:anywhere}
 #workspace-recheck-receipt{margin-top:20px}
 @media(max-width:680px){.workspace-recheck-section{margin-top:22px;padding-top:20px}.workspace-recheck-preview-summary,.workspace-recheck-start-card{padding:14px}.workspace-recheck-section .pane-heading{align-items:flex-start}.workspace-recheck-section .pane-heading button{max-width:100%;white-space:normal}.workspace-recheck-section .project-check-facts{grid-template-columns:1fr}}
+
+/* Acceptance and download are separate from the historical recheck result. */
+.snapshot-export-section{margin-top:26px;padding-top:23px;border-top:1px solid var(--line)}
+.snapshot-export-section>.pane-heading,.snapshot-export-history-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.snapshot-export-section h4{margin:0}.snapshot-export-section h5{font-size:12px;margin:0 0 10px}
+.snapshot-export-section>.muted{line-height:1.65}
+.snapshot-export-summary,.snapshot-export-accept-card{padding:18px;background:rgba(105,137,185,.055);border:1px solid var(--line);border-radius:12px;margin:18px 0}
+.snapshot-export-accept-card{background:rgba(207,161,83,.07)}
+.snapshot-export-history-heading{margin-top:24px}
+.snapshot-export-section select,.snapshot-export-section textarea{min-width:0;width:100%}
+.snapshot-export-section .bundle-file-list h5,.snapshot-export-section .context-file-facts dd{overflow-wrap:anywhere;word-break:break-word}
+.snapshot-export-diff{margin:22px 0}.snapshot-export-diff .code-view{max-height:440px}
+.snapshot-export-note{white-space:pre-wrap;overflow-wrap:anywhere}
+#snapshot-export-status,#snapshot-export-note-status,#snapshot-export-history-status{overflow-wrap:anywhere}
+#snapshot-export-acceptance{margin-top:20px}
+@media(max-width:680px){.snapshot-export-section{margin-top:22px;padding-top:20px}.snapshot-export-summary,.snapshot-export-accept-card{padding:14px}.snapshot-export-section .pane-heading{align-items:flex-start}.snapshot-export-section .pane-heading button{max-width:100%;white-space:normal}.snapshot-export-section .project-check-facts{grid-template-columns:1fr}}
