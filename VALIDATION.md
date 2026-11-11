@@ -1,141 +1,160 @@
-# Version 0.9 validation
+# Version 0.10 validation
 
-Observed on 10 November 2026 (America/New_York) on one Linux development host.
-Offline acceptance passed all **377 unit methods**: the prior 328, 30 pure bundle
-and CLI methods, and 19 bundle/controller/HTTP methods. The full runner also
-passed existing actual isolated Python/Java, Java-client parity, Git worker,
-namespace, timeout/output, prerequisite, refresh, comparison and readiness checks.
-No real-model requests were made. Runtime records, downloaded bundles, private
-source and review receipts remain excluded from the public source package.
+Offline qualification on one Linux development host passed **416 unit methods**:
+the prior 377, 24 bundle/project engine and CLI methods, and 15
+controller/HTTP methods. The full runner also passed actual isolated Python/Java,
+Java-client parity, Git worker, namespace, timeout/output, prerequisite, refresh,
+comparison, readiness and v0.9 bundle acceptance. No real-model requests were
+made. Real bundles, private projects, reports, uploaded archives and runtime
+records remain excluded from the public source package.
 
 | Area | Observed result |
 | --- | --- |
-| Retained unit suites | All prior 328 methods passed |
-| Bundle builder/verifier/CLI | 30 methods passed |
-| Bundle controller/HTTP | 19 methods passed |
-| Invented Python/Java artifacts | Deterministic previews, pinned downloads and offline verification passed; Java bundle handling required no JDK |
-| Evidence guards | Unaccepted, uncertain, stale, malformed, missing, partial and inconsistent scope/hash/final-check evidence refused |
-| Filesystem/read bounds | Symlinks, hardlinks, substituted ancestors, record/scan/read limits and selected-snapshot total bound refused |
-| Archive guards | Compression, encryption, ZIP64, duplicates, links, unsafe names, unsupported metadata, gaps/trailing data, CRC/schema/hash mismatches and external-pin changes refused |
-| Read-only boundary | Private file-tree hashes and unrelated synthetic hold unchanged per inspection; guarded live-state, process, provider, check and socket paths were not reached |
-| HTTP | In-memory handler tests verified Host/session/Origin/request guards, binary responses, attachment type and no-store headers |
-| Browser Python/Java | Both six-member previews and downloaded ZIPs verified against their displayed whole-archive digests |
-| Browser stale evidence | A later synthetic accepted review invalidated the old pin; source drift refused export; both cleared the preview and disabled download |
-| Browser controls | Run selection invalidated preview; keyboard Enter downloaded; bundle/readiness/comparison panels stayed mutually exclusive |
-| Browser layout | At a 390-pixel viewport, client and scroll widths were both 375 pixels; desktop and final privacy wording inspected |
-| Existing actual isolated acceptance | Python/Java checks, Java client, Git workspace, namespace, timeout/output and prerequisite checks passed separately |
+| Retained unit suites | All prior 377 methods passed |
+| Bundle/project engine and CLI | 24 methods passed |
+| Controller and binary HTTP | 15 methods passed |
+| Python/Java observations | Baseline and candidate matches, configured-pin differences and JDK-free inspection passed |
+| Mixed and changed files | A two-editable-file fixture reported mixed baseline/candidate bytes; arbitrary/protected drift, missing and unsafe evidence stayed distinct |
+| Profile guards | Format, scope, permission, check and budget mismatches skipped all selected-source reads |
+| Bounds and storage | Unicode/empty/line-ending and 32-file cases, task/record/source limits, links, unsafe ancestors and read stability checked |
+| Input integrity | Invalid/tampered archives and external digest failures refused before selected-source reads |
+| Read-only boundary | Source/data file hashes and unrelated synthetic hold unchanged per inspection; live-state/provider/process/check/network paths guarded |
+| HTTP | Exact raw ZIP body, length/MIME/transfer/hash headers, Host/session/Origin guards, short bodies and no-store JSON responses checked |
+| Browser | Python baseline, Java candidate with configured pins false, mixed bytes, digest failure and scope mismatch observed |
+| Browser controls | Explicit submit, input invalidation, keyboard Enter, reset after closing and mutual exclusion with all three existing inspectors checked |
+| Browser layout | Desktop and 390-pixel viewport inspected; client/scroll widths both 375 pixels, including final shared-path permission wording |
+| Final source smoke | Fresh private workspace with final code returned baseline match; file-tree bytes unchanged; both owned previews stopped |
 
-Bundle fixtures are meaningful invented Python/Java before/after sources with
-protected checks and directly saved accepted records. Their passing check rows
-are invented evidence for archive logic; they were not produced by a new model
-run or by executing those fixture checks. Bundle operations themselves executed
-zero checks and made zero provider requests. The full runner's actual isolated
-Python/Java execution checks are separate from these saved fixtures.
+During focused test development, the selected-file helper exposed a shared path
+refusal instead of the new fixed public code. That helper boundary was corrected.
+A separate direct-manager test expected the HTTP layer's digest code, while the
+manager correctly retained the existing archive verifier's allowed code; only
+that assertion was aligned with the contract. Both initial failures are retained
+privately. Final focused suites and complete acceptance passed; no failed run was
+relabelled or used as permission to retry the original uncertain Java task.
 
-Browser testing used real handlers and bundle methods over invented private
-workspaces. Deliberate changes occurred between read stages: an additional Java
-acceptance record retained the original review, and a Python source comment
-exercised source-drift refusal. Each inspection stage preserved file hashes; no
-assertion of unchanged bytes spans those intentional changes. Owned previews
-were stopped after inspection.
+## Evidence classes and browser observations
 
-The browser initially saved the two invented ZIPs with broader local file
-permissions than intended. Those exact hash-verified test files were restricted
-to owner-only permissions without changing their bytes. The UI and README tell
-users to choose a private download folder: the browser controls downloaded file
-location and permissions. The ZIP is unencrypted; the application does not
-guarantee privacy of a user's chosen download folder. No real bundle or private
-operational history was used for browser testing or included in the public
-source export.
+Fixtures contain invented Python/Java sources, protected tests, two-file mixed
+edits and directly saved accepted v0.9 records. Their recorded check rows are
+invented evidence for comparison logic. The new inspector does not run those
+tests, compile Java or use a model. The full runner's actual isolated Python/Java
+execution checks are separate from these saved records.
 
-## Saved acceptance and artifact checks
+The browser used private synthetic archives and the real binary endpoint.
+Choosing a local file left results hidden until explicit submission. A baseline
+Python report matched CLI observations; after deliberate fixture preparation,
+Java matched candidate bytes while configured pins stayed false, and a two-file
+Python project reported mixed bytes. CLI returned 0 for baseline/candidate and 1
+for mixed, matching its stated exit contract.
 
-The loader reads saved evidence directly. It does not call normal
-view/history/refresh/export, worker reconciliation, admission, hold association,
-process-ownership lookup, checks, model preflight or provider-request paths.
-An unrelated saved request hold remains unchanged and still blocks new work.
-Saved uncertainty cannot be bundled. Active selected task/workspace child IDs
-are refused using the in-memory registry without polling a process.
+A wrong trusted digest refused the request and hid the old report. A Java archive
+checked against the Python task showed scope/check differences, out-of-scope
+rows and Unknown current hashes/sizes. Unit guards independently proved no
+selected-source read occurs in such profile-mismatch cases. Changing inputs
+invalidated the report. Closing cleared the file/digest fields and required a
+new file selection. Readiness, comparison and bundle inspectors remained
+mutually exclusive with the new panel. An unrelated saved hold continued to
+block new tasks while allowing this read-only inspection.
 
-Current config and project-task raw fingerprints must match cached approved
-definitions. Run task and project-task start pins must match exact raw task bytes
-and the current project revision. Missing legacy pins are refused and never
-reconstructed. Scope, edit permissions, checks, budgets and format must agree
-with the current project; a goal override can differ. This stricter bundle gate
-leaves old plain-patch export behavior intact.
+Java candidate and mixed source states were prepared manually between read
+stages. Those intentional fixture changes are distinct from inspector behavior;
+within each stage, all source/data hashes stayed unchanged. A fresh final-source
+preview was inspected again and stopped. No real bundle or original operational
+project was used for browser testing.
 
-The latest contiguous review must be accepted and bind exact canonical result
-bytes and the saved patch. A single independent-final-check event must cover
-exactly the declared checks with positive integer test counts, zero exit codes
-and no timeout, output-limit or infrastructure failure. Booleans cannot stand in
-for integer observations. Unsafe, malformed or incomplete evidence refuses the
-operation rather than producing a partially qualified bundle.
+## Scope, fingerprints and selected bytes
 
-Baseline and candidate hashes must agree with the task/result. Current selected
-source must match the baseline; protected files must be unchanged. The loader
-reconstructs the diff and compares its bytes/hashes with the saved accepted
-patch. Export repeats the reads, rebuilds the deterministic archive and requires
-the preview's whole-archive SHA-256. Nothing is cached or written to the run
-directory. Sequential reads are not an atomic filesystem snapshot; the private
-store and host filesystem still require trust and stability.
+The controller accepts an already configured project ID, verifies exact current
+config/task bytes against its cached fingerprints, and uses only that cached
+source root and task scope. Drift or unavailable fingerprints refuse the check
+before source reads. No replacement path or definition is adopted. The report
+binds the inspected bundle/task/config bytes by SHA-256 and carries a dated
+observation; these hashes are not authenticity evidence.
 
-## Contents and verification limits
+The existing v0.9 archive verifier runs before selected-source reads. Format,
+selected path set, editable/protected permissions on shared paths, check specs
+and budgets are compared with the named task. Any mismatch skips every source
+read. Bundle-only paths are never adopted into project scope; project-only paths
+and permission differences remain visible.
 
-The six members are `manifest.json`, `changes.diff`, `review.json`, `checks.json`,
-`README.txt` and `SHA256SUMS`. Summaries select file hashes and permissions, check
-specifications/budgets, accepted status and recorded passing check observations.
-They omit task goals, run/project/model identifiers, timestamps, review notes or
-identity, prompts/responses, absolute paths, source copies and raw check output.
-The patch, relative filenames and check specifications remain private source
-information. Text is rendered without interpreting HTML.
+Matching profiles permit only declared relative files. Readers refuse links in
+every path component, hardlinks and nonregular files, enforce size and UTF-8/NUL
+guards, and detect size/mtime changes during a read. Unknown or unsafe file
+observations retain null size/hash values; they never become zero or a match.
 
-Original task/result/review/final-event digests identify omitted bytes. They
-cannot reconstruct or authenticate those records. Embedded checksums are
-unsigned integrity evidence. A person who replaces all contents and checksums
-can produce another internally consistent archive. A whole-archive digest from
-an independently trusted preview detects that replacement; the verifier does
-not establish who authored or approved an archive.
+Per-file states distinguish unchanged bytes, baseline, candidate, arbitrary
+change, missing, unreadable, limited, binary, invalid UTF-8, uninspected and
+out-of-scope inputs. A changed protected file is an arbitrary change. Configured
+task hashes and their current-byte match booleans are displayed separately:
+a later revision can pin candidate bytes, and a source can match a bundle while
+its configured task pin is stale.
 
-Every summary explicitly leaves these four areas **Not checked**:
+Overall reports distinguish baseline, candidate, mixed, different and needs
+inspection. A match describes selected bytes only. Missing, unsafe, unknown,
+limited or mismatched-profile evidence prevents a complete match. Sequential
+observations can become stale and are not an atomic snapshot or multiwriter
+transaction. The host/store remains trusted.
 
+## Privacy and action boundaries
+
+The browser submits a raw ZIP only after an explicit action, with a selected
+configured ID and optional trusted archive digest. It sends no filename or
+multipart/base64 envelope. The endpoint keeps the archive in memory and creates
+no cache, report, run, revision or hold record. Source contents, absolute paths,
+archive filenames, task goals, prompts, review notes, raw logs and exceptions
+are absent from the selected report. Relative names, profiles and hashes remain
+private project information. Text is rendered without interpreting HTML.
+
+The inspector does not extract, apply, run checks, launch processes, contact a
+provider, inspect ownership, reconcile workers or read/change a hold. It calls
+no normal history/view/admission/export workflow. Closing the panel resumes
+normal polling; that separate run view retains its existing behavior.
+
+Every comparison leaves these six areas **Not checked**:
+
+- Task goal.
 - Check rerun.
 - Provider completion.
 - Source correctness.
+- Patch applicability.
 - Git adoption.
 
-The offline CLI reads only its named input, validates a bounded canonical ZIP and
-prints a selected JSON summary. It follows no input-path symlinks, refuses
-hardlinks/nonregular files, and checks bounded input size/stability. It never
-extracts, applies a patch, runs a check, contacts a provider or changes
-run/source/hold records. The expected SHA-256 option is optional for internal
-integrity inspection and required for an externally pinned comparison.
+Embedded archive checksums remain unsigned integrity evidence. A separately
+trusted expected digest detects archive replacement, but no report establishes
+who authored or accepted it. Existing v0.9 archive semantics and format are
+unchanged. No status authorizes Run or manual patch adoption.
 
-## Bounds and retained limits
+## Bounds and CLI
 
-| Input or output | Bound |
+| Input/output | Bound |
 | --- | --- |
-| Complete archive | 2 MiB, exactly six stored members |
-| Patch | 1 MiB, nonempty UTF-8 without NUL |
-| JSON records/member payloads | 262,144 bytes each; metadata/latest review 32,768 bytes |
-| Selected baseline/candidate/current-source snapshots | At most 32 files, 32,768 bytes/file and 131,072 bytes total for each snapshot |
-| Reviews | At most 100 contiguous entries; latest record read |
-| Events | At most 256 contiguous entries, 262,144 bytes/event and 8 MiB aggregate |
-| Directory enumeration | At most 1,024 entries per bounded scan |
-| Serialized preview | 65,536 bytes |
-| Wait for earlier live UI update | Cancellable, ten seconds |
+| Binary ZIP body | 1 byte to 2 MiB, exact declared length |
+| Named task file | 262,144 bytes |
+| Approved selected scope | At most 32 files, 32,768 bytes/file |
+| Selected total eligibility | 131,072 bytes; truthful known total may exceed this and prevents a match |
+| Engine/CLI JSON | 65,536 bytes |
+| Manager envelope | 131,072 bytes |
+| Earlier live-poll wait | Cancellable, ten seconds |
 
-The verifier bounds and parses the six fixed local/central records before
-reading payloads. It requires exact layout, names, sizes, CRC, permissions, dates,
-method, schema and checksum bindings, then compares canonical archive bytes.
-There is no input archive extraction or unbounded ZIP metadata inventory. Stored
-members avoid decompression; this is a narrow application format rather than a
-general archive recovery or extraction utility.
+The total is an eligibility threshold after bounded inspection, not a 128-KiB
+physical read budget. If any size is unavailable, the total remains Unknown.
+The ZIP's existing fixed six-member stored format retains all v0.9 structural,
+checksum and payload limits. Invalid binary framing, duplicate length/hash
+headers, transfer encoding, wrong media type, short body or bad supplied digest
+are refused safely. Existing JSON endpoint bounds remain unchanged.
+
+The offline CLI reads an explicitly named archive, project root and task file
+through guarded paths, prints selected JSON and writes nothing. It returns 0 for
+a complete baseline/candidate match, 1 for nonmatch/inspection and 2 for invalid
+or refused input. Java source comparison needs no JDK. The CLI performs no
+extraction, application, checks, inference or provider request.
 
 The original uncertain real-model Java outcome and hold/result hashes remain
-unchanged. Cause and provider completion remain unknown. No retry, replay,
-recovery, model eviction, deployment or new real-model qualification occurred.
-Earlier observations and platform limits remain in
-[version 0.8 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/0fcdc4f0b1980cc4ed13118cb381f5bc29f35e26/VALIDATION.md).
-Acceptance used Python 3.12.7, isolated system Python 3.10.12, Git 2.34.1
-and Temurin JDK 21.0.13+9 targeting Java 17 on Linux. No GitHub CI pass is claimed
-for these local results. Licensing remains **UNASSIGNED**; see [origins](ORIGINS.md).
+unchanged. Cause/provider completion remain unknown; no replay, retry, recovery,
+model eviction, deployment or new real-model qualification occurred.
+Earlier evidence and platform limits remain in
+[version 0.9 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/447e09b56af4a73dab76b037ba8358b5b7fff207/VALIDATION.md).
+Acceptance used Python 3.12.7, isolated system Python 3.10.12, Git 2.34.1 and
+Temurin JDK 21.0.13+9 targeting Java 17 on Linux. No GitHub CI pass is claimed
+for local results. Licensing remains **UNASSIGNED**; see [origins](ORIGINS.md).

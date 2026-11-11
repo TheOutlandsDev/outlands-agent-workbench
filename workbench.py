@@ -24,7 +24,8 @@ from project_revisions import refresh_task
 from run_diagnostics import summarize as summarize_diagnostics
 from run_comparison import compare_runs
 from project_readiness import summarize as summarize_readiness
-from patch_bundle import build_bundle, verify_bundle
+from patch_bundle import MAX_ARCHIVE, build_bundle, verify_bundle
+from bundle_project_check import check_project
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -1308,6 +1309,25 @@ class Manager:
                 run_id, review["result_sha256"], review["patch_sha256"]
             )
 
+    def bundle_project_check(self, project_id, bundle_raw, expected_sha256=None):
+        """Compare private archive bytes with one cached approved project."""
+        with self.lock:
+            require(type(project_id) is str and project_id in self.projects, "PROJECT_CHECK_PROJECT_UNKNOWN")
+            require(type(bundle_raw) is bytes and len(bundle_raw) > 0, "PROJECT_CHECK_INPUT")
+            require(len(bundle_raw) <= MAX_ARCHIVE, "PROJECT_CHECK_LIMIT")
+            project = self.projects[project_id]
+            for path, expected in [(self.config_path, self.config_raw), (project["task"], project["task_raw"])]:
+                fingerprint = self.readiness_fingerprint(path, expected)
+                require(fingerprint["status"] != "LIMIT", "PROJECT_CHECK_LIMIT")
+                require(fingerprint["status"] == "MATCH", "PROJECT_CHECK_PROJECT_CHANGED")
+            report = check_project(bundle_raw, project["source"], project["task_raw"], expected_sha256)
+            result = {"version": 1, "project": {"id": project_id, "name": project["name"]},
+                      "checked_at_ms": time.time_ns() // 1000000,
+                      "config_sha256": sha(self.config_raw), "task_sha256": sha(project["task_raw"]),
+                      "comparison": report}
+            require(len(canonical(result)) <= 131072, "PROJECT_CHECK_OUTPUT_LIMIT")
+            return result
+
     def _bundle_bytes(self, run_id):
         """Verify saved accepted artifacts without live reconciliation or writes."""
         require(type(run_id) is str and ID.fullmatch(run_id) is not None, "BUNDLE_RUN_UNKNOWN")
@@ -1598,6 +1618,26 @@ def make_handler(manager, token, origin):
             try:
                 self.guard(True)
                 require(self.headers.get("Origin") == origin, "ORIGIN_REFUSED")
+                path = urlsplit(self.path).path
+                if path.startswith("/api/bundle-project-check/"):
+                    require(self.headers.get("Transfer-Encoding") is None, "PROJECT_CHECK_INPUT")
+                    require(self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                            == "application/zip", "PROJECT_CHECK_INPUT")
+                    lengths = self.headers.get_all("Content-Length", [])
+                    require(len(lengths) == 1 and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
+                            "PROJECT_CHECK_INPUT")
+                    length = int(lengths[0])
+                    require(length > 0, "PROJECT_CHECK_INPUT")
+                    require(length <= MAX_ARCHIVE, "PROJECT_CHECK_LIMIT")
+                    hashes = self.headers.get_all("X-Bundle-SHA256", [])
+                    require(len(hashes) <= 1 and (not hashes or re.fullmatch(r"[0-9a-f]{64}", hashes[0]) is not None),
+                            "PROJECT_CHECK_INPUT")
+                    raw = self.rfile.read(length)
+                    require(len(raw) == length, "PROJECT_CHECK_INPUT")
+                    result = manager.bundle_project_check(path.removeprefix("/api/bundle-project-check/"),
+                                                          raw, hashes[0] if hashes else None)
+                    self.send(200, canonical(result))
+                    return
                 require(
                     self.headers.get("Content-Type", "").split(";", 1)[0]
                     == "application/json",
@@ -1606,7 +1646,6 @@ def make_handler(manager, token, origin):
                 length = int(self.headers.get("Content-Length", "0"))
                 require(0 < length <= 32768, "REQUEST_LIMIT")
                 request = parse(self.rfile.read(length))
-                path = urlsplit(self.path).path
                 if path == "/api/start":
                     result = manager.start(request)
                 elif path == "/api/project-preview":
