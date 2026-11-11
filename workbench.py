@@ -29,6 +29,7 @@ from bundle_project_check import check_project
 from bundle_workspace import prepare as prepare_bundle_workspace
 from workspace_recheck import inspect as inspect_recheck
 from workspace_recheck import history_pin as recheck_history_pin
+from snapshot_export import prepare as prepare_snapshot_export
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -48,6 +49,62 @@ from agent import (
 HERE = Path(__file__).resolve().parent
 ID = re.compile(r"[0-9a-f]{16}\Z")
 ALIAS = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
+EXPORT_FORMAT = "outlands-snapshot-export-acceptance-v1"
+SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def snapshot_export_note(value):
+    try:
+        return (type(value) is str and len(value) <= 1000 and "\0" not in value
+                and len(value.encode("utf-8")) <= 2000)
+    except UnicodeError:
+        return False
+
+
+def valid_snapshot_acceptance(value):
+    """Validate private review metadata without interpreting it as execution proof."""
+    base = {"version", "format", "id", "attempt_id", "workspace_id", "status", "created",
+            "source_applied", "workspace_modified", "preview_sha256", "prepared_sha256", "review_sha256",
+            "recheck_history_sha256", "parent_acceptance_history_sha256", "recheck_receipt_sha256",
+            "snapshot_sha256", "patch_sha256", "verification_sha256", "archive_sha256", "note"}
+    if type(value) is not dict or type(value.get("status")) is not str:
+        return False
+    status = value["status"]
+    keys = base | ({"finished"} if status in {"ACCEPTED", "FAILED"} else set()) | ({"reason"} if status == "FAILED" else set())
+    if (set(value) != keys or status not in {"PREPARING", "ACCEPTED", "FAILED"}
+            or type(value.get("version")) is not int or value["version"] != 1
+            or value.get("format") != EXPORT_FORMAT or value.get("source_applied") is not False
+            or value.get("workspace_modified") is not False or not snapshot_export_note(value.get("note"))):
+        return False
+    if not all(type(value[k]) is str and ID.fullmatch(value[k]) for k in ["id", "attempt_id", "workspace_id"]):
+        return False
+    hashes = [key for key in base if key.endswith("sha256")]
+    if not all(type(value[k]) is str and SHA256.fullmatch(value[k]) for k in hashes):
+        return False
+    if not all(type(value[k]) is int and 0 <= value[k] <= 9007199254740991
+               for k in ["created"] + (["finished"] if "finished" in keys else [])):
+        return False
+    return status != "FAILED" or value["reason"] == "SNAPSHOT_EXPORT_ACCEPT_FAILED"
+
+
+def valid_snapshot_review(value, receipt):
+    keys = {"version", "preview_id", "preview_sha256", "expires_at_ms", "recheck_history_sha256",
+            "acceptance_history_sha256", "artifact"}
+    if (type(value) is not dict or set(value) != keys or type(value["version"]) is not int or value["version"] != 1
+            or type(value["preview_id"]) is not str or ID.fullmatch(value["preview_id"]) is None
+            or type(value["expires_at_ms"]) is not int or not 0 <= value["expires_at_ms"] <= 9007199254740991
+            or type(value["artifact"]) is not dict):
+        return False
+    summary = value["artifact"]
+    return (len(canonical(summary)) <= 65536 and sha(canonical(summary)) == receipt["prepared_sha256"]
+            and value["preview_sha256"] == receipt["preview_sha256"]
+            and value["recheck_history_sha256"] == receipt["recheck_history_sha256"]
+            and value["acceptance_history_sha256"] == receipt["parent_acceptance_history_sha256"]
+            and all(summary.get(k) == receipt[k] for k in ["attempt_id", "workspace_id", "snapshot_sha256",
+                                                           "patch_sha256", "verification_sha256", "archive_sha256"])
+            and summary.get("receipt_sha256") == receipt["recheck_receipt_sha256"]
+            and sha(canonical({"prepared": summary, "recheck_history_sha256": value["recheck_history_sha256"],
+                              "acceptance_history_sha256": value["acceptance_history_sha256"]})) == receipt["preview_sha256"])
 
 
 def private_dir(path):
@@ -299,7 +356,7 @@ class Manager:
                 "DATA_OUTSIDE_SOURCE",
             )
         private_dir(self.data)
-        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks"]:
+        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks", "snapshot-exports"]:
             private_dir(self.data / name)
         self.server_lock = os.open(
             self.data / "server.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
@@ -317,6 +374,7 @@ class Manager:
         self.bundle_workspace_draft = None
         self.recheck_children = {}
         self.recheck_draft = None
+        self.snapshot_export_draft = None
 
     @staticmethod
     def readiness_fingerprint(path, expected):
@@ -759,6 +817,7 @@ class Manager:
             receipt = {"status": "PREPARING", "created": int(time.time()), "source_applied": False,
                        "result_sha256": request["result_sha256"], "patch_sha256": request["patch_sha256"]}
             self.recheck_draft = None
+            self.snapshot_export_draft = None
             write_new(run / "git-workspace.json", canonical(receipt))
             meta = self.metadata(run_id)
             command = [sys.executable, "-B", str(HERE / "git_workspace.py"), "--run-dir", str(run),
@@ -1119,6 +1178,7 @@ class Manager:
             project = self.current_project(request["project"])
             task = copy.deepcopy(project["definition"])
             self.recheck_draft = None
+            self.snapshot_export_draft = None
             require(self.jdk_home is not None or not any(
                 isinstance(spec, dict) and spec.get("kind") == "java-main"
                 for spec in task["checks"].values()), "JDK_REQUIRED")
@@ -1469,6 +1529,7 @@ class Manager:
             # Consume the draft before any persistent work. A partial failure is never a retry token.
             self.bundle_workspace_draft = None
             self.recheck_draft = None
+            self.snapshot_export_draft = None
             workspace_id = secrets.token_hex(8)
             job = self.data / "bundle-workspaces" / workspace_id
             job.mkdir(mode=0o700, exist_ok=False)
@@ -1572,6 +1633,211 @@ class Manager:
                 child.wait()
             return self.bundle_workspace_view(workspace_id)
 
+    def _snapshot_acceptances(self, exclude_id=None, reserve_bytes=0):
+        """Hash bounded raw receipts; never reconcile, repair or skip damaged records."""
+        try:
+            names, limited = self.readiness_entries(self.data / "snapshot-exports", lambda _: True, 200)
+            require(not limited, "SNAPSHOT_EXPORT_LIMIT")
+            rows, pins, total, unresolved = [], [], 0, False
+            for name in names:
+                require(ID.fullmatch(name) is not None, "SNAPSHOT_EXPORT_RECORD_INVALID")
+                directory = self.data / "snapshot-exports" / name
+                entries, limited = self.readiness_entries(directory, lambda _: True, 3)
+                require(not limited and set(entries) <= {"receipt.json", "review.json", "receipt.json.next"},
+                        "SNAPSHOT_EXPORT_RECORD_INVALID")
+                raw = readiness_read_file(directory, "receipt.json", 32768)
+                total += len(raw)
+                require(total <= 2097152 - reserve_bytes, "SNAPSHOT_EXPORT_LIMIT")
+                value = parse(raw)
+                require(valid_snapshot_acceptance(value) and value["id"] == name, "SNAPSHOT_EXPORT_RECORD_INVALID")
+                if value["status"] == "ACCEPTED":
+                    review_raw = readiness_read_file(directory, "review.json", 131072)
+                    require(sha(review_raw) == value["review_sha256"]
+                            and valid_snapshot_review(parse(review_raw), value), "SNAPSHOT_EXPORT_RECORD_INVALID")
+                if name == exclude_id:
+                    continue
+                unresolved |= value["status"] != "ACCEPTED" or "receipt.json.next" in entries
+                require(value["status"] != "ACCEPTED" or "review.json" in entries, "SNAPSHOT_EXPORT_RECORD_INVALID")
+                digest = sha(raw)
+                pins.append({"id": name, "receipt_sha256": digest})
+                rows.append({**value, "receipt_sha256": digest})
+            return rows, sha(canonical(pins)), unresolved
+        except Refused as exc:
+            if str(exc).startswith("SNAPSHOT_EXPORT_"):
+                raise
+            raise Refused("SNAPSHOT_EXPORT_RECORD_INVALID") from None
+        except (OSError, ValueError, UnicodeError):
+            raise Refused("SNAPSHOT_EXPORT_RECORD_INVALID") from None
+
+    def _snapshot_prepared(self, attempt_id, expected_receipt_sha256=None):
+        require(type(attempt_id) is str and ID.fullmatch(attempt_id) is not None, "SNAPSHOT_EXPORT_ID")
+        try:
+            attempt = self.data / "workspace-rechecks" / attempt_id
+            raw = readiness_read_file(attempt, "receipt.json", 262144)
+            receipt = parse(raw)
+            require(valid_recheck_receipt(receipt) and receipt["id"] == attempt_id, "SNAPSHOT_EXPORT_RECORD_INVALID")
+            require(receipt["status"] == "VERIFIED", "SNAPSHOT_EXPORT_VERIFIED_REQUIRED")
+            self._recheck_inspection(receipt["workspace_id"])
+            return prepare_snapshot_export(attempt, expected_receipt_sha256 or sha(raw))
+        except Refused as exc:
+            if str(exc).startswith("SNAPSHOT_EXPORT_"):
+                raise
+            if str(exc) == "RECHECK_PROJECT_CHANGED":
+                raise Refused("SNAPSHOT_EXPORT_PROJECT_CHANGED") from None
+            raise Refused("SNAPSHOT_EXPORT_RECORD_INVALID") from None
+        except (OSError, ValueError, UnicodeError, KeyError, TypeError):
+            raise Refused("SNAPSHOT_EXPORT_RECORD_INVALID") from None
+
+    def _snapshot_recheck_history(self):
+        try:
+            return recheck_history_pin(self.data / "workspace-rechecks")
+        except (Refused, OSError, ValueError):
+            raise Refused("SNAPSHOT_EXPORT_RECORD_INVALID") from None
+
+    @staticmethod
+    def _snapshot_preview_pin(summary, rechecks, acceptances):
+        return sha(canonical({"prepared": summary, "recheck_history_sha256": rechecks,
+                              "acceptance_history_sha256": acceptances}))
+
+    def snapshot_export_preview(self, request):
+        """Prepare a short-lived read-only review; no worker or admission inspection."""
+        with self.lock:
+            self.snapshot_export_draft = None
+            require(type(request) is dict and set(request) == {"attempt_id"}, "SNAPSHOT_EXPORT_FIELDS")
+            prepared = self._snapshot_prepared(request["attempt_id"])
+            rechecks = self._snapshot_recheck_history()
+            _, acceptances, _ = self._snapshot_acceptances()
+            result = {"version": 1, "preview_id": secrets.token_hex(8),
+                      "preview_sha256": self._snapshot_preview_pin(prepared["summary"], rechecks, acceptances),
+                      "expires_at_ms": time.time_ns() // 1000000 + 300000,
+                      "recheck_history_sha256": rechecks, "acceptance_history_sha256": acceptances,
+                      "artifact": prepared["summary"]}
+            require(len(canonical(result)) <= 131072, "SNAPSHOT_EXPORT_OUTPUT_LIMIT")
+            self.snapshot_export_draft = {"response": result, "deadline": time.monotonic() + 300}
+            return copy.deepcopy(result)
+
+    def snapshot_export_accept(self, request):
+        """Persist only explicit local acceptance metadata, never patch application."""
+        with self.lock:
+            require(type(request) is dict and set(request) == {"preview_id", "preview_sha256", "note"},
+                    "SNAPSHOT_EXPORT_FIELDS")
+            require(snapshot_export_note(request["note"]), "SNAPSHOT_EXPORT_NOTE_INVALID")
+            draft = self.snapshot_export_draft
+            require(draft is not None, "SNAPSHOT_EXPORT_PREVIEW_REQUIRED")
+            value = draft["response"]
+            require(request["preview_id"] == value["preview_id"] and request["preview_sha256"] == value["preview_sha256"],
+                    "SNAPSHOT_EXPORT_PREVIEW_CHANGED")
+            if time.monotonic() >= draft["deadline"] or time.time_ns() // 1000000 >= value["expires_at_ms"]:
+                self.snapshot_export_draft = None
+                raise Refused("SNAPSHOT_EXPORT_PREVIEW_EXPIRED")
+            summary = value["artifact"]
+            prepared = self._snapshot_prepared(summary["attempt_id"], summary["receipt_sha256"])
+            rows, parent, unresolved = self._snapshot_acceptances(reserve_bytes=32768)
+            require(not unresolved, "SNAPSHOT_EXPORT_HISTORY_UNRESOLVED")
+            require(len(rows) < 200, "SNAPSHOT_EXPORT_LIMIT")
+            rechecks = self._snapshot_recheck_history()
+            require(self._snapshot_preview_pin(prepared["summary"], rechecks, parent) == value["preview_sha256"],
+                    "SNAPSHOT_EXPORT_PREVIEW_CHANGED")
+            self.snapshot_export_draft = None
+            identifier = secrets.token_hex(8)
+            directory = self.data / "snapshot-exports" / identifier
+            directory.mkdir(mode=0o700, exist_ok=False)
+            review_raw = canonical(value)
+            receipt = {"version": 1, "format": EXPORT_FORMAT, "id": identifier,
+                       "attempt_id": summary["attempt_id"], "workspace_id": summary["workspace_id"],
+                       "status": "PREPARING", "created": int(time.time()), "source_applied": False,
+                       "workspace_modified": False, "preview_sha256": value["preview_sha256"],
+                       "prepared_sha256": sha(canonical(summary)), "review_sha256": sha(review_raw),
+                       "recheck_history_sha256": rechecks, "parent_acceptance_history_sha256": parent,
+                       "recheck_receipt_sha256": summary["receipt_sha256"], "snapshot_sha256": summary["snapshot_sha256"],
+                       "patch_sha256": summary["patch_sha256"], "verification_sha256": summary["verification_sha256"],
+                       "archive_sha256": summary["archive_sha256"], "note": request["note"]}
+            initial_raw = canonical(receipt)
+            try:
+                write_new(directory / "receipt.json", initial_raw)
+                write_new(directory / "review.json", review_raw)
+                fresh = self._snapshot_prepared(summary["attempt_id"], summary["receipt_sha256"])
+                _, after_parent, after_unresolved = self._snapshot_acceptances(exclude_id=identifier)
+                require(not after_unresolved and after_parent == parent
+                        and self._snapshot_recheck_history() == rechecks
+                        and fresh["summary"] == summary
+                        and readiness_read_file(directory, "review.json", 131072) == review_raw,
+                        "SNAPSHOT_EXPORT_PREVIEW_CHANGED")
+                receipt.update(status="ACCEPTED", finished=int(time.time()))
+                replace_json(directory / "receipt.json", receipt, initial_raw)
+            except (Refused, OSError, ValueError, UnicodeError, KeyError, TypeError):
+                # Preserve this attempt. A failed/partial record blocks later export acceptance.
+                receipt.update(status="FAILED", finished=int(time.time()), reason="SNAPSHOT_EXPORT_ACCEPT_FAILED")
+                try:
+                    replace_json(directory / "receipt.json", receipt, initial_raw)
+                except (Refused, OSError, ValueError):
+                    pass
+                raise Refused("SNAPSHOT_EXPORT_ACCEPT_FAILED") from None
+            raw = canonical(receipt)
+            require(len(raw) <= 32768, "SNAPSHOT_EXPORT_LIMIT")
+            return {"version": 1, "acceptance_id": identifier, "receipt_sha256": sha(raw), "receipt": receipt}
+
+    def snapshot_export_history(self, attempt_id):
+        with self.lock:
+            require(type(attempt_id) is str and ID.fullmatch(attempt_id) is not None, "SNAPSHOT_EXPORT_ID")
+            rows, pin, _ = self._snapshot_acceptances()
+            result = {"version": 1, "attempt_id": attempt_id, "history_sha256": pin,
+                      "acceptances": [row for row in rows if row["attempt_id"] == attempt_id]}
+            require(len(canonical(result)) <= 262144, "SNAPSHOT_EXPORT_OUTPUT_LIMIT")
+            return result
+
+    def snapshot_export_download(self, request):
+        """Rebuild an unchanged accepted packet in memory; no record writes or execution."""
+        with self.lock:
+            require(type(request) is dict and set(request) == {"acceptance_id", "receipt_sha256", "archive_sha256"},
+                    "SNAPSHOT_EXPORT_FIELDS")
+            require(type(request["acceptance_id"]) is str and ID.fullmatch(request["acceptance_id"]) is not None,
+                    "SNAPSHOT_EXPORT_ID")
+            require(all(type(request[k]) is str and SHA256.fullmatch(request[k]) is not None
+                        for k in ["receipt_sha256", "archive_sha256"]), "SNAPSHOT_EXPORT_FIELDS")
+            identifier = request["acceptance_id"]
+            rows, _, unresolved = self._snapshot_acceptances()
+            require(not unresolved, "SNAPSHOT_EXPORT_HISTORY_UNRESOLVED")
+            row = next((row for row in rows if row["id"] == identifier), None)
+            require(row is not None and row["status"] == "ACCEPTED", "SNAPSHOT_EXPORT_ACCEPT_REQUIRED")
+            require(row["receipt_sha256"] == request["receipt_sha256"]
+                    and row["archive_sha256"] == request["archive_sha256"], "SNAPSHOT_EXPORT_ARCHIVE_CHANGED")
+            _, parent, unresolved = self._snapshot_acceptances(exclude_id=identifier)
+            require(not unresolved and parent == row["parent_acceptance_history_sha256"]
+                    and self._snapshot_recheck_history() == row["recheck_history_sha256"], "SNAPSHOT_EXPORT_HISTORY_CHANGED")
+            try:
+                review_raw = readiness_read_file(self.data / "snapshot-exports" / identifier, "review.json", 131072)
+                require(sha(review_raw) == row["review_sha256"], "SNAPSHOT_EXPORT_RECORD_INVALID")
+                review = parse(review_raw)
+                require(type(review) is dict and set(review) == {"version", "preview_id", "preview_sha256",
+                        "expires_at_ms", "recheck_history_sha256", "acceptance_history_sha256", "artifact"},
+                        "SNAPSHOT_EXPORT_RECORD_INVALID")
+                fresh = self._snapshot_prepared(row["attempt_id"], row["recheck_receipt_sha256"])
+                summary = fresh["summary"]
+                require(review["artifact"] == summary and sha(canonical(summary)) == row["prepared_sha256"]
+                        and self._snapshot_preview_pin(summary, row["recheck_history_sha256"], parent) == row["preview_sha256"]
+                        and review["preview_sha256"] == row["preview_sha256"]
+                        and review["recheck_history_sha256"] == row["recheck_history_sha256"]
+                        and review["acceptance_history_sha256"] == parent
+                        and all(row[key] == summary[key] for key in ["workspace_id", "snapshot_sha256", "patch_sha256",
+                                                                   "verification_sha256", "archive_sha256"]),
+                        "SNAPSHOT_EXPORT_PREVIEW_CHANGED")
+                require(sha(fresh["archive"]) == request["archive_sha256"], "SNAPSHOT_EXPORT_ARCHIVE_CHANGED")
+                # History is checked again after reconstruction to catch concurrent external changes.
+                _, end_parent, end_unresolved = self._snapshot_acceptances(exclude_id=identifier)
+                end_raw = readiness_read_file(self.data / "snapshot-exports" / identifier, "receipt.json", 32768)
+                require(not end_unresolved and end_parent == parent and sha(end_raw) == request["receipt_sha256"]
+                        and self._snapshot_recheck_history() == row["recheck_history_sha256"]
+                        and readiness_read_file(self.data / "snapshot-exports" / identifier, "review.json", 131072) == review_raw,
+                        "SNAPSHOT_EXPORT_HISTORY_CHANGED")
+                return fresh["archive"]
+            except Refused as exc:
+                if str(exc).startswith("SNAPSHOT_EXPORT_"):
+                    raise
+                raise Refused("SNAPSHOT_EXPORT_RECORD_INVALID") from None
+            except (OSError, ValueError, UnicodeError, KeyError, TypeError):
+                raise Refused("SNAPSHOT_EXPORT_RECORD_INVALID") from None
+
     def _recheck_inspection(self, workspace_id):
         require(type(workspace_id) is str and ID.fullmatch(workspace_id) is not None, "RECHECK_ID")
         job = self.data / "bundle-workspaces" / workspace_id
@@ -1602,6 +1868,7 @@ class Manager:
         """Read only saved creation evidence, current selected bytes and Git metadata."""
         with self.lock:
             self.recheck_draft = None
+            self.snapshot_export_draft = None
             require(type(request) is dict and set(request) == {"workspace_id"}, "RECHECK_FIELDS")
             inspected = self._recheck_inspection(request["workspace_id"])
             history = recheck_history_pin(self.data / "workspace-rechecks")
@@ -1635,6 +1902,7 @@ class Manager:
                     for spec in inspected["task"]["checks"].values()), "JDK_REQUIRED")
             self.recheck_draft = None
             self.bundle_workspace_draft = None
+            self.snapshot_export_draft = None
             attempt_id = secrets.token_hex(8)
             attempt = self.data / "workspace-rechecks" / attempt_id
             attempt.mkdir(mode=0o700, exist_ok=False)
@@ -1890,6 +2158,7 @@ class Manager:
 
     def close(self):
         self.recheck_draft = None
+        self.snapshot_export_draft = None
         for attempt_id in list(self.recheck_children):
             try:
                 self.recheck_stop(attempt_id)
@@ -2025,6 +2294,8 @@ def make_handler(manager, token, origin):
                     self.send(200, canonical(manager.rechecks(path.removeprefix("/api/workspace-rechecks/"))))
                 elif path.startswith("/api/workspace-recheck/"):
                     self.send(200, canonical(manager.recheck_view(path.removeprefix("/api/workspace-recheck/"))))
+                elif path.startswith("/api/snapshot-export-history/"):
+                    self.send(200, canonical(manager.snapshot_export_history(path.removeprefix("/api/snapshot-export-history/"))))
                 else:
                     self.send(404, canonical({"error": "NOT_FOUND"}))
             except (Refused, OSError, ValueError, KeyError, TypeError) as exc:
@@ -2077,7 +2348,8 @@ def make_handler(manager, token, origin):
                     "JSON_REQUIRED",
                 )
                 if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop", "/api/workspace-recheck-preview",
-                            "/api/workspace-recheck-start", "/api/workspace-recheck-stop"}:
+                            "/api/workspace-recheck-start", "/api/workspace-recheck-stop", "/api/snapshot-export-preview",
+                            "/api/snapshot-export-accept", "/api/snapshot-export-download"}:
                     lengths = self.headers.get_all("Content-Length", [])
                     require(self.headers.get("Transfer-Encoding") is None and len(lengths) == 1
                             and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
@@ -2086,7 +2358,8 @@ def make_handler(manager, token, origin):
                 require(0 < length <= 32768, "REQUEST_LIMIT")
                 raw = self.rfile.read(length)
                 if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop", "/api/workspace-recheck-preview",
-                            "/api/workspace-recheck-start", "/api/workspace-recheck-stop"}:
+                            "/api/workspace-recheck-start", "/api/workspace-recheck-stop", "/api/snapshot-export-preview",
+                            "/api/snapshot-export-accept", "/api/snapshot-export-download"}:
                     require(len(raw) == length, "BUNDLE_WORKSPACE_INPUT")
                 request = parse(raw)
                 if path == "/api/start":
@@ -2116,6 +2389,14 @@ def make_handler(manager, token, origin):
                 elif path == "/api/workspace-recheck-stop":
                     require(type(request) is dict and set(request) == {"id"}, "RECHECK_FIELDS")
                     result = manager.recheck_stop(request["id"])
+                elif path == "/api/snapshot-export-preview":
+                    result = manager.snapshot_export_preview(request)
+                elif path == "/api/snapshot-export-accept":
+                    result = manager.snapshot_export_accept(request)
+                elif path == "/api/snapshot-export-download":
+                    raw = manager.snapshot_export_download(request)
+                    self.send(200, raw, "application/zip", "outlands-reviewed-snapshot.zip")
+                    return
                 elif path == "/api/stop":
                     require(
                         isinstance(request, dict) and set(request) == {"id"},

@@ -62,6 +62,21 @@ Git during preview. Fixed isolated checks reuse the existing standard-library
 runners. No Git implementation or third-party parser is bundled. Current metadata
 pins are new observations, not reconstructed historical proof. Real snapshots,
 check output, attempts and earlier creation records stay private.
+Version 0.13 adds deterministic reviewed-snapshot patch reconstruction, a
+four-member private ZIP format, a verify-only offline CLI, expiring export review
+pins, explicit local acceptance records, fresh-pin downloads and browser controls.
+It reuses the existing strict diff reconstruction, selected-file readers, task
+validation and recorded-check reducers; archive handling uses Python's standard
+library without a bundled third-party ZIP or patch implementation. Its patch
+combines the imported fix and manual editable changes in an exact verified recheck
+snapshot. Export preparation, acceptance, download and verification run no new
+checks, Git command, inference or provider request. Invented Python/Java fixtures
+separate their actual isolated initial/recheck checks from this saved-evidence
+export path; they establish no model competence or source-adoption claim.
+Private acceptance notes and their two-file receipt/review records remain outside
+the ZIP and public source package, along with real archives, source snapshots,
+check output and histories. The packet carries unsigned integrity evidence and
+no human-acceptance or authenticity assertion.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.
