@@ -9,3 +9,4 @@ state/
 private-review/
 config.json
 *.log
+*.zip

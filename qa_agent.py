@@ -14,6 +14,7 @@ from qa_git import acceptance as git_acceptance
 from qa_project_refresh import acceptance as refresh_acceptance
 from qa_run_comparison import acceptance as comparison_acceptance
 from qa_project_readiness import acceptance as readiness_acceptance
+from qa_patch_bundle import acceptance as bundle_acceptance
 
 
 def main():
@@ -55,7 +56,7 @@ def main():
         timeout=30,
         check=True,
     )
-    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py", "test_project_revisions.py", "test_project_refresh.py", "test_run_comparison.py", "test_run_comparison_integration.py", "test_project_readiness.py", "test_project_readiness_integration.py"]:
+    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py", "test_project_revisions.py", "test_project_refresh.py", "test_run_comparison.py", "test_run_comparison_integration.py", "test_project_readiness.py", "test_project_readiness_integration.py", "test_patch_bundle.py", "test_patch_bundle_integration.py"]:
         tests = subprocess.run(
             [
                 sys.executable,
@@ -190,6 +191,7 @@ class Boundary(unittest.TestCase):
         **refresh_acceptance(jdk, work),
         **comparison_acceptance(work),
         **readiness_acceptance(work),
+        **bundle_acceptance(work),
     }
     (work / "acceptance.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, sort_keys=True))

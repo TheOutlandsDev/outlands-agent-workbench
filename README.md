@@ -5,9 +5,12 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.8 adds advisory **Project readiness** inspections of selected source,
-exact task/config fingerprints, executable presence and saved admission evidence.
-It retains read-only run comparisons, reviewed project refreshes, task revisions,
+Version 0.9 adds private **Reviewed patch bundles**, a pinned download preview
+and a read-only offline verifier. Each bundle carries an accepted patch,
+selected file hashes and bounded saved review/check evidence. It retains
+advisory **Project readiness** inspections of selected source,
+exact task/config fingerprints, executable presence and saved admission evidence,
+read-only run comparisons, reviewed project refreshes, task revisions,
 scoped search, focused reads, request-size guards, Run Diagnostics, the foreground
 launcher, Git review workspaces and the isolated Python/Java
 task-to-reviewed-patch workflow. It remains a small Linux prototype with a Python
@@ -322,6 +325,74 @@ preflight can occur earlier; this guard makes no claim that all provider GETs
 were skipped. It is a byte limit, not tokenizer-based context qualification.
 Model context, prediction limits, timeouts and no-retry behavior are unchanged.
 
+## Download a private reviewed bundle
+
+After accepting a completed patch, open **Review & export**, then choose
+**Preview private bundle**. Inspect the archive digest, its six members, selected
+file hashes and saved check summary. **Download private bundle** rebuilds and
+rechecks the artifact against that displayed digest; changed evidence requires
+a new preview. The original plain-patch download remains available.
+
+Keep the downloaded ZIP private: its patch, relative filenames and check
+specifications can contain private source information. Choose a private download
+location and review its filesystem permissions. Bundles are ordinary unencrypted
+ZIP files; this application does not publish or upload them.
+The source checkout ignores ZIP files to reduce accidental commits. This is an
+upload safeguard, not filesystem access control or encryption.
+
+The six fixed members are:
+
+| Member | Contents |
+| --- | --- |
+| `changes.diff` | The exact accepted patch |
+| `manifest.json` | Selected baseline/candidate hashes, editable scope, check profile, budgets and original-record digests |
+| `review.json` | Accepted decision and hash bindings |
+| `checks.json` | Selected recorded independent-final-check results |
+| `README.txt` | Manual adoption instructions and verification limits |
+| `SHA256SUMS` | SHA-256 checksums of the other five members |
+
+Task goals, project/run/model identifiers, timestamps, review notes/identities,
+prompts/responses, absolute paths, source copies and raw check output are omitted
+from these summaries. The patch itself contains source changes. Original record
+digests identify omitted private bytes; their contents cannot be reconstructed
+or authenticated from the bundle.
+
+Verify a downloaded archive from the repository root, using its displayed digest
+from a trusted preview when available:
+
+```sh
+python3 -B patch_bundle.py /absolute/private-bundle.zip \
+  --expect-sha256 SHA256_FROM_TRUSTED_PREVIEW
+```
+
+Omit `--expect-sha256` to inspect internal integrity alone. A valid archive prints
+a bounded JSON summary and exits 0; a refusal prints a fixed error code and exits
+2. The verifier reads without extracting files, applying patches, executing
+checks, contacting a provider or changing run records. Embedded checksums are
+unsigned integrity evidence. They do not establish authenticity; a person who
+changes all the contents and checksums can create a different valid bundle.
+An independently trusted whole-archive digest detects that replacement.
+
+Every summary leaves check reruns, provider completion, source correctness and
+Git adoption explicitly **Not checked**. Recorded passing checks remain saved
+evidence. Before manual adoption, inspect the patch, compare the intended
+project's baseline hashes, use a review workspace and run its fixed checks.
+
+Bundle export requires a saved accepted `REVIEW_READY` artifact with complete
+start-time task pins and the current project revision. Missing legacy pins,
+changed config/task/source/candidate/protected files, partial records, or missing
+passing final evidence are refused. The new bundle gate leaves existing plain
+patch/workspace behavior intact. An unrelated request hold stays in place and
+continues to block new work; bundle inspection does not clear or reconcile it.
+
+The preview pauses normal run polling until closed, waits at most ten seconds
+for an earlier update, and ignores late responses after selection changes.
+Archives are built in memory and never cached in the private run directory.
+Limits are a 2-MiB archive, six fixed stored members and a 1-MiB patch. The offline
+verifier rejects compressed, encrypted, linked, duplicate, extra or unsafe members,
+unsupported metadata, malformed schemas and hidden or trailing records. See
+[validation and bounds](VALIDATION.md) for saved-record inspection limits.
+
 ## Apply an accepted patch in a Git review workspace
 
 After inspecting Diff and Checks and accepting the exact patch, choose
@@ -496,8 +567,8 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 328 unit methods: the prior 270, 30 pure readiness methods and
-28 readiness/controller/HTTP methods. It compiles the Java client with Java 17
+This runs 377 unit methods: the prior 328, 30 pure bundle/CLI methods and
+19 bundle/controller/HTTP methods. It compiles the Java client with Java 17
 compatibility and warnings as errors, compares Python/Java scripted results,
 and runs actual isolated checks. Acceptance covers namespace boundaries,
 time/output limits, Java compilation diagnostics and protected-main execution,
@@ -514,14 +585,17 @@ model-generated results. Readiness acceptance uses invented configured Python
 and Java projects, executable-presence stubs that are never run, source/config
 drift, a missing Java compiler and a separate synthetic hold. Each inspection
 preserves private file hashes and performs zero checks or model requests; the
-runner's existing actual isolated checks remain separate. The runner makes no
-AI inference requests. The
+runner's existing actual isolated checks remain separate. Bundle acceptance
+uses invented accepted Python/Java artifacts and an unrelated synthetic hold,
+verifies deterministic private archives, and refuses changed pins/source while
+preserving private bytes. It performs no checks or provider requests. The
+runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
 
 Real-model browser acceptance is a separate, explicit task; see
 [VALIDATION.md](VALIDATION.md) for the observed result and its narrow coverage.
-Version 0.8 was tested offline only. Readiness, comparisons, refreshes and context
+Version 0.9 was tested offline only. Bundles, readiness, comparisons, refreshes and context
 tools do not determine the cause or provider completion of the preserved
 uncertain Java trial from version 0.3.
 
