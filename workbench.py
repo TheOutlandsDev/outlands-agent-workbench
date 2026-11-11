@@ -27,6 +27,8 @@ from project_readiness import summarize as summarize_readiness
 from patch_bundle import MAX_ARCHIVE, build_bundle, verify_bundle
 from bundle_project_check import check_project
 from bundle_workspace import prepare as prepare_bundle_workspace
+from workspace_recheck import inspect as inspect_recheck
+from workspace_recheck import history_pin as recheck_history_pin
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -126,6 +128,34 @@ def verified_workspace_receipt(value):
     checks = value.get("checks")
     return (isinstance(checks, dict) and 1 <= len(checks) <= 4
             and all(isinstance(row, dict) and type(row.get("exit_code")) is int and row["exit_code"] == 0
+                    and type(row.get("tests_ran")) is int and row["tests_ran"] > 0
+                    and all(row.get(k) is False for k in ["timed_out", "output_limited", "infrastructure_error"])
+                    for row in checks.values()))
+
+
+def valid_recheck_receipt(value):
+    if (type(value) is not dict or type(value.get("version")) is not int or value["version"] != 1
+            or value.get("format") != "outlands-workspace-recheck-v1"
+            or value.get("source_applied") is not False or value.get("workspace_modified") is not False
+            or type(value.get("status")) is not str
+            or value["status"] not in {"PREPARING", "VERIFIED", "FAILED", "INTERRUPTED"}
+            or type(value.get("created")) is not int or not 0 <= value["created"] <= 9007199254740991
+            or not all(type(value.get(k)) is str and ID.fullmatch(value[k]) is not None
+                       for k in ["id", "workspace_id"])
+            or not all(type(value.get(k)) is str and re.fullmatch(r"[0-9a-f]{64}", value[k]) is not None
+                       for k in ["creation_sha256", "preview_sha256", "history_sha256"])):
+        return False
+    if value["status"] != "VERIFIED":
+        return True
+    checks, files = value.get("checks"), value.get("checked_files")
+    return (type(value.get("finished")) is int and 0 <= value["finished"] <= 9007199254740991
+            and all(type(value.get(k)) is str and re.fullmatch(r"[0-9a-f]{64}", value[k]) is not None
+                    for k in ["snapshot_sha256", "task_sha256", "bundle_sha256", "config_sha256", "checks_sha256"])
+            and type(files) is dict and 1 <= len(files) <= 32
+            and all(type(name) is str and type(digest) is str and re.fullmatch(r"[0-9a-f]{64}", digest) is not None
+                    for name, digest in files.items())
+            and type(checks) is dict and 1 <= len(checks) <= 4
+            and all(type(row) is dict and type(row.get("exit_code")) is int and row["exit_code"] == 0
                     and type(row.get("tests_ran")) is int and row["tests_ran"] > 0
                     and all(row.get(k) is False for k in ["timed_out", "output_limited", "infrastructure_error"])
                     for row in checks.values()))
@@ -269,7 +299,7 @@ class Manager:
                 "DATA_OUTSIDE_SOURCE",
             )
         private_dir(self.data)
-        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces"]:
+        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks"]:
             private_dir(self.data / name)
         self.server_lock = os.open(
             self.data / "server.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
@@ -285,6 +315,8 @@ class Manager:
         self.workspace_children = {}
         self.bundle_workspace_children = {}
         self.bundle_workspace_draft = None
+        self.recheck_children = {}
+        self.recheck_draft = None
 
     @staticmethod
     def readiness_fingerprint(path, expected):
@@ -457,6 +489,24 @@ class Manager:
                 note("WORKSPACE_ACTIVE_OR_UNRESOLVED")
             elif not verified_workspace_receipt({**receipt, "result_sha256": receipt.get("bundle_sha256")}):
                 note("ADMISSION_RECORD_INVALID")
+        try:
+            names, recheck_truncated = self.readiness_entries(self.data / "workspace-rechecks", lambda _: True, 200)
+        except OSError:
+            names, recheck_truncated = [], False
+            note("ADMISSION_UNAVAILABLE")
+        if recheck_truncated:
+            truncated = True
+            note("ADMISSION_RECORD_LIMIT")
+        for name in names:
+            if ID.fullmatch(name) is None:
+                note("ADMISSION_RECORD_INVALID")
+                continue
+            workspaces += 1
+            receipt = record(self.data / "workspace-rechecks", name + "/receipt.json", 262144)
+            if not valid_recheck_receipt(receipt) or receipt["id"] != name:
+                note("ADMISSION_RECORD_INVALID")
+            elif receipt["status"] != "VERIFIED":
+                note("WORKSPACE_ACTIVE_OR_UNRESOLVED")
         return {"hold": hold, "jobs_inspected": jobs, "workspaces_inspected": workspaces,
                 "truncated": truncated, "reasons": reasons}
 
@@ -708,6 +758,7 @@ class Manager:
             require(blocked is None, blocked or "ADMISSION")
             receipt = {"status": "PREPARING", "created": int(time.time()), "source_applied": False,
                        "result_sha256": request["result_sha256"], "patch_sha256": request["patch_sha256"]}
+            self.recheck_draft = None
             write_new(run / "git-workspace.json", canonical(receipt))
             meta = self.metadata(run_id)
             command = [sys.executable, "-B", str(HERE / "git_workspace.py"), "--run-dir", str(run),
@@ -1030,10 +1081,15 @@ class Manager:
                 return "WORKSPACE_ACTIVE_OR_UNRESOLVED"
         try:
             for receipt in self.bundle_workspaces()["workspaces"]:
-                if receipt["status"] != "VERIFIED":
+                if receipt["status"] != "VERIFIED" or receipt.get("owned_active") is True:
                     return "BUNDLE_WORKSPACE_ACTIVE_OR_UNRESOLVED"
         except (Refused, OSError, ValueError, KeyError, TypeError):
             return "BUNDLE_WORKSPACE_NEEDS_INSPECTION"
+        try:
+            if any(row["status"] != "VERIFIED" or row.get("owned_active") is True for row in self._recheck_rows()):
+                return "RECHECK_ACTIVE_OR_UNRESOLVED"
+        except (Refused, OSError, ValueError, KeyError, TypeError):
+            return "RECHECK_NEEDS_INSPECTION"
         if any(
             r["state"] in ["RUNNING", "STOP_REQUESTED", "RECOVERY_REQUIRED"]
             for r in rows
@@ -1062,6 +1118,7 @@ class Manager:
             require(blocked is None, blocked or "ADMISSION")
             project = self.current_project(request["project"])
             task = copy.deepcopy(project["definition"])
+            self.recheck_draft = None
             require(self.jdk_home is not None or not any(
                 isinstance(spec, dict) and spec.get("kind") == "java-main"
                 for spec in task["checks"].values()), "JDK_REQUIRED")
@@ -1411,6 +1468,7 @@ class Manager:
                     for spec in project["definition"]["checks"].values()), "JDK_REQUIRED")
             # Consume the draft before any persistent work. A partial failure is never a retry token.
             self.bundle_workspace_draft = None
+            self.recheck_draft = None
             workspace_id = secrets.token_hex(8)
             job = self.data / "bundle-workspaces" / workspace_id
             job.mkdir(mode=0o700, exist_ok=False)
@@ -1513,6 +1571,167 @@ class Manager:
                     pass
                 child.wait()
             return self.bundle_workspace_view(workspace_id)
+
+    def _recheck_inspection(self, workspace_id):
+        require(type(workspace_id) is str and ID.fullmatch(workspace_id) is not None, "RECHECK_ID")
+        job = self.data / "bundle-workspaces" / workspace_id
+        try:
+            creation_raw = readiness_read_file(job, "receipt.json", 262144)
+            creation = parse(creation_raw)
+            request = parse(readiness_read_file(job, "request.json", 32768))
+        except FileNotFoundError:
+            raise Refused("RECHECK_CREATION_REQUIRED") from None
+        except (Refused, OSError, ValueError):
+            raise Refused("RECHECK_RECORD_INVALID") from None
+        require(type(creation) is dict and type(request) is dict
+                and type(creation.get("project_id")) is str and creation["project_id"] in self.projects,
+                "RECHECK_CREATION_REQUIRED")
+        project = self.projects[creation["project_id"]]
+        require(request.get("project_id") == project["id"] and request.get("id") == workspace_id
+                and request.get("source") == str(project["source"])
+                and request.get("task_path") == str(project["task"])
+                and request.get("config_path") == str(self.config_path)
+                and request.get("task_sha256") == sha(project["task_raw"])
+                and request.get("config_sha256") == sha(self.config_raw), "RECHECK_PROJECT_CHANGED")
+        for path, expected in [(self.config_path, self.config_raw), (project["task"], project["task_raw"])]:
+            require(self.readiness_fingerprint(path, expected)["status"] == "MATCH", "RECHECK_PROJECT_CHANGED")
+        inspected = inspect_recheck(job, sha(creation_raw))
+        return inspected
+
+    def recheck_preview(self, request):
+        """Read only saved creation evidence, current selected bytes and Git metadata."""
+        with self.lock:
+            self.recheck_draft = None
+            require(type(request) is dict and set(request) == {"workspace_id"}, "RECHECK_FIELDS")
+            inspected = self._recheck_inspection(request["workspace_id"])
+            history = recheck_history_pin(self.data / "workspace-rechecks")
+            pin = sha(canonical({"inspection": inspected["summary"], "history_sha256": history}))
+            result = {"version": 1, "workspace_id": request["workspace_id"], "preview_id": secrets.token_hex(8),
+                      "preview_sha256": pin, "expires_at_ms": time.time_ns() // 1000000 + 300000,
+                      "history_sha256": history, "inspection": inspected["summary"]}
+            require(len(canonical(result)) <= 131072, "RECHECK_OUTPUT_LIMIT")
+            self.recheck_draft = {"response": result, "deadline": time.monotonic() + 300}
+            return copy.deepcopy(result)
+
+    def recheck_start(self, request):
+        with self.lock:
+            require(type(request) is dict and set(request) == {"preview_id", "preview_sha256"}, "RECHECK_FIELDS")
+            draft = self.recheck_draft
+            require(draft is not None, "RECHECK_PREVIEW_REQUIRED")
+            value = draft["response"]
+            require(request["preview_id"] == value["preview_id"]
+                    and request["preview_sha256"] == value["preview_sha256"], "RECHECK_PREVIEW_CHANGED")
+            if time.monotonic() >= draft["deadline"] or time.time_ns() // 1000000 >= value["expires_at_ms"]:
+                self.recheck_draft = None
+                raise Refused("RECHECK_PREVIEW_EXPIRED")
+            blocked = self.admission()
+            require(blocked is None, blocked or "ADMISSION")
+            inspected = self._recheck_inspection(value["workspace_id"])
+            require(len(self._recheck_rows(reserve_bytes=262144)) < 200, "RECHECK_LIMIT")
+            history = recheck_history_pin(self.data / "workspace-rechecks")
+            pin = sha(canonical({"inspection": inspected["summary"], "history_sha256": history}))
+            require(pin == value["preview_sha256"], "RECHECK_PREVIEW_CHANGED")
+            require(self.jdk_home is not None or not any(isinstance(spec, dict) and spec.get("kind") == "java-main"
+                    for spec in inspected["task"]["checks"].values()), "JDK_REQUIRED")
+            self.recheck_draft = None
+            self.bundle_workspace_draft = None
+            attempt_id = secrets.token_hex(8)
+            attempt = self.data / "workspace-rechecks" / attempt_id
+            attempt.mkdir(mode=0o700, exist_ok=False)
+            receipt = {"version": 1, "format": "outlands-workspace-recheck-v1", "id": attempt_id,
+                       "workspace_id": value["workspace_id"], "status": "PREPARING", "created": int(time.time()),
+                       "source_applied": False, "workspace_modified": False,
+                       "creation_sha256": inspected["summary"]["creation_sha256"],
+                       "preview_sha256": pin, "history_sha256": history}
+            write_new(attempt / "receipt.json", canonical(receipt))
+            try:
+                worker_request = {"version": 1, "id": attempt_id, "workspace_id": value["workspace_id"],
+                                  "job_dir": str(self.data / "bundle-workspaces" / value["workspace_id"]),
+                                  "preview_sha256": pin, "creation_sha256": receipt["creation_sha256"],
+                                  "history_sha256": history}
+                write_new(attempt / "request.json", canonical(worker_request))
+                command = [sys.executable, "-B", str(HERE / "workspace_recheck.py"), "--attempt-dir", str(attempt)]
+                if self.jdk_home is not None:
+                    command += ["--jdk-home", str(self.jdk_home)]
+                fd = os.open(attempt / "worker.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                log = os.fdopen(fd, "wb")
+                try:
+                    child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                             start_new_session=True,
+                                             env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "PYTHONNOUSERSITE": "1"})
+                except BaseException:
+                    log.close()
+                    raise
+                self.recheck_children[attempt_id] = (child, log)
+            except (OSError, ValueError, Refused, subprocess.SubprocessError):
+                receipt.update(status="FAILED", reason="RECHECK_START_FAILED", finished=int(time.time()))
+                replace_json(attempt / "receipt.json", receipt)
+                raise Refused("RECHECK_START_FAILED") from None
+            return self.recheck_view(attempt_id)
+
+    def recheck_view(self, attempt_id):
+        with self.lock:
+            require(type(attempt_id) is str and ID.fullmatch(attempt_id) is not None, "RECHECK_ID")
+            attempt = self.data / "workspace-rechecks" / attempt_id
+            entry = self.recheck_children.get(attempt_id)
+            exited = entry is not None and entry[0].poll() is not None
+            if exited:
+                child, log = self.recheck_children.pop(attempt_id)
+                log.close()
+            try:
+                raw = readiness_read_file(attempt, "receipt.json", 262144)
+                receipt = parse(raw)
+            except (Refused, OSError, ValueError):
+                raise Refused("RECHECK_RECORD_INVALID") from None
+            require(valid_recheck_receipt(receipt) and receipt["id"] == attempt_id, "RECHECK_RECORD_INVALID")
+            if exited and receipt["status"] == "PREPARING":
+                receipt.update(status="INTERRUPTED", reason="RECHECK_INTERRUPTED", finished=int(time.time()))
+                replace_json(attempt / "receipt.json", receipt, raw)
+            return {**receipt, "owned_active": attempt_id in self.recheck_children}
+
+    def _recheck_rows(self, reserve_bytes=0):
+        names, truncated = self.readiness_entries(self.data / "workspace-rechecks", lambda _: True, 200)
+        require(not truncated, "RECHECK_LIMIT")
+        rows, record_bytes = [], 0
+        for name in names:
+            require(ID.fullmatch(name) is not None, "RECHECK_RECORD_INVALID")
+            row = self.recheck_view(name)
+            record_bytes += len(readiness_read_file(self.data / "workspace-rechecks" / name, "receipt.json", 262144))
+            require(record_bytes <= 2097152 - reserve_bytes, "RECHECK_LIMIT")
+            rows.append({key: row[key] for key in ["version", "id", "workspace_id", "status", "created", "finished",
+                        "reason", "source_applied", "workspace_modified", "owned_active", "creation_sha256",
+                        "preview_sha256", "history_sha256", "snapshot_sha256"] if key in row})
+        return rows
+
+    def rechecks(self, workspace_id):
+        with self.lock:
+            require(type(workspace_id) is str and ID.fullmatch(workspace_id) is not None, "RECHECK_ID")
+            rows = self._recheck_rows()
+            result = {"version": 1, "workspace_id": workspace_id,
+                      "history_sha256": recheck_history_pin(self.data / "workspace-rechecks"),
+                      "rechecks": [row for row in rows if row["workspace_id"] == workspace_id]}
+            require(len(canonical(result)) <= 262144, "RECHECK_OUTPUT_LIMIT")
+            return result
+
+    def recheck_stop(self, attempt_id):
+        with self.lock:
+            self.recheck_view(attempt_id)
+            entry = self.recheck_children.get(attempt_id)
+            require(entry is not None and entry[0].poll() is None, "NO_OWNED_ACTIVE_RECHECK")
+            child = entry[0]
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                child.wait()
+            return self.recheck_view(attempt_id)
 
     def _bundle_bytes(self, run_id):
         """Verify saved accepted artifacts without live reconciliation or writes."""
@@ -1670,6 +1889,14 @@ class Manager:
         }
 
     def close(self):
+        self.recheck_draft = None
+        for attempt_id in list(self.recheck_children):
+            try:
+                self.recheck_stop(attempt_id)
+            except Refused:
+                pass
+        for attempt_id in list(self.recheck_children):
+            self.recheck_view(attempt_id)
         self.bundle_workspace_draft = None
         for workspace_id in list(self.bundle_workspace_children):
             try:
@@ -1794,6 +2021,10 @@ def make_handler(manager, token, origin):
                     self.send(200, canonical(manager.bundle_workspaces()))
                 elif path.startswith("/api/bundle-workspace/"):
                     self.send(200, canonical(manager.bundle_workspace_view(path.removeprefix("/api/bundle-workspace/"))))
+                elif path.startswith("/api/workspace-rechecks/"):
+                    self.send(200, canonical(manager.rechecks(path.removeprefix("/api/workspace-rechecks/"))))
+                elif path.startswith("/api/workspace-recheck/"):
+                    self.send(200, canonical(manager.recheck_view(path.removeprefix("/api/workspace-recheck/"))))
                 else:
                     self.send(404, canonical({"error": "NOT_FOUND"}))
             except (Refused, OSError, ValueError, KeyError, TypeError) as exc:
@@ -1845,7 +2076,8 @@ def make_handler(manager, token, origin):
                     == "application/json",
                     "JSON_REQUIRED",
                 )
-                if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop"}:
+                if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop", "/api/workspace-recheck-preview",
+                            "/api/workspace-recheck-start", "/api/workspace-recheck-stop"}:
                     lengths = self.headers.get_all("Content-Length", [])
                     require(self.headers.get("Transfer-Encoding") is None and len(lengths) == 1
                             and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
@@ -1853,7 +2085,8 @@ def make_handler(manager, token, origin):
                 length = int(self.headers.get("Content-Length", "0"))
                 require(0 < length <= 32768, "REQUEST_LIMIT")
                 raw = self.rfile.read(length)
-                if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop"}:
+                if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop", "/api/workspace-recheck-preview",
+                            "/api/workspace-recheck-start", "/api/workspace-recheck-stop"}:
                     require(len(raw) == length, "BUNDLE_WORKSPACE_INPUT")
                 request = parse(raw)
                 if path == "/api/start":
@@ -1876,6 +2109,13 @@ def make_handler(manager, token, origin):
                 elif path == "/api/bundle-workspace-stop":
                     require(type(request) is dict and set(request) == {"id"}, "STOP_FIELDS")
                     result = manager.bundle_workspace_stop(request["id"])
+                elif path == "/api/workspace-recheck-preview":
+                    result = manager.recheck_preview(request)
+                elif path == "/api/workspace-recheck-start":
+                    result = manager.recheck_start(request)
+                elif path == "/api/workspace-recheck-stop":
+                    require(type(request) is dict and set(request) == {"id"}, "RECHECK_FIELDS")
+                    result = manager.recheck_stop(request["id"])
                 elif path == "/api/stop":
                     require(
                         isinstance(request, dict) and set(request) == {"id"},

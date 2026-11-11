@@ -54,6 +54,14 @@ fixed isolated check runners. No external patch implementation is bundled.
 Offline rerun checks are separate from the invented bundle's saved check rows;
 neither is a real-model qualification run. Private bundles, generated repositories,
 requests, check output and histories remain excluded from the public source.
+Version 0.12 adds direct private Git metadata/index inspection, pinned manual
+editable-byte snapshots, append-only workspace recheck workers and receipts,
+controller/browser integration and invented Python/Java qualification fixtures.
+Its readers validate the existing private Git worktree format without executing
+Git during preview. Fixed isolated checks reuse the existing standard-library
+runners. No Git implementation or third-party parser is bundled. Current metadata
+pins are new observations, not reconstructed historical proof. Real snapshots,
+check output, attempts and earlier creation records stay private.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.
