@@ -10,6 +10,7 @@ from pathlib import Path
 from agent import review_diff
 from isolation import check
 from qa_java import acceptance as java_acceptance
+from qa_git import acceptance as git_acceptance
 
 
 def main():
@@ -51,7 +52,7 @@ def main():
         timeout=30,
         check=True,
     )
-    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py"]:
+    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py"]:
         tests = subprocess.run(
             [
                 sys.executable,
@@ -182,6 +183,7 @@ class Boundary(unittest.TestCase):
         "unterminated_diff_git_check": True,
         "patch_sha256": results[0]["patch_sha256"],
         **java_acceptance(jdk, work),
+        **git_acceptance(jdk, work),
     }
     (work / "acceptance.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, sort_keys=True))

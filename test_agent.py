@@ -23,6 +23,7 @@ from agent import (
     review_diff,
     sha,
     validate_task,
+    tools_for_messages,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -200,7 +201,9 @@ class FilesTests(unittest.TestCase):
     def test_size_and_binary(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for raw in [b"x" * 16385, b"\x00"]:
+            (root / "file").write_bytes(b"x" * 32768)
+            self.assertEqual(len(read_file(root, "file")), 32768)
+            for raw in [b"x" * 32769, b"\x00"]:
                 (root / "file").write_bytes(raw)
                 with self.assertRaises(Refused):
                     read_file(root, "file")
@@ -411,6 +414,35 @@ class LoopTests(unittest.TestCase):
 
 
 class TransportTests(unittest.TestCase):
+    def test_provider_timeout_phase_preserves_hold_without_retry(self):
+        for phase in ["SEND", "HEADER", "BODY"]:
+            with self.subTest(phase=phase), fixture() as (root, session):
+                with patch("agent.http.client.HTTPConnection") as factory:
+                    connection = factory.return_value
+                    if phase == "SEND":
+                        connection.request.side_effect = TimeoutError("private transport detail")
+                    elif phase == "HEADER":
+                        connection.getresponse.side_effect = TimeoutError("private transport detail")
+                    else:
+                        connection.getresponse.return_value.read.side_effect = TimeoutError("private transport detail")
+                    with gate(root / "state") as hold:
+                        result = session.run(Ollama("fictional-model"), hold, "ollama")
+                    self.assertEqual(result["status"], "UNCERTAIN")
+                    self.assertEqual(result["reason"], "PROVIDER_" + phase + "_TIMEOUT")
+                    self.assertEqual(result["turns"], 1)
+                    self.assertTrue(all(row["before"] == row["after"] for row in result["files"].values()))
+                    connection.request.assert_called_once()
+                    connection.close.assert_called_once()
+                    factory.assert_called_once_with("127.0.0.1", 11434, timeout=session.task["request_seconds"])
+                    with self.assertRaisesRegex(Refused, "UNCERTAIN_REQUEST_HELD"), gate(root / "state"):
+                        pass
+
+    def test_tool_offers_follow_acknowledged_plan(self):
+        for messages in [[], [{"role": "assistant", "tool_calls": [{"function": {"name": "set_plan"}}]}], [{"role": "tool", "tool_name": "read_file"}]]:
+            self.assertEqual([t["function"]["name"] for t in tools_for_messages(messages)], ["set_plan"])
+        offered = tools_for_messages([{"role": "tool", "tool_name": "set_plan", "content": "recorded"}])
+        self.assertEqual([t["function"]["name"] for t in offered], ["read_file", "replace_text", "run_check"])
+
     def test_preflight_other_model_refused(self):
         with patch("agent.http.client.HTTPConnection") as connection:
             reply = connection.return_value.getresponse.return_value
@@ -472,7 +504,7 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(args, ("127.0.0.1", 11434, 5))
         self.assertEqual((method, path), ("POST", "/api/chat"))
         self.assertFalse(payload["stream"])
-        self.assertEqual(len(payload["tools"]), 4)
+        self.assertEqual([t["function"]["name"] for t in payload["tools"]], ["set_plan"])
         self.assertEqual(result["content"], "hello")
 
 

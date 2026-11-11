@@ -5,8 +5,8 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.2 adds a project setup wizard and isolated Java compilation/test-main
-checks to the local task-to-reviewed-patch workflow. It remains a small Linux
+Version 0.3 adds a checked foreground launcher and Git review workspaces to the
+project wizard and isolated Python/Java task-to-reviewed-patch workflow. It remains a small Linux
 prototype with a Python engine and a compatible Java launcher.
 See [validation and limits](VALIDATION.md) and [origins](ORIGINS.md).
 
@@ -16,11 +16,46 @@ See [validation and limits](VALIDATION.md) and [origins](ORIGINS.md).
 - `/usr/bin/bwrap`, `/usr/bin/prlimit`, and `/usr/bin/python3` for isolated checks.
   The host must permit Bubblewrap user namespaces. Checks fail closed when these
   prerequisites are unavailable.
-- Git for the acceptance runner's patch check.
+- Git 2.30 or newer at `/usr/bin/git` for Git review workspaces and acceptance.
 - A JDK supporting Java 17 for the optional Java launcher and full acceptance run.
 - For real inference: an already installed, tool-capable local model served by
   Ollama at `127.0.0.1:11434`. No model download, credential creation, installation,
   daemon setup, or provider reconfiguration is performed by this project.
+
+## Daily launch
+
+From the repository root, use one command with an absolute private workspace
+outside the source checkout:
+
+```sh
+python3 -B launch.py --workspace /absolute/private-workbench \
+  --model YOUR_LOCAL_MODEL --jdk-home /absolute/jdk
+```
+
+The launcher checks Linux/Python, the fixed Git/Bubblewrap/prlimit tools, an actual
+isolated Python check, optional Java 17+ tools, and configured Ollama models using
+read-only `/api/tags` and `/api/ps` requests. It performs zero inference, installs
+nothing, downloads no model, and does not evict a loaded model. It refuses an
+unavailable prerequisite or a differently loaded model instead of changing the
+provider. Model execution location still depends on your trusted Ollama setup.
+
+For a new workspace, a successful check creates the invented arithmetic demo and
+private configuration. An existing workspace reuses `config.json` and `data`;
+`--model`, when supplied, must already be in its approved model list. Omit
+`--model` for a new scripted-only workspace, or `--jdk-home` for Python-only use.
+Use the printed loopback URL. This stays in the foreground; Ctrl+C stops the
+owned server and its task/workspace workers. No startup service or scheduled
+process is installed.
+
+To inspect prerequisites without creating a workspace or starting a server:
+
+```sh
+python3 -B launch.py --workspace /absolute/private-workbench \
+  --model YOUR_LOCAL_MODEL --jdk-home /absolute/jdk --check-only
+```
+
+Private temporary fixtures are used for the isolation probe. The original
+`workbench.py init-demo` and `serve` commands below remain available.
 
 ## Start with the invented demo
 
@@ -45,8 +80,8 @@ Stop the foreground server with Ctrl+C.
    passing tests. The original deliberately broken `calculator.py` stays intact.
 4. In Review & export, record a note and accept or reject the exact patch.
    An accepted review unlocks **Download reviewed patch**.
-5. Inspect and apply the downloaded patch yourself in the intended project.
-   The workbench provides no automatic apply, commit, push, or deployment tool.
+5. Optionally create a Git review workspace to apply and recheck the accepted
+   patch in a separate snapshot. Adopt it in the intended project manually.
 
 History, prompts, model responses, copies, checks, review notes, and patches are
 stored under the private data directory. Restart with the same config and data
@@ -138,21 +173,57 @@ same top-level fields and typed `checks`, for example:
 {"unit":{"kind":"java-main","sources":["Example.java","ExampleTest.java"],"main_class":"ExampleTest"}}
 ```
 
-Current bounds remain 32 UTF-8 files, 16 KiB per file, 128 KiB total source;
+Current bounds are 32 UTF-8 files, 32 KiB per file, 128 KiB total source;
 1–4 declared checks; 1–16 requests per task; 1–120 seconds per request and a
 600-second model-loop ceiling. Wizard tasks use 12 requests. The UI displays the
 request budget; it does not account for tokens or currency. No whole-repository
 index or unattended task queue is included.
 
-The model receives only four tools: `set_plan`, `read_file`, `replace_text`, and
-`run_check`. An edit requires the current file hash and one exact, unique text
+The model first receives only `set_plan`. After a valid plan is acknowledged,
+requests offer `read_file`, `replace_text`, and `run_check`. The engine also
+enforces the plan requirement. An edit requires the current file hash and one exact, unique text
 span. Bytes outside that span are preserved, including surrounding whitespace
 and line endings. Whole-file `write_file` is refused. Tests are protected, and
 independent final checks run before a task becomes Ready for review.
 
+## Apply an accepted patch in a Git review workspace
+
+After inspecting Diff and Checks and accepting the exact patch, choose
+**Create Git workspace**. A cancellable worker will:
+
+1. Recheck the accepted artifact and original selected files.
+2. Create a new private repository containing only the selected baseline files.
+3. Commit that baseline with a generic local identity and create a separate
+   `outlands/task-ID` worktree branch.
+4. Apply the accepted patch there, verify every resulting file against the
+   accepted hashes, and rerun the task's fixed checks without model inference.
+5. Record the branch, baseline commit, local directory, and check results.
+
+The workspace is independent of the project's existing Git repository. Original
+files, branches, index and history are untouched; no existing Git history,
+remotes, hooks or attributes are imported. Git uses a clean environment, disabled
+hooks/external configuration and an empty template. `.git`, `.gitattributes`,
+`.gitmodules` and `.gitconfig` selections are refused for this operation.
+These choices build on Git's official [worktree](https://git-scm.com/docs/git-worktree)
+and [initialization](https://git-scm.com/docs/git-init) interfaces.
+
+The patch remains an **uncommitted diff** in the new worktree. Open the displayed
+local directory in your editor, inspect the diff and decide whether to commit it
+there. Exported patches remain available for manual adoption in the intended
+original project. The app does not commit candidate changes, merge into the
+original branch, push, or publish the private workspace. Its Git objects contain
+selected source; keep the workspace and data directory private.
+
+Checks passed is a recorded creation-time result. Later edits require fresh
+checks and review. Repeating the creation request verifies the existing workspace
+without reapplying the patch or launching another worker. **Stop workspace** acts
+only on its owned active worker. Failed/interrupted attempts retain files and
+logs and block new tasks for inspection; there is no automatic cleanup, replay,
+hold-clearing or recreation of an uncertain attempt.
+
 ## Stops, failures, and trust
 
-There is one active task per data directory, with no unattended queue or automatic
+There is one active task or Git-workspace operation per data directory, with no unattended queue or automatic
 resubmission. Stop task signals only the child owned by this workbench. Stopping
 an HTTP request cannot prove the provider stopped its inference. An unsettled
 request produces an uncertainty hold and blocks another task. A process whose
@@ -205,10 +276,12 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 79 unit methods, compiles the Java client with Java 17 compatibility and
+This runs 100 unit methods, compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results, and exercises real
 Bubblewrap checks, namespace boundaries, time/output limits, and patch handling. It also checks Java compilation diagnostics, protected-main
 execution, namespace boundaries and Java timeout/output limits.
+It also checks prerequisite reporting, an actual owned Git-workspace worker,
+accepted-patch rechecks and preservation of the original project Git state.
 It makes no AI inference requests. The demo's `test_calculator.py` is intentionally
 failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
