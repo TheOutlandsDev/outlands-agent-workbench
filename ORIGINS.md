@@ -39,6 +39,13 @@ loaders, a pinned preview/download interface and invented Python/Java regression
 fixtures. The standard-library ZIP implementation is used without third-party
 archive code. Raw private records and bundle downloads are excluded from the
 public source package. Recorded fixture checks do not represent new model runs.
+Version 0.10 adds a read-only private bundle/project comparator, bounded source
+observations, an explicit binary-upload inspection endpoint, a browser report,
+an offline CLI and invented Python/Java regression fixtures. It reuses the
+version 0.9 archive verifier without changing that format. Source comparisons
+and saved fixture evidence do not represent new model runs. Uploaded archives,
+comparison reports and private project records remain excluded from the public
+source package.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.

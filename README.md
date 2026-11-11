@@ -5,9 +5,12 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.9 adds private **Reviewed patch bundles**, a pinned download preview
-and a read-only offline verifier. Each bundle carries an accepted patch,
-selected file hashes and bounded saved review/check evidence. It retains
+Version 0.10 adds **Bundle Project Check**: compare a verified private bundle
+with an explicitly selected project's approved scope, check profile and current
+file hashes. Its browser panel and offline CLI make no source changes. It retains
+private **Reviewed patch bundles**, a pinned download preview and a read-only
+offline verifier, carrying accepted patches, selected file hashes and bounded
+saved review/check evidence. Other features include
 advisory **Project readiness** inspections of selected source,
 exact task/config fingerprints, executable presence and saved admission evidence,
 read-only run comparisons, reviewed project refreshes, task revisions,
@@ -325,6 +328,64 @@ preflight can occur earlier; this guard makes no claim that all provider GETs
 were skipped. It is a byte limit, not tokenizer-based context qualification.
 Model context, prediction limits, timeouts and no-retry behavior are unchanged.
 
+## Check a private bundle against a project
+
+Choose **Check bundle against project**, select an already configured project,
+choose a private ZIP, and optionally supply a whole-archive SHA-256 from a trusted
+channel. Press **Check selected project** to send those archive bytes to this
+local loopback server. Choosing a file alone does not submit it. The application
+does not persist the uploaded archive or create a run record. Relative filenames,
+check specifications and hashes in the report remain private project information.
+
+The archive is verified first. Its format, selected path set, editable/protected
+permissions, fixed check specifications and budgets must match the selected
+task. A profile difference skips all source reads and shows the mismatch; archive
+paths never expand the configured project scope. A change to the loaded config
+or project-task bytes requires inspection and a reload of the intended config.
+
+When the profile matches, the report compares only approved source bytes:
+
+| Result | Meaning |
+| --- | --- |
+| Baseline match | Selected bytes match the bundle's baseline |
+| Candidate match | Selected bytes match the bundle's candidate |
+| Mixed match | Some edited files match the baseline and others the candidate |
+| Different | At least one readable selected file matches neither version |
+| Needs inspection | Profile differences, missing/unsafe files or incomplete/bounded evidence prevent a complete comparison |
+
+An unchanged protected file can match both versions. A changed protected file
+is reported as changed. Each row shows the archive's before/after hashes, the
+selected task's configured digest, current digest/size and whether current bytes
+match that configured pin. Configured pins stay separate from the selected-byte
+comparison: a later task revision may pin candidate bytes. None of these results
+authorizes Run or establishes patch applicability.
+
+Use the same comparison offline with an explicitly named task and source root:
+
+```sh
+python3 -B bundle_project_check.py /absolute/private-bundle.zip \
+  --project /absolute/project --task /absolute/task.json \
+  --expect-sha256 SHA256_FROM_TRUSTED_CHANNEL
+```
+
+The digest option is optional for internal archive integrity checking. Embedded
+checksums are unsigned; the expected digest must come through an independently
+trusted channel to detect replacement. The CLI prints bounded JSON: exit 0 for a
+complete baseline/candidate match, exit 1 for a nonmatch or inspection report, and
+exit 2 for refused input. It reads named inputs and selected files without
+extracting, applying, executing, writing, contacting a model or changing a hold.
+Java source comparisons require no JDK or compiler invocation.
+
+Reports explicitly leave task goals, check reruns, provider completion, source
+correctness, patch applicability and Git adoption **Not checked**. Sequential
+observations can become stale and are not an atomic filesystem snapshot. Review
+the patch and run the intended checks separately before manual adoption.
+
+The panel remains available under an unrelated request hold, pauses normal
+polling while open, invalidates old results on project/file/digest changes, and
+ignores late responses. Closing resumes the normal run view. The hold continues
+to block new work. See [validation and bounds](VALIDATION.md) for read limits.
+
 ## Download a private reviewed bundle
 
 After accepting a completed patch, open **Review & export**, then choose
@@ -567,8 +628,8 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 377 unit methods: the prior 328, 30 pure bundle/CLI methods and
-19 bundle/controller/HTTP methods. It compiles the Java client with Java 17
+This runs 416 unit methods: the prior 377, 24 bundle/project engine/CLI methods
+and 15 controller/HTTP methods. It compiles the Java client with Java 17
 compatibility and warnings as errors, compares Python/Java scripted results,
 and runs actual isolated checks. Acceptance covers namespace boundaries,
 time/output limits, Java compilation diagnostics and protected-main execution,
@@ -589,13 +650,17 @@ runner's existing actual isolated checks remain separate. Bundle acceptance
 uses invented accepted Python/Java artifacts and an unrelated synthetic hold,
 verifies deterministic private archives, and refuses changed pins/source while
 preserving private bytes. It performs no checks or provider requests. The
-runner makes no AI inference requests. The
+new bundle/project acceptance prepares baseline, candidate, mixed, different and
+missing-source observations, checks configured-pin separation and config drift,
+and retains the unrelated synthetic hold without inspector writes or execution.
+The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
 
 Real-model browser acceptance is a separate, explicit task; see
 [VALIDATION.md](VALIDATION.md) for the observed result and its narrow coverage.
-Version 0.9 was tested offline only. Bundles, readiness, comparisons, refreshes and context
+Version 0.10 was tested offline only. Bundle/project checks, bundles, readiness,
+comparisons, refreshes and context
 tools do not determine the cause or provider completion of the preserved
 uncertain Java trial from version 0.3.
 
