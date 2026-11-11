@@ -5,7 +5,10 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.11 adds **Bundle Review Workspace**: preview a private bundle against
+Version 0.12 adds **Workspace Recheck**: inspect manual editable-file changes in
+a private bundle review worktree and explicitly rerun its configured checks
+against a separate pinned snapshot. Each attempt preserves earlier results.
+It retains **Bundle Review Workspace**: preview a private bundle against
 an approved baseline, then explicitly create a separate private Git worktree
 and rerun its configured Python/Java checks. Candidate edits remain uncommitted.
 It retains **Bundle Project Check**: compare a verified private bundle
@@ -379,6 +382,52 @@ records. Receipt displays bound check output; full rerun evidence stays private.
 Saved verification is a dated observation, not a freshness guarantee after manual
 workspace edits. Real bundles and generated repositories remain private.
 
+## Recheck a manually edited review workspace
+
+In **Bundle review workspace**, select a creation receipt whose checks passed,
+then choose **Inspect current workspace**. The inspection compares current
+selected bytes with the creation candidate, shows editable-file changes and
+requires protected files, approved original source, config and task pins to
+remain valid. It inspects the known private Git relationships and baseline index
+directly, without running Git, project checks or a model.
+
+Review the selected hashes, snapshot pin and current history tip. Within five
+minutes, explicitly choose **Run recheck**. The server rechecks the preview,
+history and admission guards before creating a new private attempt below
+`data/workspace-rechecks/ID/`. Its worker copies only the inspected selected
+bytes into a separate snapshot and runs the original task's fixed isolated
+Python/Java checks against that same snapshot. Java requires the configured JDK.
+The app writes neither the original project nor the review worktree.
+
+Recheck results have their own history. The original creation receipt stays a
+historical result, and existing check evidence is never replaced. A fresh
+`VERIFIED` receipt records passing configured checks for that snapshot at that
+time. Later edits need a new inspection and recheck. Source correctness, provider
+completion and permission to adopt changes remain separate decisions.
+
+The preview binds selected bytes, creation/request records, task/config/bundle
+pins, current Git guards and the current recheck-history digest. New previews,
+expired previews, changed inputs and a changed history tip require another
+explicit inspection. The worker rechecks those observations after execution;
+drift retains the checks but refuses verification. No automatic retry occurs.
+Failures, interruptions, malformed records and unknown unfinished attempts block
+further execution. Stop signals only a recheck child owned by the current server.
+Restart does not resume work or infer ownership from saved process identifiers.
+Read-only inspection remains available under an unrelated hold.
+
+This supports the simple private Git worktrees created by Bundle Review
+Workspace, with their generated config, loose objects and version-2 index.
+Commits, staged changes, changed branch/control pointers, protected edits,
+unexpected files and unsupported Git metadata are refused for inspection.
+Version 0.11 did not save historical raw control-file/index digests: the new
+inspection validates their current structure and baseline semantics, then pins
+their current bytes for this recheck. It does not invent earlier observations.
+The reader follows Git's documented [index format](https://git-scm.com/docs/gitformat-index)
+and [repository layout](https://git-scm.com/docs/gitrepository-layout), supporting
+only the stated private-workspace subset.
+The host/store must remain trusted; sequential checks are not atomic filesystem
+snapshots. Keep all workspaces, selected snapshots and results private.
+
 ## Check a private bundle against a project
 
 Choose **Check bundle against project**, select an already configured project,
@@ -679,8 +728,8 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 458 unit methods: the prior 416, 24 bundle/workspace engine methods
-and 18 controller/HTTP methods. It compiles the Java client with Java 17
+This runs 500 unit methods: the prior 458, 21 workspace-recheck engine methods
+and 21 controller/HTTP methods. It compiles the Java client with Java 17
 compatibility and warnings as errors, compares Python/Java scripted results,
 and runs actual isolated checks. Acceptance covers namespace boundaries,
 time/output limits, Java compilation diagnostics and protected-main execution,
@@ -708,13 +757,17 @@ Bundle-workspace acceptance reruns actual configured Python/Java checks in
 separate private Git worktrees, preserves original source/Git bytes and unrelated
 files, and retains a failed-check job and an owned-worker interruption without
 retry. Saved bundle rows remain invented evidence, separate from these reruns.
+Workspace-recheck acceptance edits only private worktree fixture files, runs
+actual fixed Python/Java checks against separate pinned snapshots, preserves
+creation evidence and earlier results, and retains failed/interrupted attempts
+without retry or source adoption.
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
 
 Real-model browser acceptance is a separate, explicit task; see
 [VALIDATION.md](VALIDATION.md) for the observed result and its narrow coverage.
-Version 0.11 was tested offline only. Bundle review workspaces, project checks,
+Version 0.12 was tested offline only. Workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context
 tools do not determine the cause or provider completion of the preserved
