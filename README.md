@@ -5,12 +5,13 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.6 adds reviewed project refreshes and saved task revisions. Selected
-file hashes and the default next-task goal can be updated while scope, checks
-and budgets stay fixed. It retains scoped search, focused reads, request-size
-guards, Run Diagnostics, the foreground launcher, Git review workspaces and the
-isolated Python/Java task-to-reviewed-patch workflow. It remains a small Linux
-prototype with a Python engine and a compatible Java launcher.
+Version 0.7 adds read-only comparisons of two saved runs, with task comparability,
+recorded outcomes, request measurements and bounded patch differences. It retains
+reviewed project refreshes, task revisions, scoped search, focused reads,
+request-size guards, Run Diagnostics, the foreground launcher, Git review
+workspaces and the isolated Python/Java task-to-reviewed-patch workflow. It
+remains a small Linux prototype with a Python engine and a compatible Java
+launcher.
 See [validation and limits](VALIDATION.md) and [origins](ORIGINS.md).
 
 ## Requirements
@@ -101,8 +102,9 @@ python3 -B workbench.py init-demo \
 
 Start that workspace with `serve`, select the model, and press Run task to
 authorize one bounded inference task. The scripted option remains available and
-does not call a model. The tested real model was `qwen3-coder:30b`; other models
-have not been qualified by this milestone.
+does not call a model. Earlier milestones recorded trials with
+`qwen3-coder:30b`; version 0.7 adds no real-model qualification. See the historical
+limits in [VALIDATION.md](VALIDATION.md).
 
 The engine checks Ollama's loaded-model list and refuses a different loaded
 model. It does not evict models or retry a failed request. Verify the selected
@@ -325,6 +327,68 @@ must remain private. The summary uses at most 16 request rows and the first 256
 events, reporting when that event limit is reached. Viewing diagnostics performs
 no provider request, retry, replay or recovery. The existing hold remains in place.
 
+## Compare saved runs
+
+Choose **Compare runs**, select two different saved-run IDs, then press
+**Compare saved runs**. The panel reads only saved private metadata, task,
+result, event and patch records. It does not read the current project source,
+run checks, contact a model, reconcile workers, inspect or clear holds, repair
+records, apply a patch or export one. An unknown run or unsafe data store is
+refused with a fixed message.
+
+The normal live-run polls pause while comparison is opening or open. Opening
+waits up to ten seconds for an existing poll to finish, with Close available to
+cancel the wait. **Close comparison** returns to the usual live view and resumes
+its normal polling and state reconciliation. A comparison's saved `RUNNING` or
+uncertain state is shown as recorded; it is not a current process observation.
+Changing either selected ID discards the displayed comparison. Selections are
+retained across reopen, and late responses for old selections are ignored.
+
+The two sides show saved goals, outcomes, task/start/revision fingerprints,
+selected baseline hashes, edit permissions, fixed check specifications and
+recorded baseline/final check results. **Comparable recorded tasks** means the
+available task evidence agrees on project, goal, file paths, baseline hashes,
+editable scope, checks and budgets, without a fingerprint mismatch or incomplete
+loader evidence. Differences are listed explicitly. A legacy start fingerprint
+remains `NOT_RECORDED`; equality of saved task bytes does not reconstruct proof
+of what an older run started with.
+
+Measurements count recorded request starts, total serialized request-body bytes
+when complete, and the sum of recorded request times. They are not token or
+currency estimates, total task wall time, provider-completion evidence or a
+model ranking. Deltas are right minus left. Legacy, corrupt or partial records
+keep missing totals and deltas **Unknown**, rather than inventing zeros. An
+explicitly evidenced refusal before sending any chat request can record zero
+attempts. Different models or backends can be displayed without a quality score.
+
+The saved-run inventory inspects at most 200 matching metadata files and returns
+the latest 100 within that inspected set. A partial-history flag warns when more
+records may be omitted; it does not promise the newest 100 across the entire
+store. Directory enumeration also stops after 1,024 entries. Dropdown labels
+are clipped safely to 160 UTF-8 bytes when needed, with a note; comparison shows
+the full bounded saved goal.
+
+Metadata, task and result sections each have a 32,768-byte read limit. At most
+256 event files are considered, with 262,144 bytes per event and a 2 MiB aggregate
+read budget. Unavailable, invalid or oversized sections become Unknown with
+fixed notes. Only defined display fields are returned: raw check output,
+provider payloads, prompts, response bodies and exception fields are excluded.
+Saved goals, relative paths, model labels and patch text are still private
+project evidence and must remain outside public uploads.
+
+Each saved patch is read up to 65,536 bytes and displayed up to 8,192 UTF-8 bytes.
+The literal saved patch-text difference is limited to 16,384 UTF-8 bytes and
+240 lines; clipping is explicit and preserves Unicode boundaries. The serialized
+comparison response is capped at 131,072 bytes. A patch difference compares saved
+text only; it does not validate the patch against current source or authorize
+adoption.
+
+Reads are anchored at the private data root and reject symlinks in every path
+component below it, including substituted `jobs`, `tasks` or `runs` directories.
+The data root and its ancestors must remain trusted and stable. Reading saved
+files sequentially is not an atomic snapshot or a multiwriter transaction;
+concurrent changes can make the available evidence inconsistent.
+
 ## Stops, failures, and trust
 
 There is one active task or Git-workspace operation per data directory, with no unattended queue or automatic
@@ -380,26 +444,29 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 218 unit methods (173 prior methods, 17 revision-helper methods and
-28 refresh/controller methods), compiles the Java client with Java 17 compatibility and
-warnings as errors, compares Python/Java scripted results, and exercises real
-Bubblewrap checks, namespace boundaries, time/output limits, and patch handling. It also checks Java compilation diagnostics, protected-main
-execution, namespace boundaries and Java timeout/output limits.
-It also checks prerequisite reporting, an actual owned Git-workspace worker,
-accepted-patch rechecks and preservation of the original project Git state.
+This runs 270 unit methods (218 prior methods, 34 pure comparison methods and
+18 comparison/controller/HTTP methods). It compiles the Java client with Java 17
+compatibility and warnings as errors, compares Python/Java scripted results,
+and runs actual isolated checks. Acceptance covers namespace boundaries,
+time/output limits, Java compilation diagnostics and protected-main execution,
+prerequisite reporting, an owned Git-workspace worker, accepted-patch rechecks
+and preservation of the original project Git state.
+
 Invented Python and Java refresh fixtures run actual isolated baseline checks,
 are corrected manually by the acceptance script, then pass final checks after a
 reviewed hash revision. Goal-only revisions, restart persistence and refusal of a
-stale refresh save are also checked. It makes no AI inference requests. The
-demo's `test_calculator.py` is intentionally
-failing before a task; use the acceptance runner rather than unrestricted test
+stale refresh save are also checked. Comparison acceptance uses invented saved
+Python/Java JSON histories, with guards against live-state, check, process and
+provider paths and unchanged saved-file/hold hashes. These histories are not
+model-generated results. The runner makes no AI inference requests. The
+demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
 
 Real-model browser acceptance is a separate, explicit task; see
 [VALIDATION.md](VALIDATION.md) for the observed result and its narrow coverage.
-Version 0.6 was tested offline only. Refreshes and context tools do not determine
-the cause or provider completion of the preserved uncertain Java trial from
-version 0.3.
+Version 0.7 was tested offline only. Comparisons, refreshes and context tools do
+not determine the cause or provider completion of the preserved uncertain Java
+trial from version 0.3.
 
 ## Publication and licensing
 

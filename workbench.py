@@ -21,6 +21,7 @@ from java_check import validate_jdk
 from project_setup import prepare
 from project_revisions import refresh_task
 from run_diagnostics import summarize as summarize_diagnostics
+from run_comparison import compare_runs
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -229,6 +230,179 @@ class Manager:
         self.lock = threading.RLock()
         self.children = {}
         self.workspace_children = {}
+
+    def comparison_directory(self, root):
+        """Open each private-store path component relative to the data root."""
+        parts = root.relative_to(self.data).parts
+        fd = os.open(self.data, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            for part in parts:
+                next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                os.close(fd)
+                fd = next_fd
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
+
+    def comparison_names(self, root, predicate, limit):
+        """Bound directory inspection without following a substituted root link."""
+        fd = self.comparison_directory(root)
+        names, truncated = [], False
+        try:
+            with os.scandir(fd) as entries:
+                for index, entry in enumerate(entries):
+                    if index >= 1024:
+                        truncated = True
+                        break
+                    if predicate(entry.name):
+                        if len(names) == limit:
+                            truncated = True
+                            break
+                        names.append(entry.name)
+        finally:
+            os.close(fd)
+        return sorted(names), truncated
+
+    def comparison_record(self, root, name, notes, limit=32768):
+        raw = None
+        try:
+            raw = read_file(self.data, (root / name).relative_to(self.data).as_posix(), limit)
+            value = parse(raw)
+            if not isinstance(value, dict):
+                raise Refused("INVALID_JSON")
+            return value, raw
+        except FileNotFoundError:
+            note = "RECORD_MISSING"
+        except Refused as exc:
+            note = "RECORD_LIMIT" if str(exc) in ["FILE_LIMIT", "JSON_LIMIT"] else "RECORD_INVALID"
+        except (OSError, UnicodeError, ValueError):
+            note = "RECORD_INVALID"
+        if note not in notes:
+            notes.append(note)
+        return None, raw
+
+    def comparison_history(self):
+        """Read saved rows only; never reconcile workers or rewrite metadata."""
+        with self.lock:
+            try:
+                names, truncated = self.comparison_names(self.data / "jobs",
+                    lambda name: name.endswith(".json") and ID.fullmatch(name[:-5]) is not None, 200)
+            except OSError:
+                raise Refused("COMPARE_STORE_REFUSED") from None
+            rows, notes = [], []
+            def text(value, limit):
+                return value if isinstance(value, str) and len(value.encode("utf-8")) <= limit else None
+            states = {"REVIEW_READY", "RUNNING", "STOP_REQUESTED", "RECOVERY_REQUIRED", "FAILED", "REFUSED", "UNCERTAIN", "INTERRUPTED"}
+            for name in names:
+                value, _ = self.comparison_record(self.data / "jobs", name, notes)
+                value = value or {}
+                try:
+                    project_name = text(value.get("project_name"), 320)
+                    goal = text(value.get("goal"), 8000)
+                except UnicodeError:
+                    project_name, goal = None, None
+                    if "RECORD_INVALID" not in notes:
+                        notes.append("RECORD_INVALID")
+                labels = []
+                for label in [project_name, goal]:
+                    if label is not None and len(label.encode("utf-8")) > 160:
+                        label = label.encode("utf-8")[:157].decode("utf-8", "ignore") + "…"
+                        if "HISTORY_LABEL_TRUNCATED" not in notes:
+                            notes.append("HISTORY_LABEL_TRUNCATED")
+                    labels.append(label)
+                project_name, goal = labels
+                state, created = value.get("state"), value.get("created")
+                rows.append({"id": name[:-5], "project_name": project_name, "goal": goal,
+                    "state": state if isinstance(state, str) and state in states else None,
+                    "created": created if type(created) is int and 0 <= created <= 9007199254740991 else None})
+            rows.sort(key=lambda row: (row["created"] if row["created"] is not None else -1, row["id"]), reverse=True)
+            truncated = truncated or len(rows) > 100
+            if truncated and "RECORD_LIMIT" not in notes:
+                notes.append("RECORD_LIMIT")
+            result = {"runs": rows[:100], "limit": 100, "truncated": truncated, "notes": notes}
+            require(len(canonical(result)) <= 131072, "COMPARE_OUTPUT_LIMIT")
+            return result
+
+    def comparison_bundle(self, run_id):
+        metadata_path = self.meta_path(run_id)
+        try:
+            fd = self.comparison_directory(self.data / "jobs")
+            try:
+                os.stat(metadata_path.name, dir_fd=fd, follow_symlinks=False)
+            finally:
+                os.close(fd)
+        except FileNotFoundError:
+            raise Refused("COMPARE_RUN_UNKNOWN") from None
+        except OSError:
+            raise Refused("COMPARE_STORE_REFUSED") from None
+        notes = []
+        metadata, _ = self.comparison_record(metadata_path.parent, metadata_path.name, notes)
+        task, task_raw = self.comparison_record(self.data / "tasks", run_id + ".json", notes)
+        run = self.run_path(run_id)
+        result, result_raw = self.comparison_record(run, "result.json", notes)
+        try:
+            names, truncated = self.comparison_names(run,
+                lambda name: name.startswith("event-") and name.endswith(".json"), 256)
+        except FileNotFoundError:
+            names, truncated = [], False
+            if "RECORD_MISSING" not in notes:
+                notes.append("RECORD_MISSING")
+        except OSError:
+            names, truncated = [], False
+            if "RECORD_INVALID" not in notes:
+                notes.append("RECORD_INVALID")
+        if truncated:
+            notes.append("EVENT_LIMIT")
+        events, total = [], 0
+        for name in names:
+            if re.fullmatch(r"event-[0-9]{3,6}[.]json", name) is None:
+                if "RECORD_INVALID" not in notes:
+                    notes.append("RECORD_INVALID")
+                continue
+            remaining = 2097152 - total
+            if remaining <= 1:
+                if "EVENT_LIMIT" not in notes:
+                    notes.append("EVENT_LIMIT")
+                break
+            limit = min(262144, remaining - 1)
+            value, raw = self.comparison_record(run, name, notes, limit)
+            if raw is not None:
+                total += len(raw)
+                if value is not None:
+                    events.append(value)
+            else:
+                # A refused oversized read consumes at most limit+1 bytes. Count
+                # that worst case so repeated damaged records cannot bypass the
+                # aggregate read bound; no retry or second read is performed.
+                total += limit + 1
+        patch, patch_sha = None, None
+        try:
+            raw = read_file(self.data, "runs/" + run_id + "/changes.diff", 65536)
+            patch, patch_sha = raw.decode("utf-8"), sha(raw)
+        except FileNotFoundError:
+            if "RECORD_MISSING" not in notes:
+                notes.append("RECORD_MISSING")
+        except Refused as exc:
+            note = "RECORD_LIMIT" if str(exc) == "FILE_LIMIT" else "RECORD_INVALID"
+            if note not in notes:
+                notes.append(note)
+            if str(exc) == "FILE_LIMIT":
+                notes.append("PATCH_TRUNCATED")
+        except (OSError, UnicodeError, ValueError):
+            if "RECORD_INVALID" not in notes:
+                notes.append("RECORD_INVALID")
+        return {"id": run_id, "metadata": metadata, "task": task,
+                "task_sha256": sha(task_raw) if task_raw is not None else None,
+                "result": result, "result_sha256": sha(result_raw) if result_raw is not None else None,
+                "events": events, "patch": patch, "patch_sha256": patch_sha, "notes": notes}
+
+    def compare(self, left_id, right_id):
+        with self.lock:
+            require(isinstance(left_id, str) and isinstance(right_id, str)
+                    and ID.fullmatch(left_id) is not None and ID.fullmatch(right_id) is not None
+                    and left_id != right_id, "COMPARE_IDS")
+            return compare_runs(self.comparison_bundle(left_id), self.comparison_bundle(right_id))
 
     def workspace_receipt(self, run_id):
         path = self.run_path(run_id) / "git-workspace.json"
@@ -1022,6 +1196,12 @@ def make_handler(manager, token, origin):
                     self.send(200, canonical(manager.config_view()))
                 elif path == "/api/history":
                     self.send(200, canonical(manager.history()))
+                elif path == "/api/comparison-history":
+                    self.send(200, canonical(manager.comparison_history()))
+                elif path.startswith("/api/compare/"):
+                    pair = path.removeprefix("/api/compare/").split("/")
+                    require(len(pair) == 2, "COMPARE_IDS")
+                    self.send(200, canonical(manager.compare(*pair)))
                 elif path.startswith("/api/project-revisions/"):
                     self.send(200, canonical(manager.project_revisions(path.removeprefix("/api/project-revisions/"))))
                 elif path.startswith("/api/run/"):
