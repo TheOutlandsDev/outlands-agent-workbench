@@ -16,10 +16,12 @@ from pathlib import Path, PurePosixPath
 
 from isolation import check as isolated_check
 from java_check import check as isolated_java_check
+from project_context import ContextRefused, read_lines as focused_read, search_text as scoped_search
 
 FORMAT = "outlands-coding-agent-v1"
 MAX_FILE = 32768
 MAX_JSON = 262144
+MAX_REQUEST_BYTES = 131072
 DIAGNOSTIC_FORMAT = "outlands-request-diagnostics-v1"
 DIAGNOSTIC_PHASES = frozenset(
     {"PREPARE", "SEND", "HEADER", "BODY", "VALIDATE", "COMPLETE", "UNKNOWN"}
@@ -35,6 +37,9 @@ DIAGNOSTIC_REASONS = frozenset({
     "RESPONSE_LIMIT", "JSON_LIMIT", "INVALID_JSON", "DUPLICATE_JSON_KEY",
     "JSON_CONSTANT", "PROVIDER_HTTP", "PROVIDER_INCOMPLETE",
     "PROVIDER_SEND_TIMEOUT", "PROVIDER_HEADER_TIMEOUT", "PROVIDER_BODY_TIMEOUT",
+    "REQUEST_SIZE_LIMIT", "CONTEXT_QUERY", "CONTEXT_FILES", "CONTEXT_PATH",
+    "CONTEXT_SNAPSHOT_LIMIT", "CONTEXT_UTF8", "CONTEXT_RANGE",
+    "STALE_EDIT_HASH",
 })
 
 
@@ -323,6 +328,16 @@ TOOLS = [
         "Run a named fixed unittest check in an isolated copy.",
         {"check_id": {"type": "string"}},
     ),
+    schema(
+        "search_text",
+        "Find a case-sensitive literal in declared files; bounded numbered excerpts and current file hashes.",
+        {"query": {"type": "string"}},
+    ),
+    schema(
+        "read_lines",
+        "Read at most 80 numbered lines from one declared file, with its current whole-file SHA-256.",
+        {"path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}},
+    ),
 ]
 
 
@@ -376,6 +391,7 @@ class Ollama:
     def request(self, messages, seconds):
         self._request_phase, self._request_metrics = "PREPARE", {}
         payload = self.request_payload(messages)
+        require(len(payload) <= MAX_REQUEST_BYTES, "REQUEST_SIZE_LIMIT")
         self._request_phase = "SEND"
         connection = http.client.HTTPConnection("127.0.0.1", 11434, timeout=seconds)
         phase = "SEND"
@@ -464,6 +480,7 @@ class Session:
         self.task, self.source, self.root, self.checker = task, source, run_dir, checker
         self.jdk_home = jdk_home
         self.events, self.planned = [], False
+        self.requests_started = 0
         self.work = run_dir / "work"
         self.baseline = run_dir / "baseline"
         require(
@@ -556,6 +573,17 @@ class Session:
             )
             raw = read_file(self.work, args["path"])
             return {"path": args["path"], "content": raw.decode(), "sha256": sha(raw)}
+        if name in ["search_text", "read_lines"]:
+            try:
+                if name == "search_text":
+                    require(set(args) == {"query"}, "TOOL_ARGUMENTS")
+                    files = {path: read_file(self.work, path) for path in sorted(self.task["files"])}
+                    return scoped_search(files, args["query"])
+                require(set(args) == {"path", "start_line", "end_line"}
+                        and isinstance(args["path"], str) and args["path"] in self.task["files"], "READ_SCOPE")
+                return focused_read(args["path"], read_file(self.work, args["path"]), args["start_line"], args["end_line"])
+            except ContextRefused as error:
+                raise Refused(error.code) from None
         if name == "replace_text":
             require(
                 set(args) == {"path", "expected_sha256", "old_text", "new_text"}
@@ -673,6 +701,13 @@ class Session:
             if isinstance(provider, Ollama):
                 provider._request_phase, provider._request_metrics = "PREPARE", {}
                 request_bytes = len(provider.request_payload(messages))
+                if request_bytes > MAX_REQUEST_BYTES:
+                    self.emit("request_refused", {"turn": turn, "diagnostics": {
+                        "format": "outlands-request-preflight-v1", "reason": "REQUEST_SIZE_LIMIT",
+                        "request_bytes": request_bytes, "limit_bytes": MAX_REQUEST_BYTES,
+                        "chat_request_sent": False, "new_hold_created": False,
+                    }})
+                    raise Refused("REQUEST_SIZE_LIMIT")
             self.emit("request_started", {"turn": turn, "diagnostics": {
                 "format": DIAGNOSTIC_FORMAT,
                 "started_at_ms": started_at_ms,
@@ -680,6 +715,7 @@ class Session:
                 "request_bytes": request_bytes,
             }})
             started = True
+            self.requests_started += 1
             if backend == "ollama":
                 write_new(hold, canonical({
                     "state": "REQUEST_UNSETTLED", "run": str(self.root), "turn": turn,
@@ -750,7 +786,8 @@ class Session:
             deadline = time.monotonic() + 600
             for turn in range(self.task["max_turns"]):
                 require(time.monotonic() < deadline, "SESSION_TIME_LIMIT")
-                require(len(canonical(messages)) <= 131072, "CONTEXT_LIMIT")
+                if not isinstance(provider, Ollama):
+                    require(len(canonical(messages)) <= 131072, "CONTEXT_LIMIT")
                 turns = turn + 1
                 message = self.request(
                     provider,
@@ -831,7 +868,7 @@ class Session:
             reason = str(exc) if isinstance(exc, Refused) else "EXECUTION_ERROR"
         if backend == "ollama" and hold.exists():
             status = "UNCERTAIN"
-        return self.artifacts(status, reason, backend, turns)
+        return self.artifacts(status, reason, backend, self.requests_started)
 
 
 def main(argv=None):

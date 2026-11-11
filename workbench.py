@@ -54,6 +54,47 @@ def json_file(path):
     return parse(read_file(path.parent, path.name, 262144))
 
 
+def context_evidence(kind, value, files):
+    """Select bounded source fields from known tool results; ignore damaged records."""
+    if not isinstance(value, dict) or len(canonical(value)) > 8192:
+        return None
+    def text(v, size):
+        try:
+            return isinstance(v, str) and len(v.encode("utf-8")) <= size
+        except UnicodeError:
+            return False
+    def integer(v):
+        return type(v) is int and 0 <= v <= 1000000
+    def file_row(v):
+        return isinstance(v, dict) and isinstance(v.get("path"), str) and v["path"] in files and isinstance(v.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", v["sha256"])
+    if kind == "search_text":
+        matches = value.get("matches")
+        if (not text(value.get("query"), 128) or not isinstance(matches, list) or len(matches) > 20
+                or not all(file_row(row) and integer(row.get("line_number")) and integer(row.get("column"))
+                           and text(row.get("text"), 512) and type(row.get("truncated")) is bool for row in matches)):
+            return None
+        keys = ["query", "files_searched", "total_matches", "truncated", "limit", "byte_limit"]
+        if not all(key in value for key in keys) or not all(integer(value[k]) for k in ["files_searched", "total_matches", "limit", "byte_limit"]):
+            return None
+        cleaned = {key: value[key] for key in keys}
+        cleaned["matches"] = [{key: row[key] for key in ["path", "line_number", "column", "text", "sha256", "truncated"]} for row in matches]
+    elif kind == "read_lines":
+        lines = value.get("lines")
+        keys = ["path", "sha256", "requested_start", "requested_end", "start_line", "end_line", "total_lines", "truncated", "end_of_file", "byte_limit"]
+        if (not file_row(value) or not isinstance(lines, list) or len(lines) > 80 or not all(key in value for key in keys)
+                or not all(integer(value[k]) for k in ["requested_start", "requested_end", "total_lines", "byte_limit"])
+                or not all(value[k] is None or integer(value[k]) for k in ["start_line", "end_line"])
+                or type(value["end_of_file"]) is not bool
+                or not all(isinstance(row, dict) and integer(row.get("line_number")) and text(row.get("text"), 1024)
+                           and type(row.get("truncated")) is bool for row in lines)):
+            return None
+        cleaned = {key: value[key] for key in keys}
+        cleaned["lines"] = [{key: row[key] for key in ["line_number", "text", "truncated"]} for row in lines]
+    else:
+        return None
+    return cleaned if type(value.get("truncated")) is bool else None
+
+
 def replace_json(path, value):
     temporary = path.with_name(path.name + ".next")
     write_new(temporary, canonical(value))
@@ -498,7 +539,7 @@ class Manager:
             meta = self.refresh(self.metadata(run_id))
             run = self.run_path(run_id)
             task = json_file(self.data / "tasks" / (run_id + ".json"))
-            events, plans, checks, diagnostic_events = [], [], [], []
+            events, plans, checks, diagnostic_events, context = [], [], [], [], []
             turns, pending = 0, 0
             for path in sorted(run.glob("event-*.json")):
                 try:
@@ -521,6 +562,10 @@ class Manager:
                     text = "Model turn " + str(value["turn"])
                 elif kind == "tool_result":
                     text = value["name"].replace("_", " ")
+                    if value["name"] in ["search_text", "read_lines"] and isinstance(value.get("result"), dict):
+                        evidence = context_evidence(value["name"], value["result"], task["files"])
+                        if evidence is not None:
+                            context.append({"kind": value["name"], "index": event["index"], "result": evidence})
                     if value["name"] == "set_plan":
                         plans = value["result"]["steps"]
                     if value["name"] == "run_check":
@@ -579,6 +624,7 @@ class Manager:
                 "workspace": {**workspace, "owned_active": run_id in self.workspace_children}
                 if workspace is not None else None,
                 "diagnostics": diagnostics,
+                "context": context[-8:],
                 "admission_block": self.admission(),
             }
 

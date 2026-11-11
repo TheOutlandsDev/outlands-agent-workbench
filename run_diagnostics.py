@@ -15,6 +15,9 @@ REASONS = {
     "PROTECTED_FILE_CHANGED", "WORK_TREE_CHANGED", "REPLACEMENT_NOT_UNIQUE", "FILE_HASH_CHANGED",
     "REPLACEMENT_LIMIT", "UNKNOWN_CHECK", "JDK_REQUIRED", "UNFINISHED",
     "JSON_LIMIT", "INVALID_JSON", "DUPLICATE_JSON_KEY", "JSON_CONSTANT",
+    "REQUEST_SIZE_LIMIT", "CONTEXT_QUERY", "CONTEXT_FILES", "CONTEXT_PATH",
+    "CONTEXT_SNAPSHOT_LIMIT", "CONTEXT_UTF8", "CONTEXT_RANGE",
+    "STALE_EDIT_HASH",
 }
 
 
@@ -30,7 +33,7 @@ def summarize(task, result, events, state, backend, owned_active=False, hold_mat
     """Never return raw exception text, source, prompts, paths, or unknown fields."""
     limit = number(task.get("max_turns"), 16) or 1
     timeout = number(task.get("request_seconds"), 120) or 1
-    notes, rows, current = [], {}, None
+    notes, rows, current, preflight = [], {}, None, None
 
     def note(code):
         if code not in notes:
@@ -43,6 +46,19 @@ def summarize(task, result, events, state, backend, owned_active=False, hold_mat
             note("INVALID_DIAGNOSTICS")
             continue
         kind, value = event.get("kind"), event.get("value")
+        if kind == "request_refused":
+            detail = value.get("diagnostics") if isinstance(value, dict) else None
+            if (isinstance(detail, dict) and detail.get("format") == "outlands-request-preflight-v1"
+                    and detail.get("reason") == "REQUEST_SIZE_LIMIT"
+                    and number(detail.get("request_bytes")) is not None
+                    and type(detail.get("limit_bytes")) is int and detail["limit_bytes"] == 131072
+                    and detail["request_bytes"] > detail["limit_bytes"]
+                    and detail.get("chat_request_sent") is False and detail.get("new_hold_created") is False):
+                preflight = {key: detail[key] for key in ["reason", "request_bytes", "limit_bytes", "chat_request_sent", "new_hold_created"]}
+                note("REQUEST_SIZE_REFUSED")
+            else:
+                note("INVALID_DIAGNOSTICS")
+            continue
         if kind == "response":
             if current in rows:
                 rows[current]["responded"] = True
@@ -152,4 +168,5 @@ def summarize(task, result, events, state, backend, owned_active=False, hold_mat
             "provider_completion": completion,
             "budget": {"used": max([r["turn"] for r in requests] + [number(result.get("turns"), limit) or 0]),
                        "limit": limit, "per_request_seconds": timeout},
-            "requests": requests, "legacy": "LEGACY_REQUEST_DETAILS" in notes, "notes": notes}
+            "requests": requests, "legacy": "LEGACY_REQUEST_DETAILS" in notes, "notes": notes,
+            "preflight": preflight}

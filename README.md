@@ -5,7 +5,8 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.4 adds Run Diagnostics to the checked foreground launcher, Git review
+Version 0.5 adds scoped project search, focused line reads and a serialized
+request-size guard to Run Diagnostics, the checked foreground launcher, Git review
 workspaces, project wizard and isolated Python/Java task-to-reviewed-patch workflow. It remains a small Linux
 prototype with a Python engine and a compatible Java launcher.
 See [validation and limits](VALIDATION.md) and [origins](ORIGINS.md).
@@ -76,7 +77,7 @@ Stop the foreground server with Ctrl+C.
 
 1. Choose **Arithmetic demo** and **Scripted exercise · no inference**.
 2. Submit the unchanged task. Follow Activity, then inspect Diff and Checks.
-3. The baseline has four failing tests; the corrected private copy has four
+3. The baseline runs four tests with three failures; the corrected private copy has four
    passing tests. The original deliberately broken `calculator.py` stays intact.
 4. In Review & export, record a note and accept or reject the exact patch.
    An accepted review unlocks **Download reviewed patch**.
@@ -180,11 +181,44 @@ request budget; it does not account for tokens or currency. No whole-repository
 index or unattended task queue is included.
 
 The model first receives only `set_plan`. After a valid plan is acknowledged,
-requests offer `read_file`, `replace_text`, and `run_check`. The engine also
+requests offer `read_file`, `search_text`, `read_lines`, `replace_text`, and `run_check`. The engine also
 enforces the plan requirement. An edit requires the current file hash and one exact, unique text
 span. Bytes outside that span are preserved, including surrounding whitespace
 and line endings. Whole-file `write_file` is refused. Tests are protected, and
 independent final checks run before a task becomes Ready for review.
+
+## Search and read focused project context
+
+After planning, the agent can use `search_text` to find a case-sensitive literal
+inside the task's selected snapshot files. Queries contain 1–128 UTF-8 bytes,
+with no newline or NUL. Results give relative paths, 1-based line numbers,
+Unicode code-point columns and whole-file SHA-256 hashes. One match is reported
+per matching line, in path/line order. A result contains at most 20 hits and
+8,192 serialized JSON bytes, including metadata and escaping. Matching lines
+omitted by the limit are counted, and clipped excerpts are marked explicitly.
+
+`read_lines` reads an inclusive range of at most 80 lines from one selected file.
+Its numbered excerpts carry the current whole-file hash. A read result also has
+an 8,192-byte ceiling, with returned ranges and truncation flags showing what
+was omitted. Individual search/read line excerpts have 512/1,024 UTF-8 byte
+limits. Empty files have no invented lines; LF, CRLF and CR are recognized.
+Viewing excerpts does not normalize or modify the underlying file bytes.
+
+The read-only **Context** tab shows up to eight recent search/read tool results.
+It contains private project source, so keep it and the data directory private.
+The helpers do not discover directories, execute source, search unselected files
+or expand the selected scope. Existing `read_file` remains available. Editing
+still requires the current whole-file hash and a unique exact text span;
+protected tests remain protected.
+
+Before each Ollama chat request, the full serialized JSON body, including tool
+schemas and options, must fit **131,072 bytes**. An oversized candidate is
+recorded as `REQUEST_SIZE_LIMIT` before that chat request is sent or a new hold
+is created. Earlier recorded attempts retain their counts. Diagnostics show
+measured bytes versus the ceiling. The CLI's existing read-only loaded-model
+preflight can occur earlier; this guard makes no claim that all provider GETs
+were skipped. It is a byte limit, not tokenizer-based context qualification.
+Model context, prediction limits, timeouts and no-retry behavior are unchanged.
 
 ## Apply an accepted patch in a Git review workspace
 
@@ -298,7 +332,7 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 128 unit methods, compiles the Java client with Java 17 compatibility and
+This runs 173 unit methods, compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results, and exercises real
 Bubblewrap checks, namespace boundaries, time/output limits, and patch handling. It also checks Java compilation diagnostics, protected-main
 execution, namespace boundaries and Java timeout/output limits.
@@ -310,7 +344,7 @@ discovery across the entire repository.
 
 Real-model browser acceptance is a separate, explicit task; see
 [VALIDATION.md](VALIDATION.md) for the observed result and its narrow coverage.
-Version 0.4 was tested offline only; its diagnostics do not determine the cause
+Version 0.5 was tested offline only; its context tools do not determine the cause
 or provider completion of the preserved uncertain Java trial from version 0.3.
 
 ## Publication and licensing

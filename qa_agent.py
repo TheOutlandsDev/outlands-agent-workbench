@@ -52,7 +52,7 @@ def main():
         timeout=30,
         check=True,
     )
-    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py"]:
+    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py"]:
         tests = subprocess.run(
             [
                 sys.executable,
