@@ -1,6 +1,7 @@
 """Offline engine tests. No inference and no execution of supplied source."""
 
 import io
+import http.client
 import json
 import os
 import tempfile
@@ -15,6 +16,8 @@ from agent import (
     ScriptedDemo,
     Session,
     canonical,
+    DIAGNOSTIC_FORMAT,
+    DIAGNOSTIC_METRICS,
     gate,
     main,
     parse,
@@ -67,13 +70,19 @@ def call(name, arguments):
 class Sequence:
     def __init__(self, items):
         self.items = iter(items)
+        self.calls = 0
 
     def request(self, messages, seconds):
         del messages, seconds
+        self.calls += 1
         item = next(self.items)
-        if isinstance(item, Exception):
+        if isinstance(item, BaseException):
             raise item
         return item
+
+
+def diagnostics(session, kind):
+    return [event["value"]["diagnostics"] for event in session.events if event["kind"] == kind]
 
 
 class ContractTests(unittest.TestCase):
@@ -434,6 +443,16 @@ class TransportTests(unittest.TestCase):
                     connection.request.assert_called_once()
                     connection.close.assert_called_once()
                     factory.assert_called_once_with("127.0.0.1", 11434, timeout=session.task["request_seconds"])
+                    start = diagnostics(session, "request_started")[0]
+                    finish = diagnostics(session, "request_finished")[0]
+                    self.assertEqual(start["request_bytes"], len(connection.request.call_args.args[2]))
+                    self.assertEqual(start["timeout_seconds"], session.task["request_seconds"])
+                    self.assertEqual(finish["phase"], phase)
+                    self.assertEqual(finish["outcome"], "ERROR")
+                    self.assertEqual(finish["reason"], result["reason"])
+                    self.assertEqual(finish["error_category"], "TIMEOUT")
+                    self.assertEqual(finish["metrics"], {})
+                    self.assertNotIn("private transport detail", json.dumps([start, finish]))
                     with self.assertRaisesRegex(Refused, "UNCERTAIN_REQUEST_HELD"), gate(root / "state"):
                         pass
 
@@ -506,6 +525,273 @@ class TransportTests(unittest.TestCase):
         self.assertFalse(payload["stream"])
         self.assertEqual([t["function"]["name"] for t in payload["tools"]], ["set_plan"])
         self.assertEqual(result["content"], "hello")
+
+
+class DiagnosticsTests(unittest.TestCase):
+    def test_custom_provider_contract_and_monotonic_elapsed(self):
+        with fixture() as (root, session):
+            provider = Sequence([{"role": "assistant", "content": "private response"}])
+            with patch("agent.time.time_ns", side_effect=[2000000000, 1000000000]), patch(
+                "agent.time.monotonic_ns", side_effect=[10000000000, 10047000000]
+            ):
+                result = session.run(provider, root / "hold", "scripted-demo")
+            self.assertEqual(result["reason"], "FINAL_REQUIRED")
+            self.assertEqual(provider.calls, 1)
+            self.assertEqual(diagnostics(session, "request_started"), [{
+                "format": DIAGNOSTIC_FORMAT, "started_at_ms": 2000,
+                "timeout_seconds": session.task["request_seconds"], "request_bytes": None,
+            }])
+            self.assertEqual(diagnostics(session, "request_finished"), [{
+                "format": DIAGNOSTIC_FORMAT, "finished_at_ms": 1000, "elapsed_ms": 47,
+                "phase": "COMPLETE", "outcome": "RESPONSE_RECORDED", "reason": None,
+                "error_category": None, "metrics": {},
+            }])
+            kinds = [event["kind"] for event in session.events]
+            self.assertLess(kinds.index("response"), kinds.index("request_finished"))
+            self.assertNotIn("private response", json.dumps(diagnostics(session, "request_finished")))
+
+    def test_elapsed_is_nonnegative_when_mock_clock_goes_backwards(self):
+        with fixture() as (root, session), patch(
+            "agent.time.monotonic_ns", side_effect=[100000000, 99000000]
+        ):
+            session.run(Sequence([OSError("private")]), root / "hold", "ollama")
+            self.assertEqual(diagnostics(session, "request_finished")[0]["elapsed_ms"], 0)
+
+    def test_ollama_metrics_and_durable_order_before_release(self):
+        with fixture() as (root, session), patch("agent.http.client.HTTPConnection") as factory:
+            connection = factory.return_value
+            metrics = dict(zip(DIAGNOSTIC_METRICS, [0, 9007199254740991, 2, 3, 4, 5]))
+            reply = connection.getresponse.return_value
+            reply.status = 200
+            reply.read.return_value = canonical({
+                "done": True, "message": {"role": "assistant", "content": "private prompt code"},
+                "model": "private-model", "private_path": "/private/code.py", **metrics,
+            })
+            with gate(root / "state") as hold:
+                original_emit = session.emit
+
+                def observe(kind, value):
+                    if kind in {"response", "request_finished"}:
+                        self.assertTrue(hold.exists())
+                    original_emit(kind, value)
+                    if kind == "request_finished":
+                        responses = [e for e in session.events if e["kind"] == "response"]
+                        self.assertEqual(len(responses), 1)
+                        path = session.root / f"event-{responses[0]['index']:03d}.json"
+                        self.assertEqual(json.loads(path.read_bytes()), responses[0])
+
+                with patch.object(session, "emit", side_effect=observe):
+                    session.run(Ollama("private-model"), hold, "ollama")
+                self.assertFalse(hold.exists())
+            finish = diagnostics(session, "request_finished")[0]
+            self.assertEqual(finish["metrics"], metrics)
+            self.assertEqual(finish["phase"], "COMPLETE")
+            self.assertEqual(finish["outcome"], "RESPONSE_RECORDED")
+            evidence = canonical([diagnostics(session, kind) for kind in ("request_started", "request_finished")])
+            for private in [b"private prompt code", b"private-model", b"/private/code.py"]:
+                self.assertNotIn(private, evidence)
+            connection.request.assert_called_once()
+            connection.close.assert_called_once()
+            for event in session.events:
+                if event["kind"].startswith("request_"):
+                    path = session.root / f"event-{event['index']:03d}.json"
+                    self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_invalid_metrics_are_omitted_without_coercion(self):
+        for invalid in [True, False, "1", 1.0, -1, 9007199254740992, None, {}, []]:
+            with self.subTest(invalid=invalid), fixture() as (root, session), patch(
+                "agent.http.client.HTTPConnection"
+            ) as factory:
+                reply = factory.return_value.getresponse.return_value
+                reply.status = 200
+                reply.read.return_value = canonical({
+                    "done": True, "message": {"role": "assistant", "content": "done"},
+                    **{key: invalid for key in DIAGNOSTIC_METRICS}, "other_count": 12,
+                })
+                session.run(Ollama("fictional-model"), root / "hold", "ollama")
+                self.assertEqual(diagnostics(session, "request_finished")[0]["metrics"], {})
+                factory.return_value.request.assert_called_once()
+
+    def test_transport_failures_are_classified_without_private_text(self):
+        for operation, phase, exc, category in [
+            ("request", "SEND", ConnectionRefusedError("private host path"), "CONNECTION"),
+            ("getresponse", "HEADER", http.client.BadStatusLine("private protocol"), "HTTP_PROTOCOL"),
+            ("read", "BODY", http.client.IncompleteRead(b"private response"), "HTTP_PROTOCOL"),
+            ("request", "SEND", OSError("private OS path"), "OS_ERROR"),
+        ]:
+            with self.subTest(phase=phase, category=category), fixture() as (root, session), patch(
+                "agent.http.client.HTTPConnection"
+            ) as factory:
+                connection = factory.return_value
+                target = connection.getresponse.return_value if operation == "read" else connection
+                getattr(target, operation).side_effect = exc
+                result = session.run(Ollama("private-model"), root / "hold", "ollama")
+                finish = diagnostics(session, "request_finished")[0]
+                self.assertEqual(result["reason"], "EXECUTION_ERROR")
+                self.assertEqual(result["status"], "UNCERTAIN")
+                self.assertEqual((finish["phase"], finish["error_category"]), (phase, category))
+                self.assertEqual(finish["reason"], "EXECUTION_ERROR")
+                self.assertNotIn("private", json.dumps(finish))
+                self.assertTrue((root / "hold").exists())
+                connection.request.assert_called_once()
+                connection.close.assert_called_once()
+
+    def test_malformed_responses_stop_at_validation_and_keep_hold(self):
+        cases = [
+            (b'{"private":', "INVALID_JSON"),
+            (canonical({"done": False}), "PROVIDER_INCOMPLETE"),
+            (canonical({"done": True}), "EXECUTION_ERROR"),
+            (canonical({"done": True, "message": {"role": "user"}}), "MODEL_MESSAGE"),
+            (canonical({"done": True, "message": {"role": "assistant", "content": 3}}), "MODEL_CONTENT"),
+        ]
+        for body, reason in cases:
+            with self.subTest(reason=reason), fixture() as (root, session), patch(
+                "agent.http.client.HTTPConnection"
+            ) as factory:
+                connection = factory.return_value
+                reply = connection.getresponse.return_value
+                reply.status, reply.read.return_value = 200, body
+                result = session.run(Ollama("fictional-model"), root / "hold", "ollama")
+                finish = diagnostics(session, "request_finished")[0]
+                self.assertEqual(result["reason"], reason)
+                self.assertEqual(finish["reason"], reason)
+                self.assertEqual(finish["phase"], "VALIDATE")
+                self.assertEqual(finish["outcome"], "ERROR")
+                self.assertFalse(any(e["kind"] == "response" for e in session.events))
+                self.assertTrue((root / "hold").exists())
+                connection.request.assert_called_once()
+                connection.close.assert_called_once()
+
+    def test_unknown_refusal_remains_in_result_but_not_diagnostics(self):
+        private = "private code /path/model prompt"
+        with fixture() as (root, session):
+            provider = Sequence([Refused(private)])
+            result = session.run(provider, root / "hold", "ollama")
+            finish = diagnostics(session, "request_finished")[0]
+            self.assertEqual(result["reason"], private)
+            self.assertIsNone(finish["reason"])
+            self.assertEqual(finish["error_category"], "REFUSED")
+            self.assertEqual(finish["phase"], "UNKNOWN")
+            self.assertNotIn(private, json.dumps(finish))
+            self.assertEqual(provider.calls, 1)
+
+    def test_interrupt_closes_client_and_retains_admission_hold(self):
+        for operation, phase in [("request", "SEND"), ("getresponse", "HEADER"), ("read", "BODY")]:
+            with self.subTest(phase=phase), fixture() as (root, session), patch(
+                "agent.http.client.HTTPConnection"
+            ) as factory:
+                connection = factory.return_value
+                target = connection.getresponse.return_value if operation == "read" else connection
+                getattr(target, operation).side_effect = KeyboardInterrupt("private interruption")
+                with gate(root / "state") as hold:
+                    result = session.run(Ollama("fictional-model"), hold, "ollama")
+                finish = diagnostics(session, "request_finished")[0]
+                self.assertEqual(result["reason"], "OWNER_INTERRUPT")
+                self.assertEqual(result["status"], "UNCERTAIN")
+                self.assertEqual(finish["phase"], phase)
+                self.assertEqual(finish["outcome"], "INTERRUPTED")
+                self.assertEqual(finish["error_category"], "INTERRUPTED")
+                self.assertEqual(finish["reason"], "OWNER_INTERRUPT")
+                self.assertNotIn("private interruption", json.dumps(finish))
+                connection.request.assert_called_once()
+                connection.close.assert_called_once()
+                with self.assertRaisesRegex(Refused, "UNCERTAIN_REQUEST_HELD"), gate(root / "state"):
+                    pass
+
+    def test_finish_storage_failure_retains_response_and_hold_without_retry(self):
+        with fixture() as (root, session):
+            provider = Sequence([{"role": "assistant", "content": "private response"}])
+            original_emit, writes = session.emit, []
+
+            def fail_finish(kind, value):
+                writes.append(kind)
+                if kind == "request_finished":
+                    raise OSError("private diagnostic storage")
+                original_emit(kind, value)
+
+            with patch.object(session, "emit", side_effect=fail_finish):
+                result = session.run(provider, root / "hold", "ollama")
+            self.assertEqual((result["status"], result["reason"]), ("UNCERTAIN", "EXECUTION_ERROR"))
+            self.assertTrue((root / "hold").exists())
+            self.assertEqual(provider.calls, 1)
+            self.assertEqual(writes.count("request_finished"), 1)
+            responses = [event for event in session.events if event["kind"] == "response"]
+            self.assertEqual(len(responses), 1)
+            path = session.root / f"event-{responses[0]['index']:03d}.json"
+            self.assertEqual(json.loads(path.read_bytes()), responses[0])
+
+    def test_error_diagnostic_failure_preserves_original_reason_and_hold(self):
+        with fixture() as (root, session):
+            provider = Sequence([Refused("PROVIDER_HTTP")])
+            original_emit, attempts = session.emit, []
+
+            def fail_finish(kind, value):
+                if kind == "request_finished":
+                    attempts.append(value)
+                    raise OSError("private diagnostic storage")
+                original_emit(kind, value)
+
+            with patch.object(session, "emit", side_effect=fail_finish):
+                result = session.run(provider, root / "hold", "ollama")
+            self.assertEqual((result["status"], result["reason"]), ("UNCERTAIN", "PROVIDER_HTTP"))
+            self.assertEqual(len(attempts), 1)
+            self.assertEqual(attempts[0]["diagnostics"]["reason"], "PROVIDER_HTTP")
+            self.assertEqual(provider.calls, 1)
+            self.assertTrue((root / "hold").exists())
+
+    def test_response_storage_error_records_finite_error_without_releasing_hold(self):
+        with fixture() as (root, session):
+            provider = Sequence([{"role": "assistant", "content": "done"}])
+            original_emit = session.emit
+
+            def fail_response(kind, value):
+                if kind == "response":
+                    raise OSError("private response storage")
+                original_emit(kind, value)
+
+            with patch.object(session, "emit", side_effect=fail_response):
+                result = session.run(provider, root / "hold", "ollama")
+            finish = diagnostics(session, "request_finished")[0]
+            self.assertEqual(result["status"], "UNCERTAIN")
+            self.assertEqual((finish["phase"], finish["outcome"]), ("VALIDATE", "ERROR"))
+            self.assertEqual(finish["error_category"], "OS_ERROR")
+            self.assertFalse(any(event["kind"] == "response" for event in session.events))
+            self.assertEqual(provider.calls, 1)
+            self.assertTrue((root / "hold").exists())
+
+    def test_started_attempt_guard_error_does_not_call_provider_or_clear_hold(self):
+        import agent
+
+        with fixture() as (root, session):
+            provider, hold = Sequence([]), root / "hold"
+            original_write = agent.write_new
+
+            def interrupted_hold_write(path, raw):
+                original_write(path, raw)
+                if path == hold:
+                    raise Refused("SESSION_TIME_LIMIT")
+
+            with patch("agent.write_new", side_effect=interrupted_hold_write):
+                result = session.run(provider, hold, "ollama")
+            finish = diagnostics(session, "request_finished")[0]
+            self.assertEqual(result["reason"], "SESSION_TIME_LIMIT")
+            self.assertEqual((finish["phase"], finish["outcome"]), ("PREPARE", "ERROR"))
+            self.assertEqual(finish["reason"], "SESSION_TIME_LIMIT")
+            self.assertEqual(provider.calls, 0)
+            self.assertTrue(hold.exists())
+
+    def test_uncaught_provider_error_still_has_finite_private_diagnostics(self):
+        with fixture() as (root, session):
+            provider = Sequence([RuntimeError("private provider failure")])
+            with self.assertRaisesRegex(RuntimeError, "private provider failure"):
+                session.run(provider, root / "hold", "ollama")
+            finish = diagnostics(session, "request_finished")[0]
+            self.assertEqual(finish["error_category"], "EXECUTION")
+            self.assertEqual(finish["reason"], "EXECUTION_ERROR")
+            self.assertEqual(finish["phase"], "UNKNOWN")
+            self.assertEqual(provider.calls, 1)
+            self.assertTrue((root / "hold").exists())
+            self.assertNotIn("private", json.dumps(finish))
 
 
 if __name__ == "__main__":

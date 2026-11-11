@@ -11,6 +11,9 @@ illustrate digest verification and stable selection ordering; they contain no
 real project or user data. Version 0.3 adds the prerequisite launcher and selected-file
 Git workspace worker, controller/interface integration and their tests. Git is
 invoked as a separately installed prerequisite; no Git implementation is bundled.
+Version 0.4 adds private request measurements, sanitized diagnostic summaries,
+the read-only Run Diagnostics interface, active/unresolved admission copy and
+offline regression tests. These additions do not replay or resolve old requests.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.
