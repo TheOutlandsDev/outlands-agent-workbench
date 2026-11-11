@@ -51,3 +51,18 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 #snapshot-export-status,#snapshot-export-note-status,#snapshot-export-history-status{overflow-wrap:anywhere}
 #snapshot-export-acceptance{margin-top:20px}
 @media(max-width:680px){.snapshot-export-section{margin-top:22px;padding-top:20px}.snapshot-export-summary,.snapshot-export-accept-card{padding:14px}.snapshot-export-section .pane-heading{align-items:flex-start}.snapshot-export-section .pane-heading button{max-width:100%;white-space:normal}.snapshot-export-section .project-check-facts{grid-template-columns:1fr}}
+
+/* Snapshot matching and forward reconstruction are separate observations. */
+.snapshot-project-panel .panel-heading{align-items:flex-start;flex-wrap:wrap}
+.snapshot-project-panel .panel-heading button{font-size:11px;max-width:100%}
+.snapshot-project-reconstruction{margin:22px 0;padding:18px;border:1px solid #394452;border-radius:8px;background:#0d141d}
+.snapshot-project-reconstruction.refused{border-color:#71404b;background:#24181f}
+.snapshot-project-reconstruction h3{margin:0 0 10px}
+.snapshot-project-reconstruction>.muted,.snapshot-project-reconstruction>.small{line-height:1.8}
+.snapshot-project-details{margin:24px 0;padding:16px;border:1px solid var(--line);border-radius:8px}
+.snapshot-project-details>summary{cursor:pointer;color:#cbd3df;font-size:12px;font-weight:600}
+.snapshot-project-details>summary:focus-visible{outline:2px solid var(--amber);outline-offset:4px}
+.snapshot-project-details .context-file-facts{margin-top:18px}
+.snapshot-project-panel select,.snapshot-project-panel input{min-width:0}
+#snapshot-project-status{overflow-wrap:anywhere;line-height:1.8}
+@media(max-width:680px){.snapshot-project-panel .panel-heading button{font-size:10px;white-space:normal;text-align:left}.snapshot-project-reconstruction{padding:14px}.snapshot-project-details{padding:13px}.snapshot-project-panel .project-check-facts{grid-template-columns:1fr}.snapshot-project-panel .composer-bottom button{max-width:100%;white-space:normal}}
