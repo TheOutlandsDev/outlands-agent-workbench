@@ -88,6 +88,22 @@ Reconstruction requires complete matching baseline bytes; tested/mixed/different
 or missing selections do not establish it. Qualification keeps invented saved
 observations distinct from separately executed isolated checks. Real exports,
 reports, configured projects and operational evidence remain outside public source.
+Version 0.15 adds the separate Snapshot Review Workspace importer for the v0.13
+four-member archive: strict baseline/task-pin preparation, expiring preview pins,
+a private selected-file Git worker, fresh fixed Python/Java checks, retained
+receipts, owned-worker admission/lifecycle controls and browser history. Its
+`outlands-snapshot-workspace-v1` records remain distinct from earlier bundle
+workspace records and do not add automatic manual-recheck, re-export or format
+conversion. It reuses the existing snapshot archive verifier, canonical diff
+reconstruction, guarded readers, Git helper and isolated check runners; no
+third-party implementation or runtime is bundled. Invented Python/Java fixtures
+exercise fresh import checks, failed checks, an owned stop and preservation of
+original source/Git and earlier evidence without model inference. Saved archive
+observations and local rerun results remain separate evidence classes. Real
+archives, private repositories, source copies, job records and logs are excluded
+from public source. Final local offline qualification is documented separately;
+earlier fixture failures are preserved rather than described as an initial clean
+pass. Licensing and the holds of other projects remain unchanged.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.
