@@ -77,6 +77,17 @@ Private acceptance notes and their two-file receipt/review records remain outsid
 the ZIP and public source package, along with real archives, source snapshots,
 check output and histories. The packet carries unsigned integrity evidence and
 no human-acceptance or authenticity assertion.
+Version 0.14 adds a read-only selected-project comparator for that four-member
+snapshot-export format, strict baseline-supported in-memory reconstruction,
+browser/CLI reports, cached project guards and invented Python/Java regression
+fixtures. It adapts existing bounded selected readers, task validation, archive
+verification and canonical diff reconstruction without bundling third-party code.
+It observes original/tested file hashes and does not rerun recorded checks,
+extract archives, apply source, execute Git, contact a provider or access holds.
+Reconstruction requires complete matching baseline bytes; tested/mixed/different
+or missing selections do not establish it. Qualification keeps invented saved
+observations distinct from separately executed isolated checks. Real exports,
+reports, configured projects and operational evidence remain outside public source.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.
