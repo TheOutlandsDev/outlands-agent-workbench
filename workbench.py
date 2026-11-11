@@ -24,6 +24,7 @@ from project_revisions import refresh_task
 from run_diagnostics import summarize as summarize_diagnostics
 from run_comparison import compare_runs
 from project_readiness import summarize as summarize_readiness
+from patch_bundle import build_bundle, verify_bundle
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -1307,6 +1308,114 @@ class Manager:
                 run_id, review["result_sha256"], review["patch_sha256"]
             )
 
+    def _bundle_bytes(self, run_id):
+        """Verify saved accepted artifacts without live reconciliation or writes."""
+        require(type(run_id) is str and ID.fullmatch(run_id) is not None, "BUNDLE_RUN_UNKNOWN")
+        require(run_id not in self.children and run_id not in self.workspace_children, "BUNDLE_NOT_REVIEW_READY")
+
+        def record(root, name, limit=262144):
+            raw = readiness_read_file(root, name, limit)
+            value = parse(raw)
+            require(type(value) is dict, "BUNDLE_RECORD_INVALID")
+            return raw, value
+
+        try:
+            _, meta = record(self.data, "jobs/" + run_id + ".json", 32768)
+        except FileNotFoundError:
+            raise Refused("BUNDLE_RUN_UNKNOWN") from None
+        require(meta.get("id") == run_id, "BUNDLE_RECORD_INVALID")
+        require(meta.get("state") == "REVIEW_READY", "BUNDLE_NOT_REVIEW_READY")
+        project = self.projects.get(meta.get("project")) if type(meta.get("project")) is str else None
+        require(project is not None and meta.get("source") == str(project["source"]), "BUNDLE_PROJECT_CHANGED")
+        for path, expected in [(self.config_path, self.config_raw), (project["task"], project["task_raw"])]:
+            fingerprint = self.readiness_fingerprint(path, expected)
+            require(fingerprint["status"] != "LIMIT", "BUNDLE_RECORD_LIMIT")
+            require(fingerprint["status"] == "MATCH", "BUNDLE_PROJECT_CHANGED")
+        task_raw, task = record(self.data, "tasks/" + run_id + ".json")
+        validate_task(task)
+        require(meta.get("task_sha256") == sha(task_raw)
+                and meta.get("project_task_sha256") == sha(project["task_raw"]), "BUNDLE_PIN_REQUIRED")
+        approved = project["definition"]
+        require(all(task[key] == approved[key] for key in
+                    ["format", "files", "editable", "checks", "max_turns", "request_seconds"]), "BUNDLE_PROJECT_CHANGED")
+        run = self.data / "runs" / run_id
+        result_raw, result = record(run, "result.json")
+        require(result.get("status") == "REVIEW_READY", "BUNDLE_NOT_REVIEW_READY")
+        require(type(result.get("files")) is dict and set(result["files"]) == set(task["files"]), "BUNDLE_ARTIFACT_CHANGED")
+
+        reviews, limited = self.readiness_entries(run, lambda name: name.startswith("review-"), 100)
+        require(not limited, "BUNDLE_RECORD_LIMIT")
+        require(reviews, "BUNDLE_REVIEW_REQUIRED")
+        require(reviews == [f"review-{i:03d}.json" for i in range(len(reviews))], "BUNDLE_RECORD_INVALID")
+        fd = readiness_directory(run)
+        try:
+            for name in reviews:
+                info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+                require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, "BUNDLE_RECORD_INVALID")
+                require(info.st_size <= 32768, "BUNDLE_RECORD_LIMIT")
+        finally:
+            os.close(fd)
+        review_raw, review = record(run, reviews[-1], 32768)
+        require(review.get("id") == run_id, "BUNDLE_RECORD_INVALID")
+        require(review.get("verdict") == "accepted", "BUNDLE_REVIEW_REQUIRED")
+        require(review.get("result_sha256") == sha(result_raw), "BUNDLE_ARTIFACT_CHANGED")
+
+        events, limited = self.readiness_entries(run, lambda name: name.startswith("event-"), 256)
+        require(not limited, "BUNDLE_RECORD_LIMIT")
+        require(events == [f"event-{i:03d}.json" for i in range(len(events))], "BUNDLE_RECORD_INVALID")
+        final, budget = [], 8 * 1048576
+        for index, name in enumerate(events):
+            require(budget > 1, "BUNDLE_RECORD_LIMIT")
+            raw, event = record(run, name, min(262144, budget - 1))
+            budget -= len(raw)
+            require(type(event.get("index")) is int and event["index"] == index
+                    and type(event.get("kind")) is str and type(event.get("value")) is dict, "BUNDLE_RECORD_INVALID")
+            if event["kind"] == "independent_final_checks":
+                final.append(raw)
+        require(len(final) == 1, "BUNDLE_FINAL_REQUIRED")
+
+        patch = readiness_read_file(run, "changes.diff", 1048576)
+        expected_patch, totals = "", [0, 0, 0]
+        for name, digest in sorted(task["files"].items()):
+            before = readiness_read_file(run / "baseline", name)
+            after = readiness_read_file(run / "work", name)
+            original = readiness_read_file(project["source"], name)
+            totals = [total + len(raw) for total, raw in zip(totals, [before, after, original])]
+            require(max(totals) <= 131072, "BUNDLE_RECORD_LIMIT")
+            row = result["files"][name]
+            require(type(row) is dict and sha(before) == digest == row.get("before")
+                    and sha(after) == row.get("after"), "BUNDLE_ARTIFACT_CHANGED")
+            require(sha(original) == digest, "BUNDLE_SOURCE_CHANGED")
+            if name not in task["editable"]:
+                require(sha(after) == digest, "BUNDLE_ARTIFACT_CHANGED")
+            expected_patch += review_diff(name, before, after)
+        require(expected_patch.encode() == patch and sha(patch) == review.get("patch_sha256")
+                == result.get("patch_sha256"), "BUNDLE_ARTIFACT_CHANGED")
+        return build_bundle(task_raw, result_raw, review_raw, final[0], patch)
+
+    def _guarded_bundle(self, run_id):
+        try:
+            return self._bundle_bytes(run_id)
+        except Refused as exc:
+            if str(exc).startswith("BUNDLE_"):
+                raise
+            raise Refused("BUNDLE_RECORD_LIMIT" if str(exc) in ["FILE_LIMIT", "JSON_LIMIT"]
+                          else "BUNDLE_RECORD_INVALID") from None
+        except (OSError, UnicodeError, ValueError, KeyError, TypeError, AttributeError, RecursionError):
+            raise Refused("BUNDLE_RECORD_INVALID") from None
+
+    def bundle_preview(self, run_id):
+        with self.lock:
+            return verify_bundle(self._guarded_bundle(run_id))
+
+    def bundle_export(self, run_id, expected_sha256):
+        with self.lock:
+            require(type(expected_sha256) is str and re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is not None,
+                    "BUNDLE_HASH_REQUIRED")
+            raw = self._guarded_bundle(run_id)
+            verify_bundle(raw, expected_sha256)
+            return raw
+
     def stop(self, run_id):
         with self.lock:
             self.meta_path(run_id)
@@ -1464,6 +1573,9 @@ def make_handler(manager, token, origin):
                         "text/plain; charset=utf-8",
                         f"outlands-patch-{run_id}.diff",
                     )
+                elif path.startswith("/api/bundle-preview/"):
+                    run_id = path.removeprefix("/api/bundle-preview/")
+                    self.send(200, canonical(manager.bundle_preview(run_id)))
                 else:
                     self.send(404, canonical({"error": "NOT_FOUND"}))
             except (Refused, OSError, ValueError, KeyError, TypeError) as exc:
@@ -1518,6 +1630,11 @@ def make_handler(manager, token, origin):
                     result = manager.stop(request["id"])
                 elif path == "/api/review":
                     result = manager.review(request)
+                elif path == "/api/bundle-export":
+                    require(type(request) is dict and set(request) == {"id", "bundle_sha256"}, "BUNDLE_RECORD_INVALID")
+                    raw = manager.bundle_export(request["id"], request["bundle_sha256"])
+                    self.send(200, raw, "application/zip", f"outlands-reviewed-bundle-{request['id']}.zip")
+                    return
                 else:
                     raise Refused("NOT_FOUND")
                 self.send(200, canonical(result))

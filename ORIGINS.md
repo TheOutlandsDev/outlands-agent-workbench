@@ -33,6 +33,12 @@ stubs, project checks, process probes or provider requests. Existing actual
 isolated-check acceptance remains separate. All new fixture snippets are
 invented source text; readiness records and private review evidence are excluded
 from the public source package.
+Version 0.9 adds a deterministic private reviewed-patch archive format, selected
+record summaries, an offline non-extracting verifier, guarded saved-artifact
+loaders, a pinned preview/download interface and invented Python/Java regression
+fixtures. The standard-library ZIP implementation is used without third-party
+archive code. Raw private records and bundle downloads are excluded from the
+public source package. Recorded fixture checks do not represent new model runs.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.
