@@ -18,7 +18,7 @@
     <div class="sidebar-footer"><span class="status-dot"></span> Local workspace<small>One task at a time. Your source stays in place.</small></div>
   </aside>
   <main>
-    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.5</span></h1><p>A clear view from task to reviewed patch.</p></div><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></header>
+    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.6</span></h1><p>A clear view from task to reviewed patch.</p></div><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></header>
     <div id="alert" role="alert" hidden></div>
     <section id="setup-panel" class="composer panel setup-panel" aria-labelledby="setup-title" hidden>
       <div class="panel-heading"><h2 id="setup-title">Set up a project</h2><button id="setup-close" type="button" class="secondary">Close setup</button></div>
@@ -34,7 +34,7 @@
       <section id="setup-review" class="setup-review" aria-label="Project scope review" hidden><h3>Review selected scope</h3><p id="setup-summary" class="muted"></p><ul id="setup-scope"></ul><p class="muted">Saving adds a private configuration entry. It does not start inference.</p><button id="setup-save" class="primary">Save project</button></section>
     </section>
     <section class="composer panel" aria-labelledby="compose-title">
-      <div class="panel-heading"><h2 id="compose-title">Start a task</h2><span class="muted">Explicit scope. Private working copy.</span></div>
+      <div class="panel-heading"><h2 id="compose-title">Start a task</h2><div class="compose-actions"><span class="muted">Explicit scope. Private working copy.</span><button id="refresh-open" type="button" class="secondary" aria-controls="refresh-panel" aria-expanded="false" disabled>Refresh project</button></div></div>
       <form id="task-form">
         <div class="form-grid"><label>Project<select id="project" required></select></label><label>Model<select id="model" required></select></label></div>
         <label class="goal-label">Task<textarea id="goal" maxlength="2000" rows="3" required placeholder="Describe the change and how to check it."></textarea></label>
@@ -42,6 +42,20 @@
         <div class="composer-bottom"><p id="scope-note" class="muted">Tests are protected. Edits stay in a private copy.</p><button id="start" class="primary" type="submit">Run task <span aria-hidden="true">↗</span></button></div>
       </form>
       <p id="admission" class="admission" hidden></p>
+    </section>
+    <section id="refresh-panel" class="composer panel project-refresh" aria-labelledby="refresh-title" hidden>
+      <div class="panel-heading"><div><div class="eyebrow" id="refresh-project-name"></div><h2 id="refresh-title">Refresh project</h2></div><button id="refresh-close" type="button" class="secondary">Close refresh</button></div>
+      <p class="muted">Review current hashes for the selected files and the default goal for the next task. Scope, editable files, checks and budgets stay fixed. Saving a revision starts no inference, writes no source files and preserves previous runs.</p>
+      <dl class="hashes refresh-fingerprint"><dt>Current task SHA-256</dt><dd id="refresh-current-hash">Not recorded</dd></dl>
+      <p id="refresh-admission" class="admission" hidden></p>
+      <form id="refresh-form">
+        <label>Default goal for the next task<textarea id="refresh-goal" maxlength="2000" rows="3" required></textarea></label>
+        <div class="refresh-fixed-scope"><span class="section-label">PRESERVED FILE SCOPE</span><div id="refresh-files"></div><h3>Fixed checks</h3><ul id="refresh-checks" class="refresh-check-list"></ul><p class="muted">The exact model-turn and request-timeout limits appear in the preview.</p></div>
+        <div class="composer-bottom"><p class="muted">Preview reads only the selected source files.</p><button id="refresh-preview" type="submit" class="secondary" disabled>Review refresh</button></div>
+      </form>
+      <section id="refresh-review" class="setup-review" aria-label="Project refresh review" hidden><h3>Review task revision</h3><p id="refresh-summary" class="muted"></p><div id="refresh-review-facts"></div><h3>Selected file hashes</h3><ul id="refresh-scope"></ul><h3>Preserved checks</h3><ul id="refresh-review-checks" class="refresh-check-list"></ul><p class="muted">Saving records this reviewed revision. Existing request holds keep their recorded status.</p><button id="refresh-save" type="button" class="primary" disabled>Save task revision</button></section>
+      <p id="refresh-status" class="refresh-status muted" role="status" hidden></p>
+      <section class="revision-history" aria-labelledby="revision-history-title"><div class="pane-heading"><h3 id="revision-history-title">Recent task revisions</h3><span id="revision-history-limit" class="muted">Read-only history</span></div><div id="revision-history"><p class="muted">Open refresh to load revision history.</p></div><p id="revision-history-truncated" class="context-notice" hidden>Revision history is incomplete. Only the recent saved revisions are shown.</p></section>
     </section>
     <section id="run-panel" class="run-panel panel" aria-labelledby="run-title" hidden>
       <div class="run-heading"><div><div class="eyebrow" id="run-project"></div><h2 id="run-title">Task</h2><div id="run-meta" class="muted"></div></div><div class="run-actions"><span id="run-state" class="state-pill">Ready</span><button id="stop" class="danger" disabled>Stop task</button></div></div>
