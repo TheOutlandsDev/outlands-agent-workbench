@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 
 from java_check import validate_jdk
 from project_setup import prepare
+from project_revisions import refresh_task
 from run_diagnostics import summarize as summarize_diagnostics
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
@@ -95,10 +96,32 @@ def context_evidence(kind, value, files):
     return cleaned if type(value.get("truncated")) is bool else None
 
 
-def replace_json(path, value):
+def replace_json(path, value, expected_raw=None):
     temporary = path.with_name(path.name + ".next")
     write_new(temporary, canonical(value))
+    if expected_raw is not None:
+        require(read_file(path.parent, path.name, 262144) == expected_raw, "CONFIG_CHANGED")
     os.replace(temporary, path)
+
+
+def verified_workspace_receipt(value):
+    """Recognize a completed receipt without executing its workspace."""
+    if not isinstance(value, dict) or value.get("status") != "VERIFIED":
+        return False
+    if (value.get("source_applied") is not False or value.get("patch_applied_to_workspace") is not True
+            or not all(isinstance(value.get(k), str) and re.fullmatch(r"[0-9a-f]{64}", value[k])
+                       for k in ["result_sha256", "patch_sha256"])
+            or not isinstance(value.get("baseline_commit"), str)
+            or re.fullmatch(r"[0-9a-f]{40}", value["baseline_commit"]) is None
+            or not all(isinstance(value.get(k), str) and 1 <= len(value[k]) <= 4096 for k in ["branch", "path"])
+            or type(value.get("finished")) is not int):
+        return False
+    checks = value.get("checks")
+    return (isinstance(checks, dict) and 1 <= len(checks) <= 4
+            and all(isinstance(row, dict) and type(row.get("exit_code")) is int and row["exit_code"] == 0
+                    and type(row.get("tests_ran")) is int and row["tests_ran"] > 0
+                    and all(row.get(k) is False for k in ["timed_out", "output_limited", "infrastructure_error"])
+                    for row in checks.values()))
 
 
 def process_stamp(pid):
@@ -152,12 +175,14 @@ def load_config(path):
             "PROJECT_PATH",
         )
         require(source.is_dir(), "PROJECT_SOURCE")
-        definition = validate_task(json_file(task))
+        task_raw = read_file(task.parent, task.name, 262144)
+        definition = validate_task(parse(task_raw))
         projects[row["id"]] = {
             **row,
             "source": source.resolve(),
             "task": task.resolve(),
             "definition": definition,
+            "task_raw": task_raw,
         }
     require(
         isinstance(value["models"], list) and len(value["models"]) <= 8, "MODEL_LIMIT"
@@ -190,7 +215,7 @@ class Manager:
                 "DATA_OUTSIDE_SOURCE",
             )
         private_dir(self.data)
-        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces"]:
+        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions"]:
             private_dir(self.data / name)
         self.server_lock = os.open(
             self.data / "server.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
@@ -290,7 +315,7 @@ class Manager:
             self.drafts = {key: value for key, value in self.drafts.items() if value["expires"] > time.monotonic()}
             require(len(self.drafts) < 16, "DRAFT_LIMIT")
             draft_id = secrets.token_hex(8)
-            self.drafts[draft_id] = {"request": copy.deepcopy(request), "task": task,
+            self.drafts[draft_id] = {"kind": "setup", "request": copy.deepcopy(request), "task": task,
                                      "source": source, "expires": time.monotonic() + 300}
             return {"draft": draft_id, "name": request["name"], "files": rows,
                     "checks": task["checks"], "max_turns": task["max_turns"], "total_bytes": sum(r["bytes"] for r in rows)}
@@ -300,7 +325,8 @@ class Manager:
             require(isinstance(request, dict) and set(request) == {"draft"}
                     and isinstance(request["draft"], str), "DRAFT_REQUIRED")
             draft = self.drafts.get(request["draft"])
-            require(draft is not None and draft["expires"] > time.monotonic(), "DRAFT_EXPIRED")
+            require(draft is not None and draft.get("kind") == "setup"
+                    and draft["expires"] > time.monotonic(), "DRAFT_EXPIRED")
             blocked = self.admission()
             require(blocked is None, blocked or "ADMISSION")
             source, task, _ = prepare(draft["request"], self.jdk_home is not None)
@@ -315,9 +341,147 @@ class Manager:
             write_new(task_path, canonical(task))
             replace_json(self.config_path, config)
             self.config_raw = canonical(config)
-            self.projects[name] = {**row, "source": source, "task": task_path, "definition": task}
+            self.projects[name] = {**row, "source": source, "task": task_path,
+                                   "definition": task, "task_raw": canonical(task)}
             del self.drafts[request["draft"]]
             return {"id": name, "name": row["name"]}
+
+    def current_project(self, project_id):
+        require(isinstance(project_id, str) and project_id in self.projects, "PROJECT_UNKNOWN")
+        require(read_file(self.config_path.parent, self.config_path.name, 262144)
+                == self.config_raw, "CONFIG_CHANGED")
+        project = self.projects[project_id]
+        raw = read_file(project["task"].parent, project["task"].name, 262144)
+        require(raw == project["task_raw"], "PROJECT_TASK_CHANGED")
+        return project
+
+    def revision_chain(self, project):
+        """Follow only revisions committed by the current config pointer."""
+        root = self.data / "revisions" / project["id"]
+        path = project["task"]
+        if path.name != "task.json" or path.parent.parent != root:
+            return []
+        revision = path.parent.name
+        require(ID.fullmatch(revision) is not None, "REVISION_RECORD_CHANGED")
+        rows, seen = [], set()
+        expected_sha = sha(project["task_raw"])
+        fields = {"format", "project", "id", "created", "parent_revision",
+                  "parent_task_sha256", "task_sha256", "files_changed", "goal_changed"}
+        while revision is not None:
+            require(isinstance(revision, str) and ID.fullmatch(revision) is not None
+                    and revision not in seen and len(seen) < 64, "REVISION_RECORD_CHANGED")
+            seen.add(revision)
+            folder = root / revision
+            receipt = json_file(folder / "receipt.json")
+            require(isinstance(receipt, dict) and set(receipt) == fields
+                    and receipt["format"] == "outlands-project-revision-v1"
+                    and receipt["project"] == project["id"] and receipt["id"] == revision
+                    and type(receipt["created"]) is int and receipt["created"] >= 0
+                    and type(receipt["files_changed"]) is int and 0 <= receipt["files_changed"] <= 32
+                    and type(receipt["goal_changed"]) is bool
+                    and (receipt["parent_revision"] is None or isinstance(receipt["parent_revision"], str)),
+                    "REVISION_RECORD_CHANGED")
+            task_raw = read_file(folder, "task.json", 262144)
+            parent_raw = read_file(folder, "parent-task.json", 262144)
+            require(sha(task_raw) == expected_sha == receipt["task_sha256"]
+                    and sha(parent_raw) == receipt["parent_task_sha256"], "REVISION_RECORD_CHANGED")
+            task, parent = validate_task(parse(task_raw)), validate_task(parse(parent_raw))
+            require(set(task["files"]) == set(parent["files"])
+                    and task != parent
+                    and all(task[k] == parent[k] for k in ["format", "editable", "checks", "max_turns", "request_seconds"])
+                    and receipt["files_changed"] == sum(task["files"][n] != parent["files"][n] for n in task["files"])
+                    and receipt["goal_changed"] == (task["goal"] != parent["goal"]), "REVISION_RECORD_CHANGED")
+            rows.append({k: receipt[k] for k in ["id", "created", "parent_task_sha256", "task_sha256", "files_changed", "goal_changed"]})
+            rows[-1]["current"] = len(rows) == 1
+            expected_sha, revision = receipt["parent_task_sha256"], receipt["parent_revision"]
+        return rows
+
+    def project_revisions(self, project_id):
+        with self.lock:
+            project = self.current_project(project_id)
+            rows = self.revision_chain(project)
+            return {"project": project_id, "name": project["name"], "task_sha256": sha(project["task_raw"]),
+                    "revisions": rows[:20], "limit": 20, "truncated": len(rows) > 20}
+
+    def project_refresh_preview(self, request):
+        with self.lock:
+            require(isinstance(request, dict) and set(request) == {"project", "goal"}, "REFRESH_FIELDS")
+            blocked = self.admission()
+            require(blocked is None, blocked or "ADMISSION")
+            project = self.current_project(request["project"])
+            chain = self.revision_chain(project)
+            require(len(chain) < 64, "REVISION_LIMIT")
+            task, rows = refresh_task(project["source"], project["definition"], request["goal"])
+            self.drafts = {key: value for key, value in self.drafts.items() if value["expires"] > time.monotonic()}
+            require(len(self.drafts) < 16, "DRAFT_LIMIT")
+            draft_id = secrets.token_hex(8)
+            self.drafts[draft_id] = {"kind": "refresh", "project": project["id"],
+                "task": task, "parent_raw": project["task_raw"], "parent_path": project["task"],
+                "parent_revision": chain[0]["id"] if chain else None,
+                "config_raw": self.config_raw, "expires": time.monotonic() + 300}
+            return {"draft": draft_id, "project": project["id"], "name": project["name"],
+                "parent_task_sha256": sha(project["task_raw"]), "task_sha256": sha(canonical(task)),
+                "goal": task["goal"], "files": rows, "checks": copy.deepcopy(task["checks"]),
+                "max_turns": task["max_turns"], "request_seconds": task["request_seconds"],
+                "total_bytes": sum(row["bytes"] for row in rows),
+                "files_changed": sum(row["changed"] for row in rows),
+                "goal_changed": task["goal"] != project["definition"]["goal"]}
+
+    def project_refresh_save(self, request):
+        with self.lock:
+            require(isinstance(request, dict) and set(request) == {"draft"}
+                    and isinstance(request["draft"], str), "DRAFT_REQUIRED")
+            draft = self.drafts.get(request["draft"])
+            require(draft is not None and draft.get("kind") == "refresh"
+                    and draft["expires"] > time.monotonic(), "DRAFT_EXPIRED")
+            blocked = self.admission()
+            require(blocked is None, blocked or "ADMISSION")
+            project = self.current_project(draft["project"])
+            require(self.config_raw == draft["config_raw"], "CONFIG_CHANGED")
+            require(project["task"] == draft["parent_path"] and project["task_raw"] == draft["parent_raw"], "PROJECT_TASK_CHANGED")
+            chain = self.revision_chain(project)
+            require(len(chain) < 64, "REVISION_LIMIT")
+            try:
+                task, rows = refresh_task(project["source"], project["definition"], draft["task"]["goal"])
+            except Refused as exc:
+                if str(exc) == "REFRESH_NO_CHANGES":
+                    raise Refused("REFRESH_SOURCE_CHANGED") from None
+                raise
+            require(task == draft["task"], "REFRESH_SOURCE_CHANGED")
+            revision = secrets.token_hex(8)
+            project_root = self.data / "revisions" / project["id"]
+            private_dir(project_root)
+            folder = project_root / revision
+            folder.mkdir(mode=0o700, exist_ok=False)
+            task_path, task_raw = folder / "task.json", canonical(task)
+            receipt = {"format": "outlands-project-revision-v1", "project": project["id"],
+                "id": revision, "created": int(time.time()), "parent_revision": draft["parent_revision"],
+                "parent_task_sha256": sha(draft["parent_raw"]), "task_sha256": sha(task_raw),
+                "files_changed": sum(row["changed"] for row in rows),
+                "goal_changed": task["goal"] != project["definition"]["goal"]}
+            write_new(folder / "parent-task.json", draft["parent_raw"])
+            write_new(task_path, task_raw)
+            write_new(folder / "receipt.json", canonical(receipt))
+            config = parse(self.config_raw)
+            for row in config["projects"]:
+                if row["id"] == project["id"]:
+                    row["task"] = str(task_path)
+            self.current_project(project["id"])
+            try:
+                final_task, _ = refresh_task(project["source"], project["definition"], task["goal"])
+            except Refused as exc:
+                if str(exc) == "REFRESH_NO_CHANGES":
+                    raise Refused("REFRESH_SOURCE_CHANGED") from None
+                raise
+            require(final_task == task, "REFRESH_SOURCE_CHANGED")
+            self.current_project(project["id"])
+            # The atomic config pointer is the commit boundary. Prepared files from
+            # an interrupted save are retained; history follows only committed links.
+            replace_json(self.config_path, config, expected_raw=self.config_raw)
+            self.config_raw = canonical(config)
+            self.projects[project["id"]] = {**project, "task": task_path, "task_raw": task_raw, "definition": task}
+            del self.drafts[request["draft"]]
+            return {"id": project["id"], "name": project["name"], "revision": revision, "task_sha256": sha(task_raw)}
 
     def meta_path(self, run_id):
         require(isinstance(run_id, str) and ID.fullmatch(run_id), "RUN_ID")
@@ -417,7 +581,7 @@ class Manager:
             return "UNCERTAIN_REQUEST_HELD"
         for row in rows:
             receipt = self.workspace_receipt(row["id"])
-            if receipt is not None and receipt["status"] in ["PREPARING", "FAILED"]:
+            if receipt is not None and not verified_workspace_receipt(receipt):
                 return "WORKSPACE_ACTIVE_OR_UNRESOLVED"
         if any(
             r["state"] in ["RUNNING", "STOP_REQUESTED", "RECOVERY_REQUIRED"]
@@ -445,7 +609,7 @@ class Manager:
             )
             blocked = self.admission()
             require(blocked is None, blocked or "ADMISSION")
-            project = self.projects[request["project"]]
+            project = self.current_project(request["project"])
             task = copy.deepcopy(project["definition"])
             require(self.jdk_home is not None or not any(
                 isinstance(spec, dict) and spec.get("kind") == "java-main"
@@ -478,6 +642,8 @@ class Manager:
                 "project": project["id"],
                 "project_name": project["name"],
                 "source": str(project["source"]),
+                "project_task_sha256": sha(project["task_raw"]),
+                "task_sha256": sha(canonical(task)),
                 "goal": task["goal"],
                 "model": request["model"],
                 "backend": backend,
@@ -759,6 +925,7 @@ class Manager:
                     "files": sorted(p["definition"]["files"]),
                     "editable": p["definition"]["editable"],
                     "checks": sorted(p["definition"]["checks"]),
+                    "task_sha256": sha(p["task_raw"]),
                     "scripted_available": p["definition"] == json_file(HERE / "task.example.json"),
                 }
                 for p in self.projects.values()
@@ -855,6 +1022,8 @@ def make_handler(manager, token, origin):
                     self.send(200, canonical(manager.config_view()))
                 elif path == "/api/history":
                     self.send(200, canonical(manager.history()))
+                elif path.startswith("/api/project-revisions/"):
+                    self.send(200, canonical(manager.project_revisions(path.removeprefix("/api/project-revisions/"))))
                 elif path.startswith("/api/run/"):
                     self.send(
                         200, canonical(manager.view(path.removeprefix("/api/run/")))
@@ -905,6 +1074,10 @@ def make_handler(manager, token, origin):
                     result = manager.project_preview(request)
                 elif path == "/api/project-save":
                     result = manager.project_save(request)
+                elif path == "/api/project-refresh-preview":
+                    result = manager.project_refresh_preview(request)
+                elif path == "/api/project-refresh-save":
+                    result = manager.project_refresh_save(request)
                 elif path == "/api/workspace":
                     result = manager.create_workspace(request)
                 elif path == "/api/workspace-stop":

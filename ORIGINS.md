@@ -16,7 +16,12 @@ the read-only Run Diagnostics interface, active/unresolved admission copy and
 offline regression tests. These additions do not replay or resolve old requests.
 Version 0.5 adds pure bounded snapshot search and line-range helpers, selected-file
 tool integration, serialized chat-body limits, a read-only Context view and
-offline regression tests. All new fixture snippets are invented source text.
+offline regression tests. Version 0.6 adds selected-file hash refresh helpers,
+reviewed task revisions, linked private revision receipts, refresh controls and
+offline helper/controller acceptance checks. Its qualification fixtures are
+invented Python and Java source; manual fixture corrections in acceptance do not
+represent model-generated fixes. Revision data remains outside the public source
+package. All new fixture snippets are invented source text.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.
@@ -39,7 +44,7 @@ filename combinations found no indexed matching implementation at review time.
 This is limited provenance evidence, not proof of originality, complete ownership,
 absence of copying, or license clearance. No third-party notices were removed.
 
-**Licensing is unassigned.** No MIT or other open-source license is applied, and
+**Licensing: UNASSIGNED.** No MIT or other open-source license is applied, and
 no general redistribution or reuse permission should be inferred from this
 repository's public visibility. A future license requires an explicit decision
 by the rights holder. The owner's public-release instruction for this selected

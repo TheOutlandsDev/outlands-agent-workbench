@@ -11,6 +11,7 @@ from agent import review_diff
 from isolation import check
 from qa_java import acceptance as java_acceptance
 from qa_git import acceptance as git_acceptance
+from qa_project_refresh import acceptance as refresh_acceptance
 
 
 def main():
@@ -52,7 +53,7 @@ def main():
         timeout=30,
         check=True,
     )
-    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py"]:
+    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py", "test_project_revisions.py", "test_project_refresh.py"]:
         tests = subprocess.run(
             [
                 sys.executable,
@@ -184,6 +185,7 @@ class Boundary(unittest.TestCase):
         "patch_sha256": results[0]["patch_sha256"],
         **java_acceptance(jdk, work),
         **git_acceptance(jdk, work),
+        **refresh_acceptance(jdk, work),
     }
     (work / "acceptance.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, sort_keys=True))

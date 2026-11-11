@@ -5,9 +5,11 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.5 adds scoped project search, focused line reads and a serialized
-request-size guard to Run Diagnostics, the checked foreground launcher, Git review
-workspaces, project wizard and isolated Python/Java task-to-reviewed-patch workflow. It remains a small Linux
+Version 0.6 adds reviewed project refreshes and saved task revisions. Selected
+file hashes and the default next-task goal can be updated while scope, checks
+and budgets stay fixed. It retains scoped search, focused reads, request-size
+guards, Run Diagnostics, the foreground launcher, Git review workspaces and the
+isolated Python/Java task-to-reviewed-patch workflow. It remains a small Linux
 prototype with a Python engine and a compatible Java launcher.
 See [validation and limits](VALIDATION.md) and [origins](ORIGINS.md).
 
@@ -187,6 +189,52 @@ span. Bytes outside that span are preserved, including surrounding whitespace
 and line endings. Whole-file `write_file` is refused. Tests are protected, and
 independent final checks run before a task becomes Ready for review.
 
+## Refresh a configured project
+
+After changing a selected source file outside the workbench, choose its project
+and click **Refresh project**. The panel shows its current task fingerprint and
+recent saved revisions. Edit the **Default goal for the next task**, then choose
+**Review refresh**. Inspect each selected path, current size, configured/current
+SHA-256 and editable/protected label, along with the parent/new task fingerprints,
+fixed check definitions, model-turn limit and request timeout.
+
+**Save task revision** saves exactly that reviewed candidate and reloads the
+project configuration. Changed hashes are visible for both editable and protected
+files; their edit permissions remain fixed. The refresh cannot add or remove
+paths, change checks, expand editable scope, change budgets or reconfigure the
+Java JDK. A goal-only revision is supported with zero changed file hashes. If
+neither the goal nor any selected hash changed, the preview is refused as a no-op.
+
+Task fingerprints hash the exact saved task-file bytes, including formatting.
+The parent fingerprint identifies the task bytes referenced before saving; the
+new fingerprint identifies the bytes prepared for the revision.
+Externally changed config or task bytes, even a formatting-only task change,
+require inspection rather than silent adoption. The source, config and current
+task are re-read before saving, and a source change since preview refuses the
+save. Drafts expire after five minutes or a server restart. Editing the reviewed
+goal, changing projects or encountering an admission block invalidates the UI
+preview. Review a fresh preview after resolving the cause; there is no automatic
+retry.
+
+Revision data stays under the external private data directory, in
+`DATA/revisions/PROJECT_ID/REVISION_ID/`, with a parent task, new task and linked
+receipt. Existing task files and run pins remain unchanged. The panel shows the
+latest 20 committed revisions and marks omitted older entries; a project can
+save at most 64 revisions. Older configured projects show **No saved revisions**
+until their first refresh. Keep revision files out of Git and public uploads.
+
+The save prepares new files first and atomically replaces the config pointer
+last. Prepared files left by an interrupted save are retained; committed history
+follows only links reachable from the current pointer. This requires a trusted,
+stable filesystem. Sequential source/config/task rechecks are not a multiwriter
+transaction, a snapshot service or a guarantee of atomicity across all files.
+
+Saving starts no inference and writes no source files. It does not clear holds,
+replay requests, roll back a project or overwrite previous runs. Admission blocks
+preview/save while revision history remains readable. Refreshing does not
+revalidate old reviews or exports: each remains tied to its original task and
+recorded hashes and must still pass its own checks when used.
+
 ## Search and read focused project context
 
 After planning, the agent can use `search_text` to find a case-sensitive literal
@@ -332,20 +380,26 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 173 unit methods, compiles the Java client with Java 17 compatibility and
+This runs 218 unit methods (173 prior methods, 17 revision-helper methods and
+28 refresh/controller methods), compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results, and exercises real
 Bubblewrap checks, namespace boundaries, time/output limits, and patch handling. It also checks Java compilation diagnostics, protected-main
 execution, namespace boundaries and Java timeout/output limits.
 It also checks prerequisite reporting, an actual owned Git-workspace worker,
 accepted-patch rechecks and preservation of the original project Git state.
-It makes no AI inference requests. The demo's `test_calculator.py` is intentionally
+Invented Python and Java refresh fixtures run actual isolated baseline checks,
+are corrected manually by the acceptance script, then pass final checks after a
+reviewed hash revision. Goal-only revisions, restart persistence and refusal of a
+stale refresh save are also checked. It makes no AI inference requests. The
+demo's `test_calculator.py` is intentionally
 failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
 
 Real-model browser acceptance is a separate, explicit task; see
 [VALIDATION.md](VALIDATION.md) for the observed result and its narrow coverage.
-Version 0.5 was tested offline only; its context tools do not determine the cause
-or provider completion of the preserved uncertain Java trial from version 0.3.
+Version 0.6 was tested offline only. Refreshes and context tools do not determine
+the cause or provider completion of the preserved uncertain Java trial from
+version 0.3.
 
 ## Publication and licensing
 
