@@ -32,6 +32,8 @@ from workspace_recheck import history_pin as recheck_history_pin
 from snapshot_export import prepare as prepare_snapshot_export
 from snapshot_export import verify_export as verify_snapshot_export
 from snapshot_project_check import check_project as check_snapshot_project
+from snapshot_workspace import prepare as prepare_snapshot_workspace
+from snapshot_workspace import valid_receipt as valid_snapshot_workspace_receipt
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -358,7 +360,7 @@ class Manager:
                 "DATA_OUTSIDE_SOURCE",
             )
         private_dir(self.data)
-        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks", "snapshot-exports"]:
+        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks", "snapshot-exports", "snapshot-workspaces"]:
             private_dir(self.data / name)
         self.server_lock = os.open(
             self.data / "server.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
@@ -377,6 +379,8 @@ class Manager:
         self.recheck_children = {}
         self.recheck_draft = None
         self.snapshot_export_draft = None
+        self.snapshot_workspace_draft = None
+        self.snapshot_workspace_children = {}
 
     @staticmethod
     def readiness_fingerprint(path, expected):
@@ -564,6 +568,31 @@ class Manager:
             workspaces += 1
             receipt = record(self.data / "workspace-rechecks", name + "/receipt.json", 262144)
             if not valid_recheck_receipt(receipt) or receipt["id"] != name:
+                note("ADMISSION_RECORD_INVALID")
+            elif receipt["status"] != "VERIFIED":
+                note("WORKSPACE_ACTIVE_OR_UNRESOLVED")
+        try:
+            names, snapshot_truncated = self.readiness_entries(self.data / "snapshot-workspaces", lambda _: True, 200)
+        except OSError:
+            names, snapshot_truncated = [], False
+            note("ADMISSION_UNAVAILABLE")
+        if snapshot_truncated:
+            truncated = True
+            note("ADMISSION_RECORD_LIMIT")
+        for name in names:
+            if ID.fullmatch(name) is None:
+                note("ADMISSION_RECORD_INVALID")
+                continue
+            workspaces += 1
+            try:
+                pending, pending_limited = self.readiness_entries(self.data / "snapshot-workspaces" / name,
+                                                                  lambda item: item == "receipt.json.next", 1)
+                if pending or pending_limited:
+                    note("ADMISSION_RECORD_INVALID")
+            except (OSError, Refused):
+                note("ADMISSION_RECORD_INVALID")
+            receipt = record(self.data / "snapshot-workspaces", name + "/receipt.json", 262144)
+            if not valid_snapshot_workspace_receipt(receipt) or receipt["id"] != name:
                 note("ADMISSION_RECORD_INVALID")
             elif receipt["status"] != "VERIFIED":
                 note("WORKSPACE_ACTIVE_OR_UNRESOLVED")
@@ -820,6 +849,7 @@ class Manager:
                        "result_sha256": request["result_sha256"], "patch_sha256": request["patch_sha256"]}
             self.recheck_draft = None
             self.snapshot_export_draft = None
+            self.snapshot_workspace_draft = None
             write_new(run / "git-workspace.json", canonical(receipt))
             meta = self.metadata(run_id)
             command = [sys.executable, "-B", str(HERE / "git_workspace.py"), "--run-dir", str(run),
@@ -1151,6 +1181,12 @@ class Manager:
                 return "RECHECK_ACTIVE_OR_UNRESOLVED"
         except (Refused, OSError, ValueError, KeyError, TypeError):
             return "RECHECK_NEEDS_INSPECTION"
+        try:
+            if any(row["status"] != "VERIFIED" or row.get("owned_active") is True
+                   for row in self._snapshot_workspace_rows()):
+                return "SNAPSHOT_WORKSPACE_ACTIVE_OR_UNRESOLVED"
+        except (Refused, OSError, ValueError, KeyError, TypeError):
+            return "SNAPSHOT_WORKSPACE_NEEDS_INSPECTION"
         if any(
             r["state"] in ["RUNNING", "STOP_REQUESTED", "RECOVERY_REQUIRED"]
             for r in rows
@@ -1181,6 +1217,7 @@ class Manager:
             task = copy.deepcopy(project["definition"])
             self.recheck_draft = None
             self.snapshot_export_draft = None
+            self.snapshot_workspace_draft = None
             require(self.jdk_home is not None or not any(
                 isinstance(spec, dict) and spec.get("kind") == "java-main"
                 for spec in task["checks"].values()), "JDK_REQUIRED")
@@ -1501,6 +1538,190 @@ class Manager:
             require(len(canonical(result)) <= 131072, "SNAPSHOT_PROJECT_OUTPUT_LIMIT")
             return result
 
+    def _snapshot_workspace_prepare(self, project_id, raw, expected_sha256=None):
+        require(type(project_id) is str and project_id in self.projects, "SNAPSHOT_WORKSPACE_PROJECT_UNKNOWN")
+        require(type(raw) is bytes and 0 < len(raw) <= MAX_ARCHIVE, "SNAPSHOT_WORKSPACE_INPUT_LIMIT")
+        verify_snapshot_export(raw, expected_sha256)
+        project = self.projects[project_id]
+        def guard_project():
+            for path, expected in [(self.config_path, self.config_raw), (project["task"], project["task_raw"])]:
+                require(self.readiness_fingerprint(path, expected)["status"] == "MATCH",
+                        "SNAPSHOT_WORKSPACE_PROJECT_CHANGED")
+        guard_project()
+        prepared = prepare_snapshot_workspace(raw, project["source"], project["task_raw"], expected_sha256)
+        guard_project()
+        binding = {"version": 1, "project_id": project_id, "archive_sha256": sha(raw),
+                   "task_sha256": sha(project["task_raw"]), "config_sha256": sha(self.config_raw),
+                   "prepared": prepared["summary"]}
+        return project, prepared, sha(canonical(binding))
+
+    def snapshot_workspace_preview(self, project_id, raw, expected_sha256=None):
+        """Read-only eligibility and a single memory preview; no admission/worker calls."""
+        with self.lock:
+            self.snapshot_workspace_draft = None
+            project, prepared, pin = self._snapshot_workspace_prepare(project_id, raw, expected_sha256)
+            comparison = check_snapshot_project(raw, project["source"], project["task_raw"], sha(raw))
+            require(comparison["status"] == "BASELINE_MATCH" and comparison["task_pins_match"] is True
+                    and comparison["reconstruction"]["status"] == "VERIFIED", "SNAPSHOT_WORKSPACE_BASELINE_REQUIRED")
+            for path, expected in [(self.config_path, self.config_raw), (project["task"], project["task_raw"])]:
+                require(self.readiness_fingerprint(path, expected)["status"] == "MATCH",
+                        "SNAPSHOT_WORKSPACE_PROJECT_CHANGED")
+            result = {"version": 1, "preview_id": secrets.token_hex(8), "preview_sha256": pin,
+                      "project": {"id": project_id, "name": project["name"]},
+                      "archive_sha256": sha(raw), "task_sha256": sha(project["task_raw"]),
+                      "config_sha256": sha(self.config_raw), "expires_at_ms": time.time_ns() // 1000000 + 300000,
+                      "workspace_ready": True, "patch_sha256": prepared["summary"]["patch_sha256"],
+                      "files": prepared["summary"]["files"], "comparison": comparison,
+                      "java_required": any(isinstance(spec, dict) and spec.get("kind") == "java-main"
+                                           for spec in prepared["task"]["checks"].values()),
+                      "java_available": self.jdk_home is not None}
+            require(len(canonical(result)) <= 131072, "SNAPSHOT_WORKSPACE_OUTPUT_LIMIT")
+            self.snapshot_workspace_draft = {"response": result, "raw": raw, "deadline": time.monotonic() + 300}
+            return copy.deepcopy(result)
+
+    def snapshot_workspace_create(self, request):
+        with self.lock:
+            require(type(request) is dict and set(request) == {"preview_id", "preview_sha256"}, "SNAPSHOT_WORKSPACE_FIELDS")
+            draft = self.snapshot_workspace_draft
+            require(draft is not None, "SNAPSHOT_WORKSPACE_PREVIEW_REQUIRED")
+            value = draft["response"]
+            require(request["preview_id"] == value["preview_id"] and request["preview_sha256"] == value["preview_sha256"],
+                    "SNAPSHOT_WORKSPACE_PREVIEW_CHANGED")
+            if time.monotonic() >= draft["deadline"] or time.time_ns() // 1000000 >= value["expires_at_ms"]:
+                self.snapshot_workspace_draft = None
+                raise Refused("SNAPSHOT_WORKSPACE_PREVIEW_EXPIRED")
+            blocked = self.admission()
+            require(blocked is None, blocked or "ADMISSION")
+            project_id = value["project"]["id"]
+            project, prepared, pin = self._snapshot_workspace_prepare(project_id, draft["raw"], value["archive_sha256"])
+            require(pin == value["preview_sha256"], "SNAPSHOT_WORKSPACE_PREVIEW_CHANGED")
+            require(self.jdk_home is not None or not any(isinstance(spec, dict) and spec.get("kind") == "java-main"
+                    for spec in prepared["task"]["checks"].values()), "JDK_REQUIRED")
+            require(len(self._snapshot_workspace_rows(reserve_bytes=262144)) < 200, "SNAPSHOT_WORKSPACE_RECORD_LIMIT")
+            # Consume before persistent work. A partial creation is retained, never a retry token.
+            self.snapshot_workspace_draft = None
+            self.bundle_workspace_draft = None
+            self.recheck_draft = None
+            self.snapshot_export_draft = None
+            identifier = secrets.token_hex(8)
+            job = self.data / "snapshot-workspaces" / identifier
+            job.mkdir(mode=0o700, exist_ok=False)
+            receipt = {"version": 1, "format": "outlands-snapshot-workspace-v1", "id": identifier,
+                       "project_id": project_id, "status": "PREPARING", "created": int(time.time()),
+                       "archive_sha256": value["archive_sha256"], "preview_sha256": pin,
+                       "config_sha256": value["config_sha256"], "task_sha256": value["task_sha256"],
+                       "patch_sha256": prepared["summary"]["patch_sha256"], "source_applied": False}
+            initial_raw = canonical(receipt)
+            write_new(job / "receipt.json", initial_raw)
+            try:
+                write_new(job / "task.json", project["task_raw"])
+                write_new(job / "snapshot.zip", draft["raw"])
+                worker_request = {"version": 1, "id": identifier, "project_id": project_id,
+                                  "source": str(project["source"]), "config_path": str(self.config_path),
+                                  "config_sha256": value["config_sha256"], "task_path": str(project["task"]),
+                                  "task_sha256": value["task_sha256"], "archive_sha256": value["archive_sha256"],
+                                  "preview_sha256": pin}
+                write_new(job / "request.json", canonical(worker_request))
+                command = [sys.executable, "-B", str(HERE / "snapshot_workspace.py"), "--job-dir", str(job)]
+                if self.jdk_home is not None:
+                    command += ["--jdk-home", str(self.jdk_home)]
+                fd = os.open(job / "worker.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                log = os.fdopen(fd, "wb")
+                try:
+                    child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                             start_new_session=True,
+                                             env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "PYTHONNOUSERSITE": "1"})
+                except BaseException:
+                    log.close()
+                    raise
+                self.snapshot_workspace_children[identifier] = (child, log)
+            except (OSError, ValueError, Refused, subprocess.SubprocessError):
+                receipt.update(status="FAILED", reason="SNAPSHOT_WORKSPACE_START_FAILED", finished=int(time.time()))
+                try:
+                    replace_json(job / "receipt.json", receipt, initial_raw)
+                except (OSError, ValueError, Refused):
+                    pass
+                raise Refused("SNAPSHOT_WORKSPACE_START_FAILED") from None
+            return self.snapshot_workspace_view(identifier)
+
+    def _snapshot_workspace_record(self, identifier):
+        try:
+            job = self.data / "snapshot-workspaces" / identifier
+            extras, limited = self.readiness_entries(job, lambda name: name == "receipt.json.next", 1)
+            require(not limited and not extras, "SNAPSHOT_WORKSPACE_RECORD_INVALID")
+            raw = readiness_read_file(job, "receipt.json", 262144)
+            value = parse(raw)
+            require(valid_snapshot_workspace_receipt(value) and value["id"] == identifier,
+                    "SNAPSHOT_WORKSPACE_RECORD_INVALID")
+            return raw, value
+        except Refused as exc:
+            if str(exc).startswith("SNAPSHOT_WORKSPACE_"):
+                raise
+            raise Refused("SNAPSHOT_WORKSPACE_RECORD_LIMIT" if str(exc) in {"FILE_LIMIT", "JSON_LIMIT"}
+                          else "SNAPSHOT_WORKSPACE_RECORD_INVALID") from None
+        except (OSError, ValueError, UnicodeError, TypeError, KeyError, RecursionError, AttributeError, OverflowError):
+            raise Refused("SNAPSHOT_WORKSPACE_RECORD_INVALID") from None
+
+    def snapshot_workspace_view(self, identifier):
+        with self.lock:
+            require(type(identifier) is str and ID.fullmatch(identifier) is not None, "SNAPSHOT_WORKSPACE_ID")
+            entry = self.snapshot_workspace_children.get(identifier)
+            exited = entry is not None and entry[0].poll() is not None
+            if exited:
+                child, log = self.snapshot_workspace_children.pop(identifier)
+                log.close()
+            raw, receipt = self._snapshot_workspace_record(identifier)
+            if exited and receipt["status"] == "PREPARING":
+                receipt.update(status="INTERRUPTED", reason="SNAPSHOT_WORKSPACE_INTERRUPTED", finished=int(time.time()))
+                replace_json(self.data / "snapshot-workspaces" / identifier / "receipt.json", receipt, raw)
+            return {**receipt, "owned_active": identifier in self.snapshot_workspace_children}
+
+    def _snapshot_workspace_rows(self, reserve_bytes=0):
+        try:
+            names, limited = self.readiness_entries(self.data / "snapshot-workspaces", lambda _: True, 200)
+            require(not limited, "SNAPSHOT_WORKSPACE_RECORD_LIMIT")
+            rows, total = [], 0
+            for name in names:
+                require(ID.fullmatch(name) is not None, "SNAPSHOT_WORKSPACE_RECORD_INVALID")
+                row = self.snapshot_workspace_view(name)
+                raw, _ = self._snapshot_workspace_record(name)
+                total += len(raw)
+                require(total <= 2097152 - reserve_bytes, "SNAPSHOT_WORKSPACE_RECORD_LIMIT")
+                rows.append({key: row[key] for key in ["version", "format", "id", "project_id", "status", "created",
+                             "archive_sha256", "preview_sha256", "source_applied", "owned_active", "finished", "reason",
+                             "path", "branch", "baseline_commit"] if key in row})
+            return rows
+        except Refused:
+            raise
+        except (OSError, ValueError, UnicodeError, TypeError, KeyError, RecursionError, AttributeError, OverflowError):
+            raise Refused("SNAPSHOT_WORKSPACE_RECORD_INVALID") from None
+
+    def snapshot_workspaces(self):
+        with self.lock:
+            response = {"version": 1, "workspaces": self._snapshot_workspace_rows()}
+            require(len(canonical(response)) <= 262144, "SNAPSHOT_WORKSPACE_OUTPUT_LIMIT")
+            return response
+
+    def snapshot_workspace_stop(self, identifier):
+        with self.lock:
+            self.snapshot_workspace_view(identifier)
+            entry = self.snapshot_workspace_children.get(identifier)
+            require(entry is not None and entry[0].poll() is None, "NO_OWNED_ACTIVE_SNAPSHOT_WORKSPACE")
+            child = entry[0]
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                child.wait()
+            return self.snapshot_workspace_view(identifier)
+
     def _bundle_workspace_prepare(self, project_id, raw, expected_sha256=None):
         require(type(project_id) is str and project_id in self.projects, "BUNDLE_WORKSPACE_PROJECT_UNKNOWN")
         require(type(raw) is bytes and 0 < len(raw) <= MAX_ARCHIVE, "BUNDLE_WORKSPACE_INPUT_LIMIT")
@@ -1556,6 +1777,7 @@ class Manager:
             self.bundle_workspace_draft = None
             self.recheck_draft = None
             self.snapshot_export_draft = None
+            self.snapshot_workspace_draft = None
             workspace_id = secrets.token_hex(8)
             job = self.data / "bundle-workspaces" / workspace_id
             job.mkdir(mode=0o700, exist_ok=False)
@@ -1895,6 +2117,7 @@ class Manager:
         with self.lock:
             self.recheck_draft = None
             self.snapshot_export_draft = None
+            self.snapshot_workspace_draft = None
             require(type(request) is dict and set(request) == {"workspace_id"}, "RECHECK_FIELDS")
             inspected = self._recheck_inspection(request["workspace_id"])
             history = recheck_history_pin(self.data / "workspace-rechecks")
@@ -1929,6 +2152,7 @@ class Manager:
             self.recheck_draft = None
             self.bundle_workspace_draft = None
             self.snapshot_export_draft = None
+            self.snapshot_workspace_draft = None
             attempt_id = secrets.token_hex(8)
             attempt = self.data / "workspace-rechecks" / attempt_id
             attempt.mkdir(mode=0o700, exist_ok=False)
@@ -2185,6 +2409,14 @@ class Manager:
     def close(self):
         self.recheck_draft = None
         self.snapshot_export_draft = None
+        self.snapshot_workspace_draft = None
+        for identifier in list(self.snapshot_workspace_children):
+            try:
+                self.snapshot_workspace_stop(identifier)
+            except Refused:
+                pass
+        for identifier in list(self.snapshot_workspace_children):
+            self.snapshot_workspace_view(identifier)
         for attempt_id in list(self.recheck_children):
             try:
                 self.recheck_stop(attempt_id)
@@ -2322,9 +2554,13 @@ def make_handler(manager, token, origin):
                     self.send(200, canonical(manager.recheck_view(path.removeprefix("/api/workspace-recheck/"))))
                 elif path.startswith("/api/snapshot-export-history/"):
                     self.send(200, canonical(manager.snapshot_export_history(path.removeprefix("/api/snapshot-export-history/"))))
+                elif path == "/api/snapshot-workspaces":
+                    self.send(200, canonical(manager.snapshot_workspaces()))
+                elif path.startswith("/api/snapshot-workspace/"):
+                    self.send(200, canonical(manager.snapshot_workspace_view(path.removeprefix("/api/snapshot-workspace/"))))
                 else:
                     self.send(404, canonical({"error": "NOT_FOUND"}))
-            except (Refused, OSError, ValueError, KeyError, TypeError) as exc:
+            except (Refused, OSError, ValueError, KeyError, TypeError, RecursionError) as exc:
                 self.send(
                     403
                     if isinstance(exc, Refused)
@@ -2345,6 +2581,25 @@ def make_handler(manager, token, origin):
                 self.guard(True)
                 require(self.headers.get("Origin") == origin, "ORIGIN_REFUSED")
                 path = urlsplit(self.path).path
+                if path.startswith("/api/snapshot-workspace-preview/"):
+                    require(self.headers.get("Transfer-Encoding") is None, "SNAPSHOT_WORKSPACE_INPUT")
+                    types = self.headers.get_all("Content-Type", [])
+                    require(len(types) == 1 and types[0].split(";", 1)[0].strip().lower() == "application/zip",
+                            "SNAPSHOT_WORKSPACE_INPUT")
+                    lengths = self.headers.get_all("Content-Length", [])
+                    require(len(lengths) == 1 and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
+                            "SNAPSHOT_WORKSPACE_INPUT")
+                    length = int(lengths[0])
+                    require(0 < length <= MAX_ARCHIVE, "SNAPSHOT_WORKSPACE_INPUT_LIMIT")
+                    hashes = self.headers.get_all("X-Snapshot-SHA256", [])
+                    require(len(hashes) <= 1 and (not hashes or re.fullmatch(r"[0-9a-f]{64}", hashes[0]) is not None),
+                            "SNAPSHOT_WORKSPACE_INPUT")
+                    raw = self.rfile.read(length)
+                    require(len(raw) == length, "SNAPSHOT_WORKSPACE_INPUT")
+                    result = manager.snapshot_workspace_preview(path.removeprefix("/api/snapshot-workspace-preview/"),
+                                                                raw, hashes[0] if hashes else None)
+                    self.send(200, canonical(result))
+                    return
                 if path.startswith("/api/snapshot-project-check/"):
                     require(self.headers.get("Transfer-Encoding") is None, "SNAPSHOT_PROJECT_INPUT")
                     types = self.headers.get_all("Content-Type", [])
@@ -2388,6 +2643,10 @@ def make_handler(manager, token, origin):
                                                                   raw, hashes[0] if hashes else None)
                     self.send(200, canonical(result))
                     return
+                if path in {"/api/snapshot-workspace-create", "/api/snapshot-workspace-stop"}:
+                    types = self.headers.get_all("Content-Type", [])
+                    require(len(types) == 1 and types[0].split(";", 1)[0].strip().lower() == "application/json",
+                            "SNAPSHOT_WORKSPACE_INPUT")
                 require(
                     self.headers.get("Content-Type", "").split(";", 1)[0]
                     == "application/json",
@@ -2395,18 +2654,21 @@ def make_handler(manager, token, origin):
                 )
                 if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop", "/api/workspace-recheck-preview",
                             "/api/workspace-recheck-start", "/api/workspace-recheck-stop", "/api/snapshot-export-preview",
-                            "/api/snapshot-export-accept", "/api/snapshot-export-download"}:
+                            "/api/snapshot-export-accept", "/api/snapshot-export-download",
+                            "/api/snapshot-workspace-create", "/api/snapshot-workspace-stop"}:
                     lengths = self.headers.get_all("Content-Length", [])
                     require(self.headers.get("Transfer-Encoding") is None and len(lengths) == 1
                             and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
-                            "BUNDLE_WORKSPACE_INPUT")
+                            "SNAPSHOT_WORKSPACE_INPUT" if path.startswith("/api/snapshot-workspace-") else "BUNDLE_WORKSPACE_INPUT")
                 length = int(self.headers.get("Content-Length", "0"))
                 require(0 < length <= 32768, "REQUEST_LIMIT")
                 raw = self.rfile.read(length)
                 if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop", "/api/workspace-recheck-preview",
                             "/api/workspace-recheck-start", "/api/workspace-recheck-stop", "/api/snapshot-export-preview",
-                            "/api/snapshot-export-accept", "/api/snapshot-export-download"}:
-                    require(len(raw) == length, "BUNDLE_WORKSPACE_INPUT")
+                            "/api/snapshot-export-accept", "/api/snapshot-export-download",
+                            "/api/snapshot-workspace-create", "/api/snapshot-workspace-stop"}:
+                    require(len(raw) == length, "SNAPSHOT_WORKSPACE_INPUT" if path.startswith("/api/snapshot-workspace-")
+                            else "BUNDLE_WORKSPACE_INPUT")
                 request = parse(raw)
                 if path == "/api/start":
                     result = manager.start(request)
@@ -2443,6 +2705,11 @@ def make_handler(manager, token, origin):
                     raw = manager.snapshot_export_download(request)
                     self.send(200, raw, "application/zip", "outlands-reviewed-snapshot.zip")
                     return
+                elif path == "/api/snapshot-workspace-create":
+                    result = manager.snapshot_workspace_create(request)
+                elif path == "/api/snapshot-workspace-stop":
+                    require(type(request) is dict and set(request) == {"id"}, "SNAPSHOT_WORKSPACE_FIELDS")
+                    result = manager.snapshot_workspace_stop(request["id"])
                 elif path == "/api/stop":
                     require(
                         isinstance(request, dict) and set(request) == {"id"},
@@ -2459,7 +2726,7 @@ def make_handler(manager, token, origin):
                 else:
                     raise Refused("NOT_FOUND")
                 self.send(200, canonical(result))
-            except (Refused, OSError, ValueError, KeyError, TypeError) as exc:
+            except (Refused, OSError, ValueError, KeyError, TypeError, RecursionError) as exc:
                 self.send(
                     409,
                     canonical(

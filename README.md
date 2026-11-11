@@ -5,10 +5,14 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.14 adds **Snapshot Export Project Check**: compare a private snapshot
-export with an explicitly selected project, then verify its forward patch in
-memory when current selected bytes match the original baseline. Already-tested,
-mixed, different or missing bytes are reported without reconstruction proof.
+Version 0.15 adds **Snapshot review workspace**: preview a private snapshot export
+against an approved selected baseline, then explicitly create a separate private
+Git worktree and run fresh configured Python/Java checks. It performs no model
+inference and does not write original project files. It retains **Snapshot Export
+Project Check**: compare a private snapshot export with an explicitly selected
+project, then verify its forward patch in memory when current selected bytes
+match the original baseline. Already-tested, mixed, different or missing bytes
+are reported without reconstruction proof.
 It retains **Reviewed Snapshot Export**: review a verified workspace
 recheck’s exact tested snapshot, record a separate private acceptance, then
 explicitly download a pinned four-member patch bundle. Export performs no new
@@ -341,6 +345,90 @@ measured bytes versus the ceiling. The CLI's existing read-only loaded-model
 preflight can occur earlier; this guard makes no claim that all provider GETs
 were skipped. It is a byte limit, not tokenizer-based context qualification.
 Model context, prediction limits, timeouts and no-retry behavior are unchanged.
+
+## Create a snapshot review workspace
+
+Choose **Snapshot review workspace** to import a private four-member v0.13
+snapshot-export archive into a new isolated review workspace. Embedded checksums
+provide unsigned integrity, not authenticity or a prior human-approval assertion:
+
+1. Select an already configured project and the private snapshot ZIP. Optionally
+   enter a whole-archive SHA-256 obtained through a trusted separate channel.
+2. Choose **Preview snapshot workspace** explicitly. Selected original baseline
+   bytes, protected files, approved task file pins, selected scope, fixed check
+   specifications and budgets must agree with the archive. Forward reconstruction
+   must verify. Tested or mixed current bytes and a false configured-task pin
+   match do not qualify for creation.
+3. Review the exact archive, patch, task/config and preview hashes, selected
+   baseline/snapshot file hashes and edit permissions. The Java-required and
+   configured-JDK facts describe the prepared task and server configuration;
+   preview performs no new executable probe.
+4. Within five minutes, choose **Create snapshot workspace** explicitly. The
+   server rechecks global admission, source/task/config/archive pins and required
+   JDK configuration before creating the job. Its worker constructs the private
+   worktree and runs the configured fixed checks there without model inference.
+5. Inspect **Snapshot workspace history**, its selected receipt, private path,
+   branch, baseline commit and fresh check results. Use **Refresh snapshot
+   workspace history** for an explicit update. **Stop owned snapshot workspace**
+   signals only the selected preparing worker owned by the current server.
+
+Preview is memory-only, writes no project or workspace files, and executes no
+Git command, check or provider request. It remains usable under an unrelated
+hold. One cached preview is retained; expiry, server restart, changed inputs,
+a new preview or changed selected workspace state requires another explicit
+preview. Creation consumes the preview before persistent work and is never
+repeated automatically. The UI's observed admission and JDK facts can become
+stale; the server's creation guards remain authoritative. An unresolved hold,
+active or unfinished work, failed workspace, damaged record or unknown creation
+outcome blocks new execution. An ambiguous creation response requires explicit
+history inspection before another decision.
+
+The new store is `DATA/snapshot-workspaces/ID/`, with receipts in the distinct
+`outlands-snapshot-workspace-v1` format. It holds the private archive, staged task
+and request, initial/final receipt, worker log, check output and generated Git
+files. The new repository contains only selected original baseline files; Git
+commits that baseline and creates an `outlands/snapshot-ID` review worktree.
+The worker installs only the hash-verified reconstructed snapshot there, leaving
+its candidate edits uncommitted at creation. It does not use the original
+project's Git repository or write original source, prior run, creation, recheck
+or export records. No archive extraction or archive-supplied command is used.
+
+Saved archive checks are earlier observations. The new worker runs fresh fixed
+Python/Java checks from the approved local task, using the existing read-only,
+networkless isolation. Java requires the server's configured `--jdk-home`;
+Python does not. The worker rechecks source, task/config, staged bytes, Git
+controls, selected scope and snapshot hashes before recording verification.
+`VERIFIED` means those checks passed when this workspace was created; it is a
+historical receipt, not a current-workspace inspection, model/provider proof,
+authenticity assertion, source-correctness guarantee or adoption authorization.
+Later manual changes need their own review and checks.
+
+Failures, including early preparation failures, retain private partial files,
+core pins and available evidence. Interrupted or unknown unfinished work is not
+resumed, retried, deleted or relabelled successful. Closing the panel ends its
+selected-worker polling without stopping the worker; stopping the server stops
+workers it owns. After restart, saved unfinished work is unowned and unresolved.
+No foreign or saved PID is signalled. Read-only preview/history does not clear a
+hold or authorize recovery.
+
+This workspace type has no v0.12 manual-recheck or v0.13 snapshot-re-export action
+in this milestone. Existing bundle review workspaces retain their separate tools;
+there is no automatic format conversion. `snapshot_workspace.py` is the
+controller's explicit staged-job worker, not a general archive-import CLI. Use
+the reviewed browser flow for import and creation.
+
+The store allows at most 200 jobs and 2,097,152 aggregate raw receipt bytes.
+Creation reserves 262,144 bytes for its new receipt before writing. Each receipt
+and task JSON is bounded to 262,144 bytes, the staged request to 32,768 bytes,
+the preview response to 131,072 bytes and the history response to 262,144 bytes.
+The archive limit is 2,097,152 bytes; selected baseline and reconstructed snapshot
+limits remain 32 files, 32,768 bytes per file and 131,072 bytes total. Full check
+evidence is bounded to 2,097,152 bytes; receipt output is clipped separately and
+marked when truncated. Damaged, partial or over-limit records fail closed.
+The host and private store must remain trusted and stable: sequential rechecks
+are not a multiwriter transaction or an atomic filesystem snapshot. Keep these
+archives, generated repositories, source copies, notes and logs out of public
+source and uploads.
 
 ## Create a private bundle review workspace
 
@@ -897,9 +985,10 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs the full offline unit suites, including snapshot-export and selected
-snapshot-project engine/controller/HTTP regressions. It compiles the Java client with Java 17
-compatibility and warnings as errors, compares Python/Java scripted results,
+Final offline qualification passed 652 unit methods across 28 suites, including
+snapshot workspace, snapshot export and selected-project engine/controller/HTTP
+regressions. The runner compiles the Java client with Java 17 compatibility and
+warnings as errors, compares Python/Java scripted results,
 and runs actual isolated checks. Acceptance covers namespace boundaries,
 time/output limits, Java compilation diagnostics and protected-main execution,
 prerequisite reporting, an owned Git-workspace worker, accepted-patch rechecks
@@ -937,6 +1026,15 @@ fix/manual-edit patch, and guards the export path against checks, Git execution,
 provider requests and existing-record writes. It preserves source/Git, creation,
 recheck and unrelated synthetic-hold bytes, refuses changed snapshots and stale
 history pins, and keeps notes in private acceptance records outside the ZIP.
+Snapshot-workspace acceptance imports tested Python/Java exports into new private
+Git worktrees and runs their fixed isolated checks again. It verifies exact
+selected snapshot bytes and uncommitted diffs, preserves original source/Git and
+earlier records, and retains a deliberate failed-check workspace and an owned
+worker stop without retry. These fresh checks remain distinct from the archive's
+recorded observations. The final qualification retains all earlier client,
+isolation, prerequisite, time/output, Git and preservation probes. See
+[validation and limits](VALIDATION.md) for the preserved development failures,
+final run and browser-review scope; these are local results, not a CI claim.
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
@@ -949,8 +1047,9 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.14 adds no real-model qualification. Snapshot exports, workspace
-rechecks, bundle review workspaces, project checks, bundles, readiness,
+Version 0.15 adds no real-model qualification. Snapshot review workspaces,
+snapshot exports, workspace rechecks, bundle review workspaces, project checks,
+bundles, readiness,
 comparisons, refreshes and context
 tools do not determine the cause or provider completion of the preserved
 uncertain Java trial from version 0.3.

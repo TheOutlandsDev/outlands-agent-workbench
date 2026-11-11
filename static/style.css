@@ -66,3 +66,14 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 .snapshot-project-panel select,.snapshot-project-panel input{min-width:0}
 #snapshot-project-status{overflow-wrap:anywhere;line-height:1.8}
 @media(max-width:680px){.snapshot-project-panel .panel-heading button{font-size:10px;white-space:normal;text-align:left}.snapshot-project-reconstruction{padding:14px}.snapshot-project-details{padding:13px}.snapshot-project-panel .project-check-facts{grid-template-columns:1fr}.snapshot-project-panel .composer-bottom button{max-width:100%;white-space:normal}}
+
+/* Snapshot imports use a separate private worktree and history. */
+.snapshot-workspace-panel .panel-heading{align-items:flex-start;flex-wrap:wrap}
+.snapshot-workspace-panel .panel-heading button{max-width:100%;white-space:normal}
+.snapshot-workspace-panel select,.snapshot-workspace-panel input{min-width:0}
+.snapshot-workspace-panel .bundle-workspace-history>.pane-heading{align-items:flex-start}
+.snapshot-workspace-panel .bundle-workspace-create-card button,.snapshot-workspace-panel .review-buttons button{max-width:100%;white-space:normal}
+.snapshot-workspace-availability{padding:12px 14px;border:1px solid var(--line);border-radius:7px;background:#0d141d}
+#snapshot-workspace-preview-status,#snapshot-workspace-history-status,#snapshot-workspace-admission{overflow-wrap:anywhere;line-height:1.8}
+#snapshot-workspace-receipt>.muted{line-height:1.8}
+@media(max-width:680px){.snapshot-workspace-panel .composer-bottom{flex-wrap:wrap}.snapshot-workspace-panel .composer-bottom button{max-width:100%;white-space:normal}.snapshot-workspace-panel .project-check-facts{grid-template-columns:1fr}.snapshot-workspace-panel .bundle-workspace-history>.pane-heading button{max-width:100%;white-space:normal;text-align:left}.snapshot-workspace-panel .bundle-workspace-hashes dd{font-size:9px}}

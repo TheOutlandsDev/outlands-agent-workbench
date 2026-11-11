@@ -20,6 +20,7 @@ from qa_bundle_workspace import acceptance as bundle_workspace_acceptance
 from qa_workspace_recheck import acceptance as workspace_recheck_acceptance
 from qa_snapshot_export import acceptance as snapshot_export_acceptance
 from qa_snapshot_project_check import acceptance as snapshot_project_check_acceptance
+from qa_snapshot_workspace import acceptance as snapshot_workspace_acceptance
 
 
 def main():
@@ -61,7 +62,7 @@ def main():
         timeout=30,
         check=True,
     )
-    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py", "test_project_revisions.py", "test_project_refresh.py", "test_run_comparison.py", "test_run_comparison_integration.py", "test_project_readiness.py", "test_project_readiness_integration.py", "test_patch_bundle.py", "test_patch_bundle_integration.py", "test_bundle_project_check.py", "test_bundle_project_check_integration.py", "test_bundle_workspace.py", "test_bundle_workspace_integration.py", "test_workspace_recheck.py", "test_workspace_recheck_integration.py", "test_snapshot_export.py", "test_snapshot_export_integration.py", "test_snapshot_project_check.py", "test_snapshot_project_check_integration.py"]:
+    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py", "test_project_revisions.py", "test_project_refresh.py", "test_run_comparison.py", "test_run_comparison_integration.py", "test_project_readiness.py", "test_project_readiness_integration.py", "test_patch_bundle.py", "test_patch_bundle_integration.py", "test_bundle_project_check.py", "test_bundle_project_check_integration.py", "test_bundle_workspace.py", "test_bundle_workspace_integration.py", "test_workspace_recheck.py", "test_workspace_recheck_integration.py", "test_snapshot_export.py", "test_snapshot_export_integration.py", "test_snapshot_project_check.py", "test_snapshot_project_check_integration.py", "test_snapshot_workspace.py", "test_snapshot_workspace_integration.py"]:
         tests = subprocess.run(
             [
                 sys.executable,
@@ -202,6 +203,7 @@ class Boundary(unittest.TestCase):
         **workspace_recheck_acceptance(jdk, work),
         **snapshot_export_acceptance(jdk, work),
         **snapshot_project_check_acceptance(jdk, work),
+        **snapshot_workspace_acceptance(jdk, work),
     }
     (work / "acceptance.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, sort_keys=True))
