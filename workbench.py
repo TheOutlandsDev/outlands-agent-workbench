@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 
 from java_check import validate_jdk
 from project_setup import prepare
+from run_diagnostics import summarize as summarize_diagnostics
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -350,10 +351,28 @@ class Manager:
             rows = sorted(rows, key=lambda x: (x["created"], x["id"]), reverse=True)
             return rows if limit is None else rows[:limit]
 
+    def request_hold(self):
+        path = self.data / "state/hold.json"
+        present = path.exists() or path.is_symlink()
+        try:
+            value = json_file(path) if present else None
+        except (Refused, OSError, ValueError):
+            value = None
+        valid = (isinstance(value, dict) and value.get("state") == "REQUEST_UNSETTLED"
+                 and type(value.get("turn")) is int and 1 <= value["turn"] <= 16
+                 and isinstance(value.get("run"), str))
+        return present, value["run"] if valid else None
+
+    def owns_active(self, run_id):
+        entry = self.children.get(run_id)
+        return entry is not None and entry[0].poll() is None
+
     def admission(self):
         rows = self.history(limit=None)
-        hold = self.data / "state/hold.json"
-        if hold.exists() or hold.is_symlink():
+        present, held_run = self.request_hold()
+        if present:
+            if any(held_run == str(self.run_path(row["id"])) and self.owns_active(row["id"]) for row in rows):
+                return "MODEL_REQUEST_ACTIVE"
             return "UNCERTAIN_REQUEST_HELD"
         for row in rows:
             receipt = self.workspace_receipt(row["id"])
@@ -478,7 +497,8 @@ class Manager:
         with self.lock:
             meta = self.refresh(self.metadata(run_id))
             run = self.run_path(run_id)
-            events, plans, checks = [], [], []
+            task = json_file(self.data / "tasks" / (run_id + ".json"))
+            events, plans, checks, diagnostic_events = [], [], [], []
             turns, pending = 0, 0
             for path in sorted(run.glob("event-*.json")):
                 try:
@@ -486,8 +506,17 @@ class Manager:
                 except (Refused, OSError, ValueError):
                     pending += 1
                     continue
+                if len(diagnostic_events) <= 256:
+                    diagnostic_events.append(event)
+                if (not isinstance(event, dict) or not isinstance(event.get("kind"), str)
+                        or not isinstance(event.get("value"), dict) or type(event.get("index")) is not int):
+                    pending += 1
+                    continue
                 kind, value = event["kind"], event["value"]
                 if kind == "request_started":
+                    if type(value.get("turn")) is not int or not 1 <= value["turn"] <= task["max_turns"]:
+                        pending += 1
+                        continue
                     turns = max(turns, value["turn"])
                     text = "Model turn " + str(value["turn"])
                 elif kind == "tool_result":
@@ -511,7 +540,6 @@ class Manager:
                 else:
                     continue
                 events.append({"kind": kind, "text": text, "index": event["index"]})
-            task = json_file(self.data / "tasks" / (run_id + ".json"))
             result = self.result(run_id)
             patch_path = run / "changes.diff"
             patch_text = (
@@ -525,6 +553,9 @@ class Manager:
             for entry in checks:
                 entry["output"] = entry.get("output", "")[:8192]
             workspace = self.workspace_receipt(run_id)
+            hold_present, held_run = self.request_hold()
+            diagnostics = summarize_diagnostics(task, result, diagnostic_events, meta["state"], meta["backend"],
+                                                self.owns_active(run_id), held_run == str(run), hold_present)
             return {
                 "id": run_id,
                 "project_name": meta["project_name"],
@@ -547,6 +578,7 @@ class Manager:
                 "pending_events": pending,
                 "workspace": {**workspace, "owned_active": run_id in self.workspace_children}
                 if workspace is not None else None,
+                "diagnostics": diagnostics,
                 "admission_block": self.admission(),
             }
 

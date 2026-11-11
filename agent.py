@@ -20,6 +20,55 @@ from java_check import check as isolated_java_check
 FORMAT = "outlands-coding-agent-v1"
 MAX_FILE = 32768
 MAX_JSON = 262144
+DIAGNOSTIC_FORMAT = "outlands-request-diagnostics-v1"
+DIAGNOSTIC_PHASES = frozenset(
+    {"PREPARE", "SEND", "HEADER", "BODY", "VALIDATE", "COMPLETE", "UNKNOWN"}
+)
+DIAGNOSTIC_METRICS = (
+    "prompt_eval_count", "eval_count", "total_duration", "load_duration",
+    "prompt_eval_duration", "eval_duration",
+)
+# Only fixed engine codes may enter request diagnostics. Refused remains compatible
+# with older callers, including their original result reasons.
+DIAGNOSTIC_REASONS = frozenset({
+    "CONTEXT_LIMIT", "SESSION_TIME_LIMIT", "MODEL_MESSAGE", "MODEL_CONTENT",
+    "RESPONSE_LIMIT", "JSON_LIMIT", "INVALID_JSON", "DUPLICATE_JSON_KEY",
+    "JSON_CONSTANT", "PROVIDER_HTTP", "PROVIDER_INCOMPLETE",
+    "PROVIDER_SEND_TIMEOUT", "PROVIDER_HEADER_TIMEOUT", "PROVIDER_BODY_TIMEOUT",
+})
+
+
+def diagnostic_error(exc):
+    if isinstance(exc, KeyboardInterrupt):
+        return "OWNER_INTERRUPT", "INTERRUPTED"
+    if isinstance(exc, Refused):
+        value = exc.args[0] if len(exc.args) == 1 else None
+        reason = value if type(value) is str and value in DIAGNOSTIC_REASONS else None
+    else:
+        reason = "EXECUTION_ERROR"
+    if isinstance(exc, TimeoutError) or reason in {
+        "PROVIDER_SEND_TIMEOUT", "PROVIDER_HEADER_TIMEOUT", "PROVIDER_BODY_TIMEOUT"
+    }:
+        category = "TIMEOUT"
+    elif isinstance(exc, ConnectionError):
+        category = "CONNECTION"
+    elif isinstance(exc, http.client.HTTPException):
+        category = "HTTP_PROTOCOL"
+    elif isinstance(exc, Refused):
+        category = "REFUSED"
+    elif isinstance(exc, OSError):
+        category = "OS_ERROR"
+    else:
+        category = "EXECUTION"
+    return reason, category
+
+
+def diagnostic_metrics(value):
+    return {
+        key: value[key]
+        for key in DIAGNOSTIC_METRICS
+        if key in value and type(value[key]) is int and 0 <= value[key] <= 9007199254740991
+    }
 
 
 class Refused(Exception):
@@ -288,6 +337,8 @@ class Ollama:
             re.fullmatch(r"[A-Za-z0-9_.:/-]{1,96}", model) is not None, "MODEL_NAME"
         )
         self.model = model
+        self._request_phase = "PREPARE"
+        self._request_metrics = {}
 
     def preflight(self):
         connection = http.client.HTTPConnection("127.0.0.1", 11434, timeout=5)
@@ -310,8 +361,9 @@ class Ollama:
         finally:
             connection.close()
 
-    def request(self, messages, seconds):
-        payload = canonical(
+    def request_payload(self, messages):
+        """Serialize the unchanged wire payload without opening a connection."""
+        return canonical(
             {
                 "model": self.model,
                 "messages": messages,
@@ -320,6 +372,11 @@ class Ollama:
                 "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 1024},
             }
         )
+
+    def request(self, messages, seconds):
+        self._request_phase, self._request_metrics = "PREPARE", {}
+        payload = self.request_payload(messages)
+        self._request_phase = "SEND"
         connection = http.client.HTTPConnection("127.0.0.1", 11434, timeout=seconds)
         phase = "SEND"
         try:
@@ -327,16 +384,23 @@ class Ollama:
                 "POST", "/api/chat", payload, {"Content-Type": "application/json"}
             )
             phase = "HEADER"
+            self._request_phase = "HEADER"
             response = connection.getresponse()
             phase = "BODY"
+            self._request_phase = "BODY"
             body = response.read(MAX_JSON + 1)
+            self._request_phase = "VALIDATE"
             require(response.status == 200, "PROVIDER_HTTP")
             result = parse(body)
+            if isinstance(result, dict):
+                self._request_metrics = diagnostic_metrics(result)
             require(
                 isinstance(result, dict) and result.get("done") is True,
                 "PROVIDER_INCOMPLETE",
             )
-            return result["message"]
+            message = result["message"]
+            self._request_phase = "COMPLETE"
+            return message
         except TimeoutError:
             raise Refused("PROVIDER_" + phase + "_TIMEOUT") from None
         finally:
@@ -572,6 +636,79 @@ class Session:
         write_new(self.root / "result.json", canonical(result))
         return result
 
+    def request(self, provider, messages, seconds, turn, hold, backend):
+        """One attempt, with finite private metadata and no recovery or retry."""
+        started_at_ms = time.time_ns() // 1000000
+        started_ns = time.monotonic_ns()
+        phase, provider_pending = "PREPARE", False
+        started, finish_attempted = False, False
+
+        def finish(exc=None):
+            nonlocal finish_attempted
+            # Never retry a failed diagnostic write or overwrite an earlier event.
+            finish_attempted = True
+            current_phase, metrics = phase, {}
+            if isinstance(provider, Ollama):
+                if provider_pending:
+                    current_phase = provider._request_phase
+                metrics = diagnostic_metrics(provider._request_metrics)
+            if current_phase not in DIAGNOSTIC_PHASES:
+                current_phase = "UNKNOWN"
+            reason, category = diagnostic_error(exc) if exc is not None else (None, None)
+            self.emit("request_finished", {"turn": turn, "diagnostics": {
+                "format": DIAGNOSTIC_FORMAT,
+                "finished_at_ms": time.time_ns() // 1000000,
+                "elapsed_ms": max(0, (time.monotonic_ns() - started_ns) // 1000000),
+                "phase": current_phase,
+                "outcome": "INTERRUPTED" if isinstance(exc, KeyboardInterrupt) else (
+                    "ERROR" if exc is not None else "RESPONSE_RECORDED"
+                ),
+                "reason": reason,
+                "error_category": category,
+                "metrics": metrics,
+            }})
+
+        try:
+            request_bytes = None
+            if isinstance(provider, Ollama):
+                provider._request_phase, provider._request_metrics = "PREPARE", {}
+                request_bytes = len(provider.request_payload(messages))
+            self.emit("request_started", {"turn": turn, "diagnostics": {
+                "format": DIAGNOSTIC_FORMAT,
+                "started_at_ms": started_at_ms,
+                "timeout_seconds": seconds,
+                "request_bytes": request_bytes,
+            }})
+            started = True
+            if backend == "ollama":
+                write_new(hold, canonical({
+                    "state": "REQUEST_UNSETTLED", "run": str(self.root), "turn": turn,
+                }))
+            phase, provider_pending = "UNKNOWN", True
+            message = provider.request(messages, seconds)
+            phase, provider_pending = "VALIDATE", False
+            require(
+                isinstance(message, dict) and message.get("role") == "assistant",
+                "MODEL_MESSAGE",
+            )
+            require(isinstance(message.get("content", ""), str), "MODEL_CONTENT")
+            require(len(canonical(message)) <= MAX_JSON, "RESPONSE_LIMIT")
+            # A durable response and diagnostic finish both precede hold release.
+            self.emit("response", message)
+            phase = "COMPLETE"
+            finish()
+            if backend == "ollama":
+                hold.unlink()
+            return message
+        except BaseException as exc:
+            if started and not finish_attempted:
+                try:
+                    finish(exc)
+                except BaseException:
+                    # Preserve the original failure and any unsettled admission hold.
+                    pass
+            raise
+
     def run(self, provider, hold, backend):
         turns = 0
         status, reason = "FAILED", "UNFINISHED"
@@ -615,35 +752,17 @@ class Session:
                 require(time.monotonic() < deadline, "SESSION_TIME_LIMIT")
                 require(len(canonical(messages)) <= 131072, "CONTEXT_LIMIT")
                 turns = turn + 1
-                self.emit("request_started", {"turn": turns})
-                if backend == "ollama":
-                    write_new(
-                        hold,
-                        canonical(
-                            {
-                                "state": "REQUEST_UNSETTLED",
-                                "run": str(self.root),
-                                "turn": turns,
-                            }
-                        ),
-                    )
-                message = provider.request(
+                message = self.request(
+                    provider,
                     messages,
                     min(
                         self.task["request_seconds"],
                         max(1, int(deadline - time.monotonic())),
                     ),
+                    turns,
+                    hold,
+                    backend,
                 )
-                require(
-                    isinstance(message, dict) and message.get("role") == "assistant",
-                    "MODEL_MESSAGE",
-                )
-                require(isinstance(message.get("content", ""), str), "MODEL_CONTENT")
-                # Durable response precedes releasing the request hold.
-                require(len(canonical(message)) <= MAX_JSON, "RESPONSE_LIMIT")
-                self.emit("response", message)
-                if backend == "ollama":
-                    hold.unlink()
                 calls = message.get("tool_calls", [])
                 require(
                     isinstance(calls, list) and len(calls) <= 1, "ONE_TOOL_PER_TURN"

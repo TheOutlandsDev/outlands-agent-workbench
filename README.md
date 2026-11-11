@@ -5,8 +5,8 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.3 adds a checked foreground launcher and Git review workspaces to the
-project wizard and isolated Python/Java task-to-reviewed-patch workflow. It remains a small Linux
+Version 0.4 adds Run Diagnostics to the checked foreground launcher, Git review
+workspaces, project wizard and isolated Python/Java task-to-reviewed-patch workflow. It remains a small Linux
 prototype with a Python engine and a compatible Java launcher.
 See [validation and limits](VALIDATION.md) and [origins](ORIGINS.md).
 
@@ -221,6 +221,28 @@ only on its owned active worker. Failed/interrupted attempts retain files and
 logs and block new tasks for inspection; there is no automatic cleanup, replay,
 hold-clearing or recreation of an uncertain attempt.
 
+## Inspect Run Diagnostics
+
+Every run has a read-only **Diagnostics** tab and a summary beside its request
+budget. New request records include the start time, monotonic elapsed time,
+effective timeout, serialized request size when available, recorded transport
+phase and a fixed error category. Optional provider counters are local
+observations; request bytes and counts are not token-budget or currency accounting.
+Phase is shown only when recorded. An active request may have no finish timing yet.
+
+The panel distinguishes an owned active worker from an unresolved request after
+it exits. A present hold that cannot be linked to the selected run stays visibly
+present and continues blocking new work. A saved response proves that a response
+was recorded; it does not establish task correctness or authorize clearing a hold.
+Older runs display **Not recorded** for missing measurements. Missing or damaged
+diagnostics are flagged for inspection without rewriting historical records.
+
+New diagnostic fields are bounded and omit prompts, source, paths, model names
+and exception text. Existing private run files still contain project content and
+must remain private. The summary uses at most 16 request rows and the first 256
+events, reporting when that event limit is reached. Viewing diagnostics performs
+no provider request, retry, replay or recovery. The existing hold remains in place.
+
 ## Stops, failures, and trust
 
 There is one active task or Git-workspace operation per data directory, with no unattended queue or automatic
@@ -276,7 +298,7 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 100 unit methods, compiles the Java client with Java 17 compatibility and
+This runs 128 unit methods, compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results, and exercises real
 Bubblewrap checks, namespace boundaries, time/output limits, and patch handling. It also checks Java compilation diagnostics, protected-main
 execution, namespace boundaries and Java timeout/output limits.
@@ -288,6 +310,8 @@ discovery across the entire repository.
 
 Real-model browser acceptance is a separate, explicit task; see
 [VALIDATION.md](VALIDATION.md) for the observed result and its narrow coverage.
+Version 0.4 was tested offline only; its diagnostics do not determine the cause
+or provider completion of the preserved uncertain Java trial from version 0.3.
 
 ## Publication and licensing
 
