@@ -5,9 +5,13 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.12 adds **Workspace Recheck**: inspect manual editable-file changes in
-a private bundle review worktree and explicitly rerun its configured checks
-against a separate pinned snapshot. Each attempt preserves earlier results.
+Version 0.13 adds **Reviewed Snapshot Export**: review a verified workspace
+recheck’s exact tested snapshot, record a separate private acceptance, then
+explicitly download a pinned four-member patch bundle. Export performs no new
+checks or model requests. It retains **Workspace Recheck**: inspect manual
+editable-file changes in a private bundle review worktree and explicitly rerun
+its configured checks against a separate pinned snapshot. Each attempt preserves
+earlier results.
 It retains **Bundle Review Workspace**: preview a private bundle against
 an approved baseline, then explicitly create a separate private Git worktree
 and rerun its configured Python/Java checks. Candidate edits remain uncommitted.
@@ -428,6 +432,103 @@ only the stated private-workspace subset.
 The host/store must remain trusted; sequential checks are not atomic filesystem
 snapshots. Keep all workspaces, selected snapshots and results private.
 
+## Review and export a tested workspace snapshot
+
+In **Bundle review workspace**, select an original creation whose status is
+`VERIFIED`, refresh its recheck history explicitly, and select a `VERIFIED`
+recheck attempt. Below that attempt, choose **Review snapshot export**. The
+server prepares the archive in memory and shows its exact digest, original
+baseline/tested-snapshot file hashes, editable/protected scope, fixed check
+specifications and recorded passing observations. It does not execute Git,
+checks or a provider request, reconcile old jobs, or write a new run.
+
+The patch compares the approved original bundle baseline with that recheck's
+saved tested snapshot. It therefore includes both the initial imported fix and
+any selected editable manual changes captured by the recheck. Protected files
+must remain unchanged. Use the original baseline hashes when reviewing the
+combined patch. The original creation and recheck records remain historical and
+unchanged.
+
+Review the bounded diff carefully. The browser displays at most 240 lines and
+8,192 UTF-8 bytes, with an explicit truncation notice when anything is omitted;
+the archive contains the complete patch. Add an optional private note, then
+choose **Accept reviewed snapshot** explicitly. Notes allow up to 1,000 Unicode
+code points and 2,000 UTF-8 bytes, without NUL characters or invalid Unicode.
+Editing a note does not change the artifact preview. Acceptance writes only
+`receipt.json` and `review.json` below
+`DATA/snapshot-exports/ACCEPTANCE_ID/`; the note stays in the private receipt.
+Neither the note nor a human-acceptance assertion is included in the ZIP.
+
+**Download private patch bundle** is a separate explicit action after acceptance.
+The server reconstructs the artifact and rechecks the selected acceptance
+receipt, archive digest, tested bytes, source/task/config/Git evidence and
+history pins before returning it. Nothing is applied, extracted or committed.
+The browser does not accept or download automatically. Keep the unencrypted ZIP
+private and preserve its displayed whole-archive SHA-256 separately through a
+trusted channel.
+
+The four fixed members are:
+
+| Member | Contents |
+| --- | --- |
+| `changes.diff` | The complete original-baseline-to-tested-snapshot patch |
+| `verification.json` | Selected hashes, fixed task profile and recorded passing check observations |
+| `README.txt` | Private handling, manual-use guidance and verification limits |
+| `SHA256SUMS` | SHA-256 checksums of the other three members |
+
+Raw source copies, full check output, prompts, model responses, host paths and
+acceptance notes are excluded. The patch, relative filenames and check
+specifications still contain private project information. Original record hashes
+identify omitted bytes; they do not reconstruct or authenticate those records.
+This packet provides unsigned byte integrity, not authenticity, a model result,
+provider completion, source correctness or Git adoption. No checks are rerun by
+preview, acceptance, download or the verifier.
+
+Export previews are memory-only, expire after five minutes or server restart,
+and are consumed by the explicit acceptance flow. Workspace/recheck selection,
+new inspections or execution, changed inputs and changed history pins invalidate
+cached review state. Changed source, task/config bytes, Git metadata, protected
+files or tested snapshot bytes refuse the old evidence; inspect the cause and
+obtain a fresh valid recheck before exporting changed content. A history-tip
+change alone requires fresh explicit review and acceptance pins. A later
+acceptance invalidates an earlier download's parent-history pin; the application
+does not fall back to an older acceptance or overwrite old records.
+
+Use **Refresh accepted exports history** to inspect saved acceptances and choose
+one explicitly after a restart. Download needs no new preview when that saved
+acceptance still passes every fresh server guard. `PREPARING`, `FAILED`, partial
+or malformed acceptance evidence blocks new snapshot acceptance and download.
+It remains available for inspection or produces a fixed inspection refusal;
+there is no automatic retry, cleanup or repair. These export-only blockers do
+not clear a model hold or change admission for other execution. Export inspection,
+explicit acceptance and download remain available under an unrelated model hold
+without reading or changing that hold. Normal live polling stays paused while
+the existing workspace panel is open and resumes when it closes.
+
+Bounds are 200 saved acceptances, 2,097,152 aggregate raw receipt bytes,
+32,768 bytes per receipt, and 131,072 bytes per saved review. New acceptance
+reserves room for its receipt before writing. The ZIP is limited to 2,097,152
+bytes, the full patch to 1,048,576 bytes, and `verification.json` to 262,144 bytes.
+The selected snapshot retains the 32-file, 32,768-byte-per-file and 131,072-byte
+total bounds. Reads reject unsafe links and remain sequential; this requires a
+trusted, stable private filesystem, not a multiwriter atomic snapshot service.
+
+Use `snapshot_export.py` for this four-member format. The earlier six-member
+reviewed-patch format and its verifier remain unchanged. Verify an explicitly
+named downloaded snapshot archive without project access:
+
+```sh
+python3 -B snapshot_export.py --archive /absolute/private-snapshot-export.zip \
+  --expected-sha256 SHA256_FROM_TRUSTED_CHANNEL
+```
+
+The digest option is optional for internal integrity inspection. A valid archive
+prints a bounded JSON summary and exits 0; refused input prints a fixed code and
+exits 1. This CLI is verify-only: it never creates an acceptance, extracts or
+applies files, executes Git/checks/models, accesses a configured project, or
+changes records or holds. Internal checksums alone cannot establish authenticity;
+compare a whole-archive digest obtained independently when available.
+
 ## Check a private bundle against a project
 
 Choose **Check bundle against project**, select an already configured project,
@@ -728,8 +829,8 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 500 unit methods: the prior 458, 21 workspace-recheck engine methods
-and 21 controller/HTTP methods. It compiles the Java client with Java 17
+This runs the full offline unit suites, including snapshot-export engine and
+controller/HTTP regressions. It compiles the Java client with Java 17
 compatibility and warnings as errors, compares Python/Java scripted results,
 and runs actual isolated checks. Acceptance covers namespace boundaries,
 time/output limits, Java compilation diagnostics and protected-main execution,
@@ -761,14 +862,21 @@ Workspace-recheck acceptance edits only private worktree fixture files, runs
 actual fixed Python/Java checks against separate pinned snapshots, preserves
 creation evidence and earlier results, and retains failed/interrupted attempts
 without retry or source adoption.
+Snapshot-export acceptance uses invented Python/Java projects with actual initial
+and snapshot checks performed separately. It reviews and accepts the tested
+snapshots, verifies deterministic four-member archives and the combined initial
+fix/manual-edit patch, and guards the export path against checks, Git execution,
+provider requests and existing-record writes. It preserves source/Git, creation,
+recheck and unrelated synthetic-hold bytes, refuses changed snapshots and stale
+history pins, and keeps notes in private acceptance records outside the ZIP.
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
 
 Real-model browser acceptance is a separate, explicit task; see
 [VALIDATION.md](VALIDATION.md) for the observed result and its narrow coverage.
-Version 0.12 was tested offline only. Workspace rechecks, bundle review workspaces, project checks,
-bundles, readiness,
+Version 0.13 adds no real-model qualification. Snapshot exports, workspace
+rechecks, bundle review workspaces, project checks, bundles, readiness,
 comparisons, refreshes and context
 tools do not determine the cause or provider completion of the preserved
 uncertain Java trial from version 0.3.
