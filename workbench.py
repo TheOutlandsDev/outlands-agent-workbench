@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -22,6 +23,7 @@ from project_setup import prepare
 from project_revisions import refresh_task
 from run_diagnostics import summarize as summarize_diagnostics
 from run_comparison import compare_runs
+from project_readiness import summarize as summarize_readiness
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -32,6 +34,7 @@ from agent import (
     read_file,
     require,
     review_diff,
+    relative,
     sha,
     validate_task,
     write_new,
@@ -123,6 +126,53 @@ def verified_workspace_receipt(value):
                     and type(row.get("tests_ran")) is int and row["tests_ran"] > 0
                     and all(row.get(k) is False for k in ["timed_out", "output_limited", "infrastructure_error"])
                     for row in checks.values()))
+
+
+def readiness_presence(path):
+    """Observe executable presence only; never execute or inspect version output."""
+    try:
+        return path.is_file() and os.access(path, os.X_OK)
+    except OSError:
+        return False
+
+
+def readiness_directory(root):
+    """Open an absolute directory without following any path-component link."""
+    root = Path(os.path.normpath(root))
+    require(root.is_absolute(), "READINESS_PROJECT_UNKNOWN")
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in root.parts[1:]:
+            next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def readiness_read_file(root, name, limit=32768):
+    """Read one approved relative file using guarded directory descriptors."""
+    relative(name)
+    fd = readiness_directory(root)
+    try:
+        parts = name.split("/")
+        for part in parts[:-1]:
+            next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        child = os.open(parts[-1], os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW, dir_fd=fd)
+        with os.fdopen(child, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, "INPUT_TYPE")
+            raw = stream.read(limit + 1)
+            require(len(raw) <= limit, "FILE_LIMIT")
+            require(b"\x00" not in raw, "BINARY_INPUT")
+            raw.decode("utf-8")
+            return raw
+    finally:
+        os.close(fd)
 
 
 def process_stamp(pid):
@@ -230,6 +280,201 @@ class Manager:
         self.lock = threading.RLock()
         self.children = {}
         self.workspace_children = {}
+
+    @staticmethod
+    def readiness_fingerprint(path, expected):
+        try:
+            raw = readiness_read_file(path.parent, path.name, 262144)
+            return {"expected_sha256": sha(expected), "sha256": sha(raw),
+                    "status": "MATCH" if raw == expected else "CHANGED"}
+        except FileNotFoundError:
+            status = "MISSING"
+        except Refused as exc:
+            status = "LIMIT" if str(exc) == "FILE_LIMIT" else "UNREADABLE"
+        except (OSError, UnicodeError, ValueError):
+            status = "UNREADABLE"
+        return {"expected_sha256": sha(expected), "sha256": None, "status": status}
+
+    @staticmethod
+    def readiness_entries(root, predicate, limit):
+        fd = readiness_directory(root)
+        names, truncated = [], False
+        try:
+            with os.scandir(fd) as entries:
+                for index, entry in enumerate(entries):
+                    if index >= 1024:
+                        truncated = True
+                        break
+                    if predicate(entry.name):
+                        if len(names) == limit:
+                            truncated = True
+                            break
+                        names.append(entry.name)
+        finally:
+            os.close(fd)
+        return sorted(names), truncated
+
+    def readiness_admission(self):
+        """Inspect saved admission evidence without reconciling any worker."""
+        reasons, budget = [], 2097152
+        def note(code):
+            if code not in reasons:
+                reasons.append(code)
+        def record(root, name, ceiling=32768):
+            nonlocal budget
+            if budget <= 1:
+                note("ADMISSION_RECORD_LIMIT")
+                return None
+            limit = min(ceiling, budget - 1)
+            raw = None
+            try:
+                raw = readiness_read_file(root, name, limit)
+                value = parse(raw)
+                if not isinstance(value, dict):
+                    raise Refused("INVALID_JSON")
+                return value
+            except Refused as exc:
+                note("ADMISSION_RECORD_LIMIT" if str(exc) in ["FILE_LIMIT", "JSON_LIMIT"] else "ADMISSION_RECORD_INVALID")
+            except (OSError, UnicodeError, ValueError):
+                note("ADMISSION_RECORD_INVALID")
+            finally:
+                budget -= len(raw) if raw is not None else limit + 1
+            return None
+        hold, jobs, workspaces, truncated = "ABSENT", 0, 0, False
+        try:
+            fd = readiness_directory(self.data / "state")
+            try:
+                try:
+                    os.stat("hold.json", dir_fd=fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    pass
+                else:
+                    hold = "PRESENT"
+            finally:
+                os.close(fd)
+        except OSError:
+            hold = "UNAVAILABLE"
+            note("HOLD_UNREADABLE")
+        if hold == "PRESENT":
+            note("HOLD_PRESENT")
+            value = record(self.data, "state/hold.json", 4096)
+            if (value is None or value.get("state") != "REQUEST_UNSETTLED"
+                    or type(value.get("turn")) is not int or not 1 <= value["turn"] <= 16
+                    or not isinstance(value.get("run"), str) or not 1 <= len(value["run"]) <= 4096):
+                note("HOLD_UNREADABLE")
+        try:
+            names, truncated = self.readiness_entries(self.data / "jobs",
+                lambda name: name.endswith(".json") or name.endswith(".next"), 200)
+        except OSError:
+            names, truncated = [], False
+            note("ADMISSION_UNAVAILABLE")
+        if truncated:
+            note("ADMISSION_RECORD_LIMIT")
+        terminal = {"REVIEW_READY", "FAILED", "REFUSED", "INTERRUPTED"}
+        for name in names:
+            if budget <= 1:
+                truncated = True
+                note("ADMISSION_RECORD_LIMIT")
+                break
+            if not name.endswith(".json") or ID.fullmatch(name[:-5]) is None:
+                note("ADMISSION_RECORD_INVALID")
+                continue
+            run_id = name[:-5]
+            jobs += 1
+            value = record(self.data, "jobs/" + name)
+            if value is None or value.get("id") != run_id or not isinstance(value.get("state"), str):
+                note("ADMISSION_RECORD_INVALID")
+            elif value["state"] in {"RUNNING", "STOP_REQUESTED", "RECOVERY_REQUIRED"}:
+                note("TASK_ACTIVE_OR_UNRESOLVED")
+            elif value["state"] == "UNCERTAIN":
+                note("TASK_UNCERTAIN")
+            elif value["state"] not in terminal:
+                note("ADMISSION_RECORD_INVALID")
+            try:
+                fd = readiness_directory(self.data / "runs" / run_id)
+                try:
+                    os.stat("git-workspace.json", dir_fd=fd, follow_symlinks=False)
+                finally:
+                    os.close(fd)
+            except FileNotFoundError:
+                continue
+            except OSError:
+                note("ADMISSION_RECORD_INVALID")
+                continue
+            workspaces += 1
+            receipt = record(self.data, "runs/" + run_id + "/git-workspace.json")
+            if (isinstance(receipt, dict) and isinstance(receipt.get("status"), str)
+                    and receipt["status"] in {"PREPARING", "FAILED"}):
+                note("WORKSPACE_ACTIVE_OR_UNRESOLVED")
+                max_safe = 9007199254740991
+                valid = (type(receipt.get("created")) is int and 0 <= receipt["created"] <= max_safe
+                         and receipt.get("source_applied") is False
+                         and all(type(receipt.get(key)) is str
+                                 and re.fullmatch(r"[0-9a-f]{64}", receipt[key]) is not None
+                                 for key in ["result_sha256", "patch_sha256"]))
+                if "reason" in receipt:
+                    valid = valid and type(receipt["reason"]) is str and 1 <= len(receipt["reason"]) <= 128
+                if "finished" in receipt:
+                    valid = valid and type(receipt["finished"]) is int and 0 <= receipt["finished"] <= max_safe
+                if "checks" in receipt:
+                    checks = receipt["checks"]
+                    valid_checks = (type(checks) is dict and 1 <= len(checks) <= 4
+                        and all(type(name) is str and re.fullmatch(r"[a-z][a-z0-9_]{0,31}", name) is not None
+                            and type(row) is dict
+                            and type(row.get("exit_code")) is int and -255 <= row["exit_code"] <= 255
+                            and type(row.get("tests_ran")) is int and 0 <= row["tests_ran"] <= max_safe
+                            and all(type(row.get(key)) is bool for key in ["timed_out", "output_limited", "infrastructure_error"])
+                            and ("output" not in row or type(row["output"]) is str and len(row["output"]) <= 65536)
+                            for name, row in checks.items()))
+                    valid = valid and valid_checks
+                if not valid:
+                    note("ADMISSION_RECORD_INVALID")
+            elif not verified_workspace_receipt(receipt):
+                note("ADMISSION_RECORD_INVALID")
+        return {"hold": hold, "jobs_inspected": jobs, "workspaces_inspected": workspaces,
+                "truncated": truncated, "reasons": reasons}
+
+    def project_readiness(self, project_id):
+        with self.lock:
+            require(isinstance(project_id, str) and project_id in self.projects, "READINESS_PROJECT_UNKNOWN")
+            project = self.projects[project_id]
+            task = copy.deepcopy(project["definition"])
+            valid_task = True
+            try:
+                validate_task(task)
+            except (Refused, OSError, ValueError, TypeError, KeyError):
+                valid_task = False
+            config = self.readiness_fingerprint(self.config_path, self.config_raw)
+            fingerprint = self.readiness_fingerprint(project["task"], project["task_raw"])
+            files = []
+            if valid_task:
+                for path, digest in sorted(task["files"].items()):
+                    row = {"path": path, "editable": path in task["editable"],
+                           "expected_sha256": digest, "sha256": None, "bytes": None, "status": "NOT_CHECKED"}
+                    if config["status"] == fingerprint["status"] == "MATCH":
+                        try:
+                            raw = readiness_read_file(project["source"], path)
+                            row.update(sha256=sha(raw), bytes=len(raw), status="MATCH" if sha(raw) == digest else "CHANGED")
+                        except FileNotFoundError:
+                            row["status"] = "MISSING"
+                        except UnicodeError:
+                            row["status"] = "UTF8"
+                        except Refused as exc:
+                            row["status"] = {"FILE_LIMIT": "LIMIT", "BINARY_INPUT": "BINARY"}.get(str(exc), "UNREADABLE")
+                        except (OSError, ValueError):
+                            row["status"] = "UNREADABLE"
+                    files.append(row)
+            java = valid_task and any(isinstance(spec, dict) and spec.get("kind") == "java-main" for spec in task["checks"].values())
+            prerequisites = [{"id": key, "required": key != "git", "status": "AVAILABLE" if readiness_presence(Path(path)) else "MISSING"}
+                for key, path in [("python", "/usr/bin/python3"), ("git", "/usr/bin/git"), ("bwrap", "/usr/bin/bwrap"), ("prlimit", "/usr/bin/prlimit")]]
+            jdk_status = ("NOT_REQUIRED" if not java else "NOT_CONFIGURED" if self.jdk_home is None else
+                "AVAILABLE" if all(readiness_presence(self.jdk_home / "bin" / name) for name in ["java", "javac"]) else "MISSING")
+            prerequisites.append({"id": "jdk", "required": bool(java), "status": jdk_status})
+            snapshot = {"project": project_id, "name": project["name"], "checked_at_ms": time.time_ns() // 1000000,
+                        "definition": task if valid_task else None, "config": config, "task": fingerprint,
+                        "files": files, "prerequisites": prerequisites, "admission": self.readiness_admission(),
+                        "notes": [] if valid_task else ["DEFINITION_INVALID"]}
+            return summarize_readiness(snapshot)
 
     def comparison_directory(self, root):
         """Open each private-store path component relative to the data root."""
@@ -1198,6 +1443,8 @@ def make_handler(manager, token, origin):
                     self.send(200, canonical(manager.history()))
                 elif path == "/api/comparison-history":
                     self.send(200, canonical(manager.comparison_history()))
+                elif path.startswith("/api/project-readiness/"):
+                    self.send(200, canonical(manager.project_readiness(path.removeprefix("/api/project-readiness/"))))
                 elif path.startswith("/api/compare/"):
                     pair = path.removeprefix("/api/compare/").split("/")
                     require(len(pair) == 2, "COMPARE_IDS")

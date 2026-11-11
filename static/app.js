@@ -4,9 +4,10 @@ const $=id=>document.getElementById(id);
 let configuration=null,selected=null,current=null,polling=false,busy=false,initialized=false,setupDraft=null;
 let contextRunId=null,contextSnapshot=null;
 let comparisonOpen=false,comparisonOpening=false,comparisonBusy=false,comparisonHistoryLoading=false,comparisonSequence=0,comparisonHistorySequence=0,comparisonLeftId="",comparisonRightId="",normalRefreshInFlight=Promise.resolve(),comparisonHistoryReady=false,comparisonOpeningCancel=null,comparisonOpenSequence=0;
+let readinessOpen=false,readinessOpening=false,readinessReady=false,readinessBusy=false,readinessProjectId="",readinessSequence=0,readinessOpenSequence=0,readinessOpeningCancel=null;
 let admissionReason=null,projectRefreshDraft=null,projectRefreshProject=null,projectRefreshBusy=false,projectRefreshSequence=0,revisionSequence=0;
 const friendly={REVIEW_READY:"Ready for review",RUNNING:"Running",STOP_REQUESTED:"Stop requested",FAILED:"Failed",REFUSED:"Refused",INTERRUPTED:"Interrupted",UNCERTAIN:"Uncertain",RECOVERY_REQUIRED:"Needs inspection"};
-const errors={COMPARE_IDS:"Choose two different saved runs.",COMPARE_RUN_UNKNOWN:"A selected saved run is unavailable. Choose another saved run.",COMPARE_STORE_REFUSED:"Saved run records could not be read safely. Inspect the private data store.",COMPARE_RECORD_LIMIT:"The saved comparison records exceed a read limit. Inspect the private records.",COMPARE_OUTPUT_LIMIT:"The saved comparison exceeds the bounded response size. Inspect the private records.",REFRESH_FIELDS:"The refresh request did not contain the required project and default goal.",REVISION_LIMIT:"This project has reached its saved revision limit. Inspect the preserved revision chain before continuing.",REVISION_RECORD_CHANGED:"A saved revision record changed. Inspect the preserved project history before continuing.",REFRESH_SNAPSHOT_LIMIT:"The selected source exceeds the refresh snapshot size bound.",REFRESH_UTF8:"Selected source could not be read as valid UTF-8 text.",REFRESH_NO_CHANGES:"No selected file hashes or default task goal changed. There is no new revision to save.",REFRESH_SOURCE_CHANGED:"Selected source changed after the preview. Review a new refresh before saving.",PROJECT_TASK_CHANGED:"The current project task changed. Reload the project and review a new refresh.",CONFIG_CHANGED:"Project configuration changed. Reload the project and review a new refresh.",DRAFT_EXPIRED:"The reviewed draft expired. Review a new refresh before saving.",PROJECT_UNKNOWN:"The selected project is no longer available. Reload the project list.",SOURCE_HASH_CHANGED:"Source files changed. Update the configured task hashes before starting.",MODEL_REQUEST_ACTIVE:"A model request is active. Another run cannot start while this request is in progress.",UNCERTAIN_REQUEST_HELD:"A model request has an unresolved outcome. Inspect the private state before another run.",TASK_ACTIVE_OR_UNRESOLVED:"A task is running or needs inspection before another can start.",SCRIPTED_DEMO_ONLY:"The scripted exercise requires its original demo goal and files.",REVIEW_REQUIRED:"Accept a completed patch before exporting it.",RESULT_CHANGED:"The result changed. Inspect the run before recording a new review.",PATCH_CHANGED:"The patch no longer matches the recorded evidence.",ORIGINAL_SOURCE_CHANGED:"Original source changed after this run. The patch cannot be exported against that source.",SESSION_REQUIRED:"The local session changed. Reload this page.",PROJECT_SCOPE_CHANGED:"The project configuration changed. Inspect the original run scope.",WORKSPACE_ACTIVE_OR_UNRESOLVED:"A Git workspace is running or needs inspection. Its private records are preserved.",WORKSPACE_NEEDS_INSPECTION:"Inspect the existing workspace and worker log before deciding how to recover. It will not be recreated automatically.",GIT_CONTROL_FILE_REFUSED:"Git control files cannot be included in a review workspace.",WORKSPACE_BYTES_CHANGED:"Workspace files changed after verification. Inspect the workspace before continuing."};
+const errors={READINESS_PROJECT_UNKNOWN:"The selected configured project is unavailable. Inspect the private project configuration.",READINESS_OUTPUT_LIMIT:"The static readiness report exceeds its bounded response size. Inspect the private project records.",COMPARE_IDS:"Choose two different saved runs.",COMPARE_RUN_UNKNOWN:"A selected saved run is unavailable. Choose another saved run.",COMPARE_STORE_REFUSED:"Saved run records could not be read safely. Inspect the private data store.",COMPARE_RECORD_LIMIT:"The saved comparison records exceed a read limit. Inspect the private records.",COMPARE_OUTPUT_LIMIT:"The saved comparison exceeds the bounded response size. Inspect the private records.",REFRESH_FIELDS:"The refresh request did not contain the required project and default goal.",REVISION_LIMIT:"This project has reached its saved revision limit. Inspect the preserved revision chain before continuing.",REVISION_RECORD_CHANGED:"A saved revision record changed. Inspect the preserved project history before continuing.",REFRESH_SNAPSHOT_LIMIT:"The selected source exceeds the refresh snapshot size bound.",REFRESH_UTF8:"Selected source could not be read as valid UTF-8 text.",REFRESH_NO_CHANGES:"No selected file hashes or default task goal changed. There is no new revision to save.",REFRESH_SOURCE_CHANGED:"Selected source changed after the preview. Review a new refresh before saving.",PROJECT_TASK_CHANGED:"The current project task changed. Reload the project and review a new refresh.",CONFIG_CHANGED:"Project configuration changed. Reload the project and review a new refresh.",DRAFT_EXPIRED:"The reviewed draft expired. Review a new refresh before saving.",PROJECT_UNKNOWN:"The selected project is no longer available. Reload the project list.",SOURCE_HASH_CHANGED:"Source files changed. Update the configured task hashes before starting.",MODEL_REQUEST_ACTIVE:"A model request is active. Another run cannot start while this request is in progress.",UNCERTAIN_REQUEST_HELD:"A model request has an unresolved outcome. Inspect the private state before another run.",TASK_ACTIVE_OR_UNRESOLVED:"A task is running or needs inspection before another can start.",SCRIPTED_DEMO_ONLY:"The scripted exercise requires its original demo goal and files.",REVIEW_REQUIRED:"Accept a completed patch before exporting it.",RESULT_CHANGED:"The result changed. Inspect the run before recording a new review.",PATCH_CHANGED:"The patch no longer matches the recorded evidence.",ORIGINAL_SOURCE_CHANGED:"Original source changed after this run. The patch cannot be exported against that source.",SESSION_REQUIRED:"The local session changed. Reload this page.",PROJECT_SCOPE_CHANGED:"The project configuration changed. Inspect the original run scope.",WORKSPACE_ACTIVE_OR_UNRESOLVED:"A Git workspace is running or needs inspection. Its private records are preserved.",WORKSPACE_NEEDS_INSPECTION:"Inspect the existing workspace and worker log before deciding how to recover. It will not be recreated automatically.",GIT_CONTROL_FILE_REFUSED:"Git control files cannot be included in a review workspace.",WORKSPACE_BYTES_CHANGED:"Workspace files changed after verification. Inspect the workspace before continuing."};
 const diagnosticStates={ACTIVE:"Request active",UNCERTAIN:"Outcome uncertain",COMPLETE:"Ready for review",FAILED:"Request failed",NOT_STARTED:"Not started",NEEDS_INSPECTION:"Needs inspection"};
 const diagnosticHolds={ACTIVE_REQUEST:"A model request is active. New model work remains blocked while it is in progress.",UNRESOLVED:"A request outcome is unresolved. Inspect the preserved private state before any recovery decision.",UNASSOCIATED:"A request hold is present but cannot be linked to this run. New tasks remain blocked.",ABSENT:"No request hold is recorded."};
 const diagnosticCompletion={RECORDED:"Response recorded",UNKNOWN:"Provider completion unknown",NOT_APPLICABLE:"Not applicable"};
@@ -141,6 +142,7 @@ function renderContext(v){
 function showError(error){$('alert').textContent=errors[error.message]||error.message.replaceAll('_',' ').toLowerCase();$('alert').hidden=false;}
 function clearError(){$('alert').hidden=true;}
 async function api(path,body){const options={headers:{'X-Workbench-Token':token}};if(body!==undefined){options.method='POST';options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}const r=await fetch(path,options);const value=await r.json();if(!r.ok)throw new Error(value.error||'REQUEST_REFUSED');return value;}
+function readOnlyPanelActive(){return comparisonOpen||comparisonOpening||readinessOpen||readinessOpening;}
 function stateClass(state){return state==='REVIEW_READY'?'good':['FAILED','REFUSED','UNCERTAIN','INTERRUPTED','RECOVERY_REQUIRED'].includes(state)?'bad':'';}
 function projectChanged(){const p=configuration.projects.find(p=>p.id===$('project').value);if(!p)return;const demo=$('model').querySelector('option[value="scripted-demo"]');demo.disabled=!p.scripted_available;if(demo.disabled&&$('model').value==='scripted-demo')$('model').value=configuration.models[0]||'';$('goal').value=p.goal;const files=$('scope-files');files.replaceChildren(...p.files.map(name=>node('span',name+(p.editable.includes(name)?' · editable':' · protected'),'file-chip'+(p.editable.includes(name)?' editable':''))));$('scope-note').textContent=p.checks.length+' named check'+(p.checks.length===1?'':'s')+' · Edits stay in a private copy';modelChanged();resetProjectRefresh(p);}
 function modelChanged(){$('goal').readOnly=$('model').value==='scripted-demo';if($('goal').readOnly){const p=configuration.projects.find(p=>p.id===$('project').value);if(p)$('goal').value=p.goal;}}
@@ -152,7 +154,7 @@ function renderRun(v){const changed=!current||current.id!==v.id;current=v;$('wel
   if(changed)$('review-note').value=v.review?v.review.note:'';
   const accepted=v.review&&v.review.verdict==='accepted'&&v.review.result_sha256===v.result_sha256&&v.review.patch_sha256===v.patch_sha256;$('export').disabled=!ready||!accepted||busy;renderWorkspace(v,ready,accepted);$('review-status').textContent=v.review?'Review '+v.review.verdict+'. '+(accepted?'Export is ready. Source has not been changed.':'Export remains unavailable.'):'Available after a completed task and an accepted review.';setAdmission(v.admission_block);
 }
-async function refresh(){if(polling||comparisonOpen||comparisonOpening)return;polling=true;let finish;normalRefreshInFlight=new Promise(resolve=>{finish=resolve;});try{const rows=await api('/api/history');if(comparisonOpen||comparisonOpening)return;if(!initialized){selected=rows.length?rows[0].id:null;initialized=true;}renderHistory(rows);if(selected){const run=await api('/api/run/'+selected);if(comparisonOpen||comparisonOpening)return;renderRun(run);}else{$('run-panel').hidden=true;$('welcome').hidden=false;const cfg=await api('/api/config');if(comparisonOpen||comparisonOpening)return;setAdmission(cfg.admission_block);}}catch(error){showError(error);}finally{polling=false;finish();}}
+async function refresh(){if(polling||readOnlyPanelActive())return;polling=true;let finish;normalRefreshInFlight=new Promise(resolve=>{finish=resolve;});try{const rows=await api('/api/history');if(readOnlyPanelActive())return;if(!initialized){selected=rows.length?rows[0].id:null;initialized=true;}renderHistory(rows);if(selected){const run=await api('/api/run/'+selected);if(readOnlyPanelActive())return;renderRun(run);}else{$('run-panel').hidden=true;$('welcome').hidden=false;const cfg=await api('/api/config');if(readOnlyPanelActive())return;setAdmission(cfg.admission_block);}}catch(error){showError(error);}finally{polling=false;finish();}}
 async function submitReview(verdict){if(!current)return;clearError();busy=true;try{await api('/api/review',{id:current.id,result_sha256:current.result_sha256,patch_sha256:current.patch_sha256,verdict,note:$('review-note').value});await refresh();}catch(error){showError(error);}finally{busy=false;if(current)renderRun(current);}}
 $('task-form').addEventListener('submit',async event=>{event.preventDefault();clearError();busy=true;setAdmission(null);try{const value=await api('/api/start',{project:$('project').value,model:$('model').value,goal:$('goal').value});selected=value.id;current=null;await refresh();}catch(error){showError(error);}finally{busy=false;await refresh();}});
 $('new-task').addEventListener('click',()=>{selected=null;current=null;clearError();$('run-panel').hidden=true;$('welcome').hidden=false;$('goal').focus();refresh();});
@@ -207,13 +209,14 @@ function comparisonNoteList(codes,labels){
 function comparisonDetails(title,children){const details=node('details',undefined,'comparison-section');details.append(node('summary',title),...children);return details;}
 function invalidateComparison(text){comparisonSequence++;comparisonBusy=false;$('comparison-result').hidden=true;$('comparison-result').replaceChildren();$('comparison-status').textContent=text||'Choose two different saved runs, then compare.';}
 function setComparisonControls(){
-  $('comparison-open').disabled=!configuration||comparisonOpen||comparisonOpening||busy||projectRefreshBusy;
+  $('comparison-open').disabled=!configuration||readOnlyPanelActive()||busy||projectRefreshBusy;
   $('comparison-open').textContent=comparisonOpening?'Opening comparison…':'Compare runs';
-  $('new-task').disabled=comparisonOpen||comparisonOpening;
-  $('setup-open').disabled=comparisonOpen||comparisonOpening;
+  $('new-task').disabled=readOnlyPanelActive();
+  $('setup-open').disabled=readOnlyPanelActive();
   $('comparison-left').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||!$('comparison-left').options.length;
   $('comparison-right').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||!$('comparison-right').options.length;
   $('comparison-submit').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||comparisonBusy||!comparisonLeftId||!comparisonRightId||comparisonLeftId===comparisonRightId;
+  setReadinessControls();
 }
 function comparisonOptions(rows,selectedId){
   const options=rows.map(run=>{const option=node('option',comparisonValue(run.project_name)+' · '+comparisonState(run.state)+' · '+run.id.slice(0,8)+' · '+comparisonValue(run.goal));option.value=run.id;return option;});
@@ -303,7 +306,7 @@ function renderComparison(value){
   container.replaceChildren(...children);container.hidden=false;
 }
 $('comparison-open').addEventListener('click',async()=>{
-  if(comparisonOpen||comparisonOpening||busy||projectRefreshBusy)return;
+  if(readOnlyPanelActive()||busy||projectRefreshBusy)return;
   const sequence=++comparisonOpenSequence;
   comparisonOpening=true;comparisonHistoryReady=false;invalidateComparison('Waiting for the current live update to finish…');$('comparison-history-status').textContent='Saved history has not been requested yet.';$('comparison-history-notes').replaceChildren();$('comparison-panel').hidden=false;$('normal-workspace').hidden=true;$('comparison-open').setAttribute('aria-expanded','true');setComparisonControls();$('comparison-close').focus();
   const readiness=await new Promise(resolve=>{
@@ -335,6 +338,104 @@ $('comparison-form').addEventListener('submit',async event=>{
     renderComparison(value);$('comparison-status').textContent='Showing saved evidence for the selected runs.';
   }catch(error){if(comparisonOpen&&sequence===comparisonSequence)$('comparison-status').textContent=errors[error.message]||'The saved comparison is unavailable. Inspect the private records.';}
   finally{if(sequence===comparisonSequence){comparisonBusy=false;setComparisonControls();}}
+});
+
+const readinessStatuses={STATIC_CHECKS_PASSED:'Static checks passed',REFRESH_REQUIRED:'Source refresh required',BLOCKED:'Blocked',NEEDS_INSPECTION:'Needs inspection'};
+const readinessEvidenceStatuses={MATCH:'Matches saved fingerprint',CHANGED:'Changed',MISSING:'Missing',UNREADABLE:'Unreadable',LIMIT:'Read limit reached',BINARY:'Binary input refused',UTF8:'Invalid UTF-8 refused',NOT_CHECKED:'Not checked'};
+const readinessReasons={CONFIG_CHANGED:'Configuration bytes changed since they were loaded. Source files were not inspected.',CONFIG_UNREADABLE:'Configuration bytes could not be read safely. Source files were not inspected.',TASK_CHANGED:'The saved task bytes changed since they were loaded. Source files were not inspected.',TASK_UNREADABLE:'The saved task could not be read safely. Source files were not inspected.',DEFINITION_INVALID:'The approved task definition needs inspection.',SOURCE_CHANGED:'One or more selected source hashes changed.',SOURCE_MISSING:'A selected source file is missing.',SOURCE_UNREADABLE:'A selected source file could not be read safely.',FILE_LIMIT:'A selected source file exceeded its byte limit.',TOTAL_INPUT_LIMIT:'Selected source exceeds the total byte limit.',BINARY_INPUT:'A selected source file contains binary input.',INVALID_UTF8:'A selected source file is not valid UTF-8.',PREREQUISITE_MISSING:'A required executable is missing.',JDK_NOT_CONFIGURED:'The Java check profile requires a configured JDK.',HOLD_PRESENT:'A saved request hold is present and continues to block new work.',HOLD_UNREADABLE:'A saved hold could not be read safely. Admission remains blocked.',TASK_ACTIVE_OR_UNRESOLVED:'A saved task is active or unresolved.',TASK_UNCERTAIN:'A saved task has an uncertain outcome, even if no hold was observed.',WORKSPACE_ACTIVE_OR_UNRESOLVED:'A saved Git workspace is active or unresolved.',ADMISSION_RECORD_INVALID:'A saved admission record is damaged or unrecognized. Admission needs inspection.',ADMISSION_RECORD_LIMIT:'The saved admission inventory reached a record or byte limit. Admission needs inspection.',ADMISSION_UNAVAILABLE:'Saved admission evidence could not be inspected safely.'};
+const readinessPrerequisites={python:'Python',git:'Git',bwrap:'Bubblewrap',prlimit:'prlimit',jdk:'JDK'};
+const readinessPresence={AVAILABLE:'Executable present',MISSING:'Missing',NOT_CONFIGURED:'Not configured',NOT_REQUIRED:'Not required',NOT_CHECKED:'Not checked'};
+const readinessNotChecked={PROVIDER_AVAILABILITY:'Provider availability',CHECK_EXECUTION:'Check execution',ISOLATION_CAPABILITY:'Isolation capability',JAVA_VERSION:'Java version',MODEL_CONTEXT_FIT:'Model context fit',PROCESS_OWNERSHIP:'Process ownership',WORKSPACE_FRESHNESS:'Workspace freshness',SOURCE_CORRECTNESS:'Source correctness'};
+function readinessReasonList(codes){
+  if(!Array.isArray(codes)||!codes.length)return null;
+  const texts=[...new Set(codes.map(code=>diagnosticText(readinessReasons,code)||'Unrecognized readiness evidence needs inspection. No unknown record details are shown.'))];
+  const list=node('ul',undefined,'comparison-notes readiness-reasons');list.append(...texts.map(text=>node('li',text)));return list;
+}
+function invalidateReadiness(text){readinessSequence++;readinessBusy=false;$('readiness-result').hidden=true;$('readiness-result').replaceChildren();$('readiness-status').textContent=text||'Choose a project, then inspect its static evidence.';}
+function setReadinessControls(){
+  $('readiness-open').disabled=!configuration||readOnlyPanelActive()||busy||projectRefreshBusy;
+  $('readiness-open').textContent=readinessOpening?'Opening readiness…':'Project readiness';
+  $('readiness-project').disabled=!readinessOpen||!readinessReady||!$('readiness-project').options.length;
+  $('readiness-submit').disabled=!readinessOpen||!readinessReady||readinessBusy||!readinessProjectId;
+}
+function renderReadinessProjects(){
+  const projects=configuration&&Array.isArray(configuration.projects)?configuration.projects:[];
+  if(!projects.some(project=>project.id===readinessProjectId))readinessProjectId=projects.some(project=>project.id===$('project').value)?$('project').value:(projects[0]&&projects[0].id)||'';
+  $('readiness-project').replaceChildren(...projects.map(project=>{const option=node('option',project.name+' · '+project.id);option.value=project.id;return option;}));$('readiness-project').value=readinessProjectId;
+}
+function readinessSection(title,children){const section=node('section',undefined,'readiness-section');section.append(node('h3',title),...children);return section;}
+function renderReadiness(value){
+  const fingerprints=value.fingerprints||{},limits=value.limits||{},admission=value.admission||{};
+  const unknownReason=[...(Array.isArray(value.reasons)?value.reasons:[]),...(Array.isArray(admission.reasons)?admission.reasons:[])].some(code=>!diagnosticText(readinessReasons,code));
+  const status=unknownReason?'NEEDS_INSPECTION':value.status;
+  const summary=node('section',undefined,'readiness-summary');
+  const heading=node('div',undefined,'readiness-summary-heading');
+  heading.append(node('h3',diagnosticText(readinessStatuses,status)||'Needs inspection'),node('span','STATIC OBSERVATION','state-pill '+(status==='STATIC_CHECKS_PASSED'?'good':status==='BLOCKED'||status==='NEEDS_INSPECTION'?'bad':'')));
+  const observed=diagnosticStarted(value.checked_at_ms);
+  summary.append(heading,node('p',comparisonValue(value.name)+' · '+comparisonValue(value.project),'readiness-project-name'),diagnosticList([['Observed (UTC)',observed==='Not recorded'?'Unknown':observed],['Total selected source bytes',comparisonBytes(value.total_bytes)]],'diagnostic-facts readiness-facts'),node('p','This dated observation can become stale if files, prerequisites or saved admission records change. It does not authorize running.','muted readiness-stale'));
+  const reasons=readinessReasonList(value.reasons);if(reasons)summary.append(reasons);
+  const children=[summary,readinessSection('Saved default goal',[node('p',comparisonValue(value.goal),'readiness-goal')])];
+  const fingerprintCards=node('div',undefined,'readiness-pair');
+  for(const [key,title] of [['config','Configuration fingerprint'],['task','Saved task revision']]){
+    const fingerprint=fingerprints[key]||{};
+    const card=node('section',undefined,'readiness-evidence-card');card.append(node('h4',title),diagnosticList([['Status',diagnosticText(readinessEvidenceStatuses,fingerprint.status)||'Unknown'],['Saved SHA-256',comparisonValue(fingerprint.expected_sha256)],['Observed SHA-256',comparisonValue(fingerprint.sha256)]],'context-file-facts readiness-hashes'));fingerprintCards.append(card);
+  }
+  children.push(readinessSection('Exact raw fingerprints',[fingerprintCards]));
+  const files=Array.isArray(value.files)?value.files:[];
+  const fileList=node('ul',undefined,'readiness-file-list');
+  for(const file of files){
+    const item=node('li');const heading=node('div',undefined,'readiness-file-heading');heading.append(node('h4',comparisonValue(file.path)),node('span',comparisonPermission(file.editable),'state-pill'));
+    item.append(heading,diagnosticList([['Status',diagnosticText(readinessEvidenceStatuses,file.status)||'Unknown'],['Observed size',comparisonBytes(file.bytes)],['Saved SHA-256',comparisonValue(file.expected_sha256)],['Observed SHA-256',comparisonValue(file.sha256)]],'context-file-facts readiness-hashes'));fileList.append(item);
+  }
+  children.push(readinessSection('Selected source evidence',files.length?[fileList]:[node('p','Unknown · selected source evidence is unavailable.','muted')]));
+  const checkChildren=[diagnosticList([['File-count limit',comparisonInteger(limits.max_files)],['Per-file byte limit',comparisonBytes(limits.max_file_bytes)],['Total source byte limit',comparisonBytes(limits.max_total_bytes)],['Model-turn limit',comparisonInteger(limits.max_turns)],['Per-request timeout',Number.isSafeInteger(limits.request_seconds)&&limits.request_seconds>=0?comparisonInteger(limits.request_seconds)+' s':'Unknown']],'diagnostic-facts readiness-facts')];
+  if(Array.isArray(value.checks)&&value.checks.length){const checks=node('div',undefined,'readiness-checks');for(const check of value.checks)checks.append(node('h4',comparisonValue(check.name)),node('pre',check.spec===null||check.spec===undefined?'Unknown':JSON.stringify(check.spec,null,2),'code-view comparison-spec'));checkChildren.push(checks);}else checkChildren.push(node('p','Unknown · saved check specifications are unavailable.','muted'));
+  children.push(readinessSection('Fixed checks and budgets',checkChildren));
+  const prerequisites=node('ul',undefined,'readiness-prerequisites');
+  for(const prerequisite of Array.isArray(value.prerequisites)?value.prerequisites:[]){
+    const name=diagnosticText(readinessPrerequisites,prerequisite.id);if(!name)continue;
+    const item=node('li');item.append(node('h4',name),diagnosticList([['Required for this task',comparisonBoolean(prerequisite.required)],['Presence',diagnosticText(readinessPresence,prerequisite.status)||'Unknown']],'diagnostic-facts readiness-facts'));prerequisites.append(item);
+  }
+  children.push(readinessSection('Prerequisite presence',[node('p','Presence only. No executable, version command or check was run. Git is optional for coding tasks; a JDK is required for Java check profiles.','muted'),...(prerequisites.children.length?[prerequisites]:[node('p','Unknown · prerequisite evidence is unavailable.','muted')])]));
+  const hold=admission.hold==='ABSENT'?'No saved hold observed':admission.hold==='PRESENT'?'Saved hold present':admission.hold==='UNAVAILABLE'?'Unavailable · admission remains blocked':'Unknown';
+  const admissionChildren=[diagnosticList([['Saved request hold',hold],['Jobs inspected',comparisonInteger(admission.jobs_inspected)],['Workspace receipts inspected',comparisonInteger(admission.workspaces_inspected)],['Partial inventory',comparisonBoolean(admission.truncated)]],'diagnostic-facts readiness-facts'),node('p','Saved admission evidence only. Process ownership and current workspace freshness were not checked. This inspection changes no hold or saved status.','muted')];
+  if(admission.truncated)admissionChildren.push(node('p','Admission inventory is incomplete. Some saved jobs or receipts were not inspected.','context-notice'));
+  const admissionReasons=readinessReasonList(admission.reasons);if(admissionReasons)admissionChildren.push(admissionReasons);
+  children.push(readinessSection('Saved admission observations',admissionChildren));
+  const notChecked=node('ul',undefined,'readiness-not-checked');notChecked.append(...Object.values(readinessNotChecked).map(label=>node('li',label)));
+  children.push(readinessSection('Not checked by this inspection',[notChecked]));
+  $('readiness-result').replaceChildren(...children);$('readiness-result').hidden=false;
+}
+$('readiness-open').addEventListener('click',async()=>{
+  if(readOnlyPanelActive()||busy||projectRefreshBusy)return;
+  const sequence=++readinessOpenSequence;
+  readinessOpening=true;readinessReady=false;invalidateReadiness('Waiting for the current live update to finish…');renderReadinessProjects();$('readiness-panel').hidden=false;$('normal-workspace').hidden=true;$('readiness-open').setAttribute('aria-expanded','true');setComparisonControls();$('readiness-close').focus();
+  const available=await new Promise(resolve=>{
+    let settled=false;
+    const finish=value=>{if(settled)return;settled=true;clearTimeout(timer);if(readinessOpeningCancel===cancel)readinessOpeningCancel=null;resolve(value);};
+    const cancel=()=>finish('cancelled');
+    const timer=setTimeout(()=>finish('timeout'),10000);readinessOpeningCancel=cancel;normalRefreshInFlight.then(()=>finish('ready'));
+  });
+  if(sequence!==readinessOpenSequence||!readinessOpening)return;
+  readinessOpening=false;readinessOpen=true;readinessReady=available==='ready';setComparisonControls();
+  if(!readinessReady){$('readiness-status').textContent='The earlier live update did not finish within 10 seconds. Close this panel to return to the run view.';return;}
+  $('readiness-status').textContent=readinessProjectId?'Choose a project, then inspect its static evidence.':'No configured project is available for inspection.';
+  if(!$('readiness-project').disabled)$('readiness-project').focus();
+});
+$('readiness-close').addEventListener('click',()=>{
+  readinessOpenSequence++;if(readinessOpeningCancel)readinessOpeningCancel();readinessOpen=false;readinessOpening=false;readinessReady=false;invalidateReadiness();$('readiness-panel').hidden=true;$('normal-workspace').hidden=false;$('readiness-open').setAttribute('aria-expanded','false');setComparisonControls();$('readiness-open').focus();refresh();
+});
+$('readiness-project').addEventListener('change',()=>{readinessProjectId=$('readiness-project').value;invalidateReadiness('Project changed. Inspect to show its static evidence.');setReadinessControls();});
+$('readiness-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(!readinessOpen||!readinessReady||readinessBusy||!readinessProjectId)return;
+  invalidateReadiness('Inspecting the selected project…');const sequence=readinessSequence,projectId=readinessProjectId;readinessBusy=true;setReadinessControls();
+  try{
+    const value=await api('/api/project-readiness/'+encodeURIComponent(projectId));
+    if(!readinessOpen||sequence!==readinessSequence||readinessProjectId!==projectId)return;
+    if(!value||value.version!==1||value.project!==projectId)throw new Error('READINESS_RESPONSE');
+    renderReadiness(value);$('readiness-status').textContent='Showing a dated static observation for the selected project.';
+  }catch(error){if(readinessOpen&&sequence===readinessSequence)$('readiness-status').textContent=errors[error.message]||'Project readiness is unavailable. Inspect the private project records.';}
+  finally{if(sequence===readinessSequence){readinessBusy=false;setReadinessControls();}}
 });
 
 function selectedProjectConfiguration(){return configuration&&configuration.projects.find(project=>project.id===$('project').value);}
