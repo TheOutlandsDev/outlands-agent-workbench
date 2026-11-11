@@ -3,9 +3,10 @@ const token=document.querySelector('meta[name="workbench-token"]').content;
 const $=id=>document.getElementById(id);
 let configuration=null,selected=null,current=null,polling=false,busy=false,initialized=false,setupDraft=null;
 let contextRunId=null,contextSnapshot=null;
+let comparisonOpen=false,comparisonOpening=false,comparisonBusy=false,comparisonHistoryLoading=false,comparisonSequence=0,comparisonHistorySequence=0,comparisonLeftId="",comparisonRightId="",normalRefreshInFlight=Promise.resolve(),comparisonHistoryReady=false,comparisonOpeningCancel=null,comparisonOpenSequence=0;
 let admissionReason=null,projectRefreshDraft=null,projectRefreshProject=null,projectRefreshBusy=false,projectRefreshSequence=0,revisionSequence=0;
 const friendly={REVIEW_READY:"Ready for review",RUNNING:"Running",STOP_REQUESTED:"Stop requested",FAILED:"Failed",REFUSED:"Refused",INTERRUPTED:"Interrupted",UNCERTAIN:"Uncertain",RECOVERY_REQUIRED:"Needs inspection"};
-const errors={REFRESH_FIELDS:"The refresh request did not contain the required project and default goal.",REVISION_LIMIT:"This project has reached its saved revision limit. Inspect the preserved revision chain before continuing.",REVISION_RECORD_CHANGED:"A saved revision record changed. Inspect the preserved project history before continuing.",REFRESH_SNAPSHOT_LIMIT:"The selected source exceeds the refresh snapshot size bound.",REFRESH_UTF8:"Selected source could not be read as valid UTF-8 text.",REFRESH_NO_CHANGES:"No selected file hashes or default task goal changed. There is no new revision to save.",REFRESH_SOURCE_CHANGED:"Selected source changed after the preview. Review a new refresh before saving.",PROJECT_TASK_CHANGED:"The current project task changed. Reload the project and review a new refresh.",CONFIG_CHANGED:"Project configuration changed. Reload the project and review a new refresh.",DRAFT_EXPIRED:"The reviewed draft expired. Review a new refresh before saving.",PROJECT_UNKNOWN:"The selected project is no longer available. Reload the project list.",SOURCE_HASH_CHANGED:"Source files changed. Update the configured task hashes before starting.",MODEL_REQUEST_ACTIVE:"A model request is active. Another run cannot start while this request is in progress.",UNCERTAIN_REQUEST_HELD:"A model request has an unresolved outcome. Inspect the private state before another run.",TASK_ACTIVE_OR_UNRESOLVED:"A task is running or needs inspection before another can start.",SCRIPTED_DEMO_ONLY:"The scripted exercise requires its original demo goal and files.",REVIEW_REQUIRED:"Accept a completed patch before exporting it.",RESULT_CHANGED:"The result changed. Inspect the run before recording a new review.",PATCH_CHANGED:"The patch no longer matches the recorded evidence.",ORIGINAL_SOURCE_CHANGED:"Original source changed after this run. The patch cannot be exported against that source.",SESSION_REQUIRED:"The local session changed. Reload this page.",PROJECT_SCOPE_CHANGED:"The project configuration changed. Inspect the original run scope.",WORKSPACE_ACTIVE_OR_UNRESOLVED:"A Git workspace is running or needs inspection. Its private records are preserved.",WORKSPACE_NEEDS_INSPECTION:"Inspect the existing workspace and worker log before deciding how to recover. It will not be recreated automatically.",GIT_CONTROL_FILE_REFUSED:"Git control files cannot be included in a review workspace.",WORKSPACE_BYTES_CHANGED:"Workspace files changed after verification. Inspect the workspace before continuing."};
+const errors={COMPARE_IDS:"Choose two different saved runs.",COMPARE_RUN_UNKNOWN:"A selected saved run is unavailable. Choose another saved run.",COMPARE_STORE_REFUSED:"Saved run records could not be read safely. Inspect the private data store.",COMPARE_RECORD_LIMIT:"The saved comparison records exceed a read limit. Inspect the private records.",COMPARE_OUTPUT_LIMIT:"The saved comparison exceeds the bounded response size. Inspect the private records.",REFRESH_FIELDS:"The refresh request did not contain the required project and default goal.",REVISION_LIMIT:"This project has reached its saved revision limit. Inspect the preserved revision chain before continuing.",REVISION_RECORD_CHANGED:"A saved revision record changed. Inspect the preserved project history before continuing.",REFRESH_SNAPSHOT_LIMIT:"The selected source exceeds the refresh snapshot size bound.",REFRESH_UTF8:"Selected source could not be read as valid UTF-8 text.",REFRESH_NO_CHANGES:"No selected file hashes or default task goal changed. There is no new revision to save.",REFRESH_SOURCE_CHANGED:"Selected source changed after the preview. Review a new refresh before saving.",PROJECT_TASK_CHANGED:"The current project task changed. Reload the project and review a new refresh.",CONFIG_CHANGED:"Project configuration changed. Reload the project and review a new refresh.",DRAFT_EXPIRED:"The reviewed draft expired. Review a new refresh before saving.",PROJECT_UNKNOWN:"The selected project is no longer available. Reload the project list.",SOURCE_HASH_CHANGED:"Source files changed. Update the configured task hashes before starting.",MODEL_REQUEST_ACTIVE:"A model request is active. Another run cannot start while this request is in progress.",UNCERTAIN_REQUEST_HELD:"A model request has an unresolved outcome. Inspect the private state before another run.",TASK_ACTIVE_OR_UNRESOLVED:"A task is running or needs inspection before another can start.",SCRIPTED_DEMO_ONLY:"The scripted exercise requires its original demo goal and files.",REVIEW_REQUIRED:"Accept a completed patch before exporting it.",RESULT_CHANGED:"The result changed. Inspect the run before recording a new review.",PATCH_CHANGED:"The patch no longer matches the recorded evidence.",ORIGINAL_SOURCE_CHANGED:"Original source changed after this run. The patch cannot be exported against that source.",SESSION_REQUIRED:"The local session changed. Reload this page.",PROJECT_SCOPE_CHANGED:"The project configuration changed. Inspect the original run scope.",WORKSPACE_ACTIVE_OR_UNRESOLVED:"A Git workspace is running or needs inspection. Its private records are preserved.",WORKSPACE_NEEDS_INSPECTION:"Inspect the existing workspace and worker log before deciding how to recover. It will not be recreated automatically.",GIT_CONTROL_FILE_REFUSED:"Git control files cannot be included in a review workspace.",WORKSPACE_BYTES_CHANGED:"Workspace files changed after verification. Inspect the workspace before continuing."};
 const diagnosticStates={ACTIVE:"Request active",UNCERTAIN:"Outcome uncertain",COMPLETE:"Ready for review",FAILED:"Request failed",NOT_STARTED:"Not started",NEEDS_INSPECTION:"Needs inspection"};
 const diagnosticHolds={ACTIVE_REQUEST:"A model request is active. New model work remains blocked while it is in progress.",UNRESOLVED:"A request outcome is unresolved. Inspect the preserved private state before any recovery decision.",UNASSOCIATED:"A request hold is present but cannot be linked to this run. New tasks remain blocked.",ABSENT:"No request hold is recorded."};
 const diagnosticCompletion={RECORDED:"Response recorded",UNKNOWN:"Provider completion unknown",NOT_APPLICABLE:"Not applicable"};
@@ -143,7 +144,7 @@ async function api(path,body){const options={headers:{'X-Workbench-Token':token}
 function stateClass(state){return state==='REVIEW_READY'?'good':['FAILED','REFUSED','UNCERTAIN','INTERRUPTED','RECOVERY_REQUIRED'].includes(state)?'bad':'';}
 function projectChanged(){const p=configuration.projects.find(p=>p.id===$('project').value);if(!p)return;const demo=$('model').querySelector('option[value="scripted-demo"]');demo.disabled=!p.scripted_available;if(demo.disabled&&$('model').value==='scripted-demo')$('model').value=configuration.models[0]||'';$('goal').value=p.goal;const files=$('scope-files');files.replaceChildren(...p.files.map(name=>node('span',name+(p.editable.includes(name)?' · editable':' · protected'),'file-chip'+(p.editable.includes(name)?' editable':''))));$('scope-note').textContent=p.checks.length+' named check'+(p.checks.length===1?'':'s')+' · Edits stay in a private copy';modelChanged();resetProjectRefresh(p);}
 function modelChanged(){$('goal').readOnly=$('model').value==='scripted-demo';if($('goal').readOnly){const p=configuration.projects.find(p=>p.id===$('project').value);if(p)$('goal').value=p.goal;}}
-function setAdmission(reason){const blocked=Boolean(reason);if(blocked&&admissionReason!==reason)invalidateProjectRefresh();admissionReason=reason||null;$('admission').hidden=!blocked;$('admission').textContent=reason?(errors[reason]||reason.replaceAll('_',' ').toLowerCase()):'';for(const id of ['start','project','model','goal'])$(id).disabled=blocked||busy||projectRefreshBusy||(id==='start'&&!$('model').value);setProjectRefreshControls();}
+function setAdmission(reason){const blocked=Boolean(reason);if(blocked&&admissionReason!==reason)invalidateProjectRefresh();admissionReason=reason||null;$('admission').hidden=!blocked;$('admission').textContent=reason?(errors[reason]||reason.replaceAll('_',' ').toLowerCase()):'';for(const id of ['start','project','model','goal'])$(id).disabled=blocked||busy||projectRefreshBusy||(id==='start'&&!$('model').value);setProjectRefreshControls();setComparisonControls();}
 function renderHistory(rows){$('history-count').textContent=String(rows.length);if(!rows.length){$('history').replaceChildren(node('p','Your runs will appear here.','empty-small'));return;}$('history').replaceChildren(...rows.map(row=>{const b=node('button',undefined,'history-item'+(row.id===selected?' selected':''));b.append(node('strong',row.project_name),node('small',(friendly[row.state]||row.state)+' · '+row.id.slice(0,6)));b.addEventListener('click',()=>{selected=row.id;current=null;refresh();});return b;}));}
 function renderRun(v){const changed=!current||current.id!==v.id;current=v;$('welcome').hidden=true;$('run-panel').hidden=false;$('run-project').textContent=v.project_name.toUpperCase();$('run-title').textContent='Task '+v.id.slice(0,8);$('run-meta').textContent=v.goal;$('run-state').textContent=friendly[v.state]||v.state;$('run-state').className='state-pill '+stateClass(v.state);$('stop').disabled=!['RUNNING','STOP_REQUESTED'].includes(v.state)||v.state==='STOP_REQUESTED';$('budget-label').textContent=v.turns+' / '+v.max_turns+' model turns';$('budget-bar').max=v.max_turns;$('budget-bar').value=v.turns;$('run-mode').textContent=v.backend==='scripted-demo'?'SCRIPTED · NO INFERENCE':v.model;renderDiagnostics(v);renderContext(v);$('plan').replaceChildren(...(v.plan.length?v.plan.map(s=>node('li',s)):[node('li','Waiting for the agent’s plan.','muted')]));$('events').replaceChildren(...v.events.map(e=>{const li=node('li');li.append(node('span',e.text),node('small','#'+String(e.index).padStart(2,'0')+' · '+e.kind.replaceAll('_',' ')));return li;}));$('activity-empty').hidden=v.events.length>0;$('diff').textContent=v.patch||'The patch will appear after the task finishes.';
   $('checks').replaceChildren(...v.checks.map(c=>{const card=node('section',undefined,'check-card');const heading=node('div',undefined,'check-heading');heading.append(node('strong',c.label),node('span',c.exit_code===0?'PASS':'FAIL','state-pill '+(c.exit_code===0?'good':'bad')));card.append(heading,node('p',(c.tests_ran||0)+' tests · exit '+c.exit_code+(c.timed_out?' · timed out':''),'muted'),node('pre',c.output||'No output','code-view'));return card;}));
@@ -151,7 +152,7 @@ function renderRun(v){const changed=!current||current.id!==v.id;current=v;$('wel
   if(changed)$('review-note').value=v.review?v.review.note:'';
   const accepted=v.review&&v.review.verdict==='accepted'&&v.review.result_sha256===v.result_sha256&&v.review.patch_sha256===v.patch_sha256;$('export').disabled=!ready||!accepted||busy;renderWorkspace(v,ready,accepted);$('review-status').textContent=v.review?'Review '+v.review.verdict+'. '+(accepted?'Export is ready. Source has not been changed.':'Export remains unavailable.'):'Available after a completed task and an accepted review.';setAdmission(v.admission_block);
 }
-async function refresh(){if(polling)return;polling=true;try{const rows=await api('/api/history');if(!initialized){selected=rows.length?rows[0].id:null;initialized=true;}renderHistory(rows);if(selected){renderRun(await api('/api/run/'+selected));}else{$('run-panel').hidden=true;$('welcome').hidden=false;const cfg=await api('/api/config');setAdmission(cfg.admission_block);}}catch(error){showError(error);}finally{polling=false;}}
+async function refresh(){if(polling||comparisonOpen||comparisonOpening)return;polling=true;let finish;normalRefreshInFlight=new Promise(resolve=>{finish=resolve;});try{const rows=await api('/api/history');if(comparisonOpen||comparisonOpening)return;if(!initialized){selected=rows.length?rows[0].id:null;initialized=true;}renderHistory(rows);if(selected){const run=await api('/api/run/'+selected);if(comparisonOpen||comparisonOpening)return;renderRun(run);}else{$('run-panel').hidden=true;$('welcome').hidden=false;const cfg=await api('/api/config');if(comparisonOpen||comparisonOpening)return;setAdmission(cfg.admission_block);}}catch(error){showError(error);}finally{polling=false;finish();}}
 async function submitReview(verdict){if(!current)return;clearError();busy=true;try{await api('/api/review',{id:current.id,result_sha256:current.result_sha256,patch_sha256:current.patch_sha256,verdict,note:$('review-note').value});await refresh();}catch(error){showError(error);}finally{busy=false;if(current)renderRun(current);}}
 $('task-form').addEventListener('submit',async event=>{event.preventDefault();clearError();busy=true;setAdmission(null);try{const value=await api('/api/start',{project:$('project').value,model:$('model').value,goal:$('goal').value});selected=value.id;current=null;await refresh();}catch(error){showError(error);}finally{busy=false;await refresh();}});
 $('new-task').addEventListener('click',()=>{selected=null;current=null;clearError();$('run-panel').hidden=true;$('welcome').hidden=false;$('goal').focus();refresh();});
@@ -184,6 +185,156 @@ $('setup-save').addEventListener('click',async()=>{
   if(!setupDraft)return;clearError();$('setup-save').disabled=true;
   try{const project=await api('/api/project-save',{draft:setupDraft});configuration=await api('/api/config');renderProjects(project.id);setupInvalidate();$('setup-panel').hidden=true;await refresh();}
   catch(error){showError(error);}finally{$('setup-save').disabled=false;}
+});
+
+const comparisonDifferences={PROJECT_DIFFERS:'The saved projects differ.',GOAL_DIFFERS:'The saved goals differ.',FILE_SCOPE_DIFFERS:'The selected file paths differ.',BASELINE_DIFFERS:'The selected baseline file hashes differ.',EDIT_SCOPE_DIFFERS:'The editable file scope differs.',CHECKS_DIFFER:'The fixed check specifications differ.',BUDGETS_DIFFER:'The model-turn or request-timeout limits differ.',INCOMPLETE_RECORDS:'Saved records are incomplete; direct comparability cannot be established.',TASK_FINGERPRINT_MISMATCH:'A saved task does not match its recorded start fingerprint.'};
+const comparisonNotes={RECORD_MISSING:'A saved record section is missing. Its values remain Unknown.',RECORD_INVALID:'A saved record section is invalid. Its values have not been reconstructed.',RECORD_LIMIT:'A saved record section exceeded a read limit and is unavailable.',EVENT_LIMIT:'The bounded event history is incomplete; measurements may be unavailable.',PATCH_TRUNCATED:'Patch text is clipped; some saved text is omitted.',LEGACY_TASK_FINGERPRINT:'A legacy run has no recorded start fingerprint. A match has not been reconstructed.',INCOMPLETE_METRICS:'Request measurements are incomplete. Unknown totals and deltas have not been reconstructed.',TASK_FINGERPRINT_MISMATCH:'Saved task bytes differ from the recorded start fingerprint.',PATCH_FINGERPRINT_MISMATCH:'Saved patch bytes differ from the recorded patch fingerprint.',HISTORY_LABEL_TRUNCATED:'Some run labels are shortened; compare to read the saved goal.'};
+const comparisonIntegrity={MATCH:'Matches recorded start',NOT_RECORDED:'Start fingerprint not recorded',MISMATCH:'Fingerprint mismatch',UNAVAILABLE:'Unknown'};
+function comparisonValue(value){return value===null||value===undefined?'Unknown':String(value);}
+function comparisonInteger(value){return Number.isSafeInteger(value)&&value>=0?value.toLocaleString('en-US'):'Unknown';}
+function comparisonBytes(value){const text=comparisonInteger(value);return text==='Unknown'?text:text+' bytes';}
+function comparisonElapsed(value){return Number.isSafeInteger(value)&&value>=0?(value/1000).toLocaleString('en-US',{maximumFractionDigits:3})+' s':'Unknown';}
+function comparisonTime(value){const text=Number.isSafeInteger(value)&&value>=0?diagnosticStarted(value*1000):'Not recorded';return text==='Not recorded'?'Unknown':text;}
+function comparisonBoolean(value){return value===true?'Yes':value===false?'No':'Unknown';}
+function comparisonPermission(value){return value===true?'Editable':value===false?'Protected':'Unknown';}
+function comparisonState(value){return diagnosticText(friendly,value)||'Unknown';}
+function comparisonDelta(value,unit){if(!Number.isSafeInteger(value))return 'Unknown';const number=unit==='ms'?value/1000:value;return (value>0?'+':'')+number.toLocaleString('en-US',{maximumFractionDigits:unit==='ms'?3:0})+(unit==='ms'?' s':unit==='bytes'?' bytes':'');}
+function comparisonNoteList(codes,labels){
+  if(!Array.isArray(codes)||!codes.length)return null;
+  const texts=[...new Set(codes.map(code=>diagnosticText(labels||comparisonNotes,code)||'An additional saved-record warning needs inspection.'))];
+  const list=node('ul',undefined,'comparison-notes');list.append(...texts.map(text=>node('li',text)));return list;
+}
+function comparisonDetails(title,children){const details=node('details',undefined,'comparison-section');details.append(node('summary',title),...children);return details;}
+function invalidateComparison(text){comparisonSequence++;comparisonBusy=false;$('comparison-result').hidden=true;$('comparison-result').replaceChildren();$('comparison-status').textContent=text||'Choose two different saved runs, then compare.';}
+function setComparisonControls(){
+  $('comparison-open').disabled=!configuration||comparisonOpen||comparisonOpening||busy||projectRefreshBusy;
+  $('comparison-open').textContent=comparisonOpening?'Opening comparison…':'Compare runs';
+  $('new-task').disabled=comparisonOpen||comparisonOpening;
+  $('setup-open').disabled=comparisonOpen||comparisonOpening;
+  $('comparison-left').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||!$('comparison-left').options.length;
+  $('comparison-right').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||!$('comparison-right').options.length;
+  $('comparison-submit').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||comparisonBusy||!comparisonLeftId||!comparisonRightId||comparisonLeftId===comparisonRightId;
+}
+function comparisonOptions(rows,selectedId){
+  const options=rows.map(run=>{const option=node('option',comparisonValue(run.project_name)+' · '+comparisonState(run.state)+' · '+run.id.slice(0,8)+' · '+comparisonValue(run.goal));option.value=run.id;return option;});
+  if(selectedId&&!rows.some(run=>run.id===selectedId)){const option=node('option','Previously selected saved run · '+selectedId);option.value=selectedId;options.unshift(option);}
+  if(!options.length){const option=node('option','No saved runs available');option.value='';options.push(option);}
+  return options;
+}
+async function loadComparisonHistory(){
+  const sequence=++comparisonHistorySequence;
+  comparisonHistoryLoading=true;comparisonHistoryReady=false;$('comparison-history-status').textContent='Loading saved run history…';$('comparison-history-notes').replaceChildren();setComparisonControls();
+  try{
+    const history=await api('/api/comparison-history');
+    if(!comparisonOpen||sequence!==comparisonHistorySequence)return;
+    comparisonHistoryReady=true;
+    const runs=Array.isArray(history.runs)?history.runs.filter(run=>run&&typeof run.id==='string'&&/^[a-f0-9]{16}$/.test(run.id)):[];
+    if(!comparisonLeftId)comparisonLeftId=runs.some(run=>run.id===selected)?selected:(runs[0]&&runs[0].id)||'';
+    if(!comparisonRightId)comparisonRightId=(runs.find(run=>run.id!==comparisonLeftId)||{}).id||'';
+    $('comparison-left').replaceChildren(...comparisonOptions(runs,comparisonLeftId));$('comparison-left').value=comparisonLeftId;
+    $('comparison-right').replaceChildren(...comparisonOptions(runs,comparisonRightId));$('comparison-right').value=comparisonRightId;
+    $('comparison-history-status').textContent=comparisonInteger(runs.length)+' saved runs listed · return limit '+comparisonInteger(history.limit)+'.';
+    const notes=comparisonNoteList(history.notes);if(notes)$('comparison-history-notes').append(notes);
+    if(history.truncated)$('comparison-history-notes').prepend(node('p','Saved-run history is partial. Only a bounded set of metadata was inspected; other saved runs may be omitted.','context-notice'));
+    if(!runs.length)$('comparison-status').textContent='No saved runs are available to compare.';
+    else if(!comparisonRightId)$('comparison-status').textContent='Two different saved runs are needed for comparison.';
+  }catch(error){
+    if(!comparisonOpen||sequence!==comparisonHistorySequence)return;
+    $('comparison-history-status').textContent=errors[error.message]||'Saved-run history could not be loaded. Inspect the private saved records.';
+    $('comparison-left').replaceChildren();$('comparison-right').replaceChildren();
+  }finally{if(sequence===comparisonHistorySequence){comparisonHistoryLoading=false;setComparisonControls();}}
+}
+function comparisonCheckRows(rows,title){
+  const section=node('section',undefined,'comparison-check-stage');section.append(node('h4',title));
+  if(!Array.isArray(rows)||!rows.length){section.append(node('p','Unknown · no saved check results are available.','muted'));return section;}
+  for(const check of rows){
+    const card=node('section',undefined,'comparison-check');
+    card.append(node('h5',comparisonValue(check.name)),diagnosticList([['Kind',comparisonValue(check.kind)],['Exit code',Number.isSafeInteger(check.exit_code)?String(check.exit_code):'Unknown'],['Tests reported',comparisonInteger(check.tests_ran)],['Timed out',comparisonBoolean(check.timed_out)],['Output limited',comparisonBoolean(check.output_limited)],['Infrastructure error',comparisonBoolean(check.infrastructure_error)]],'diagnostic-facts comparison-facts'));
+    section.append(card);
+  }
+  return section;
+}
+function comparisonRunCard(summary,side){
+  const card=node('section',undefined,'comparison-run');
+  const heading=node('div',undefined,'comparison-run-heading');heading.append(node('h3',side+' · '+comparisonValue(summary.project_name)),node('span',comparisonState(summary.state),'state-pill'));
+  card.append(heading,node('p',comparisonValue(summary.id),'comparison-run-id'),node('h4','Saved goal'),node('p',comparisonValue(summary.goal),'comparison-goal'));
+  card.append(node('h4','Recorded outcome'),diagnosticList([['Project',comparisonValue(summary.project)],['Result status',comparisonValue(summary.result_status)],['Recorded reason',diagnosticText(diagnosticReasons,summary.result_reason)||'Unknown'],['Backend',comparisonValue(summary.backend)],['Model',comparisonValue(summary.model)],['Created (UTC)',comparisonTime(summary.created)],['Finished (UTC)',comparisonTime(summary.finished)]],'diagnostic-facts comparison-facts'));
+  const metrics=summary.metrics||{};
+  card.append(node('h4','Recorded request measurements'),diagnosticList([['Request starts',comparisonInteger(metrics.requests)],['Serialized request-body bytes',comparisonBytes(metrics.request_bytes)],['Recorded request time',comparisonElapsed(metrics.elapsed_ms)],['Byte-measured requests',comparisonInteger(metrics.measured_requests)],['Time-measured requests',comparisonInteger(metrics.elapsed_requests)],['Measurement coverage',metrics.complete===true?'Complete':metrics.complete===false?'Incomplete':'Unknown']],'diagnostic-facts comparison-facts'));
+  card.append(comparisonDetails('Task, revision and result fingerprints',[diagnosticList([['Saved task SHA-256',comparisonValue(summary.task_sha256)],['Recorded start task SHA-256',comparisonValue(summary.recorded_task_sha256)],['Configured task revision SHA-256',comparisonValue(summary.project_task_sha256)],['Task integrity',diagnosticText(comparisonIntegrity,summary.task_integrity)||'Unknown'],['Saved result SHA-256',comparisonValue(summary.result_sha256)]],'context-file-facts comparison-hashes')]));
+  const checks=node('div',undefined,'comparison-check-specs');
+  checks.append(diagnosticList([['Model-turn limit',comparisonInteger(summary.max_turns)],['Per-request timeout',Number.isSafeInteger(summary.request_seconds)&&summary.request_seconds>=0?comparisonInteger(summary.request_seconds)+' s':'Unknown']],'diagnostic-facts comparison-facts'));
+  if(Array.isArray(summary.checks)&&summary.checks.length){for(const check of summary.checks){checks.append(node('h5',comparisonValue(check.name)),node('pre',check.spec===null||check.spec===undefined?'Unknown':JSON.stringify(check.spec,null,2),'code-view comparison-spec'));}}else checks.append(node('p','Unknown · no saved check specifications are available.','muted'));
+  card.append(comparisonDetails('Fixed task checks and limits',[checks]),comparisonDetails('Baseline and final check results',[comparisonCheckRows(summary.baseline_checks,'Baseline checks'),comparisonCheckRows(summary.final_checks,'Final checks')]));
+  const patch=summary.patch||{};
+  const patchChildren=[diagnosticList([['Saved patch SHA-256',comparisonValue(patch.sha256)],['Recorded patch SHA-256',comparisonValue(patch.recorded_sha256)],['Matches recorded fingerprint',comparisonBoolean(patch.matches_recorded)]],'context-file-facts comparison-hashes')];
+  patchChildren.push(patch.text===null||patch.text===undefined?node('p','Unknown · saved patch text is unavailable.','muted'):node('pre',patch.text||'The saved patch is empty.','code-view comparison-patch'));
+  if(patch.truncated)patchChildren.push(node('p','Saved patch display is clipped; some text is omitted.','context-notice'));
+  card.append(comparisonDetails('Saved patch',[...patchChildren]));
+  const notes=comparisonNoteList(summary.notes);if(notes)card.append(notes);
+  return card;
+}
+function renderComparison(value){
+  const container=$('comparison-result');
+  const children=[];
+  const summary=node('section',undefined,'comparison-summary');
+  summary.append(node('h3',value.comparable===true?'Comparable recorded tasks':'Tasks are not directly comparable'),node('p',value.comparable===true?'The saved task evidence agrees on project, goal, selected files, baseline hashes, edit scope, checks and budgets. This does not rank the runs or prove their correctness.':'Differences or incomplete evidence prevent a direct task comparison. Recorded values remain visible below.','muted'));
+  const differences=comparisonNoteList(value.differences,comparisonDifferences);if(differences)summary.append(differences);
+  const notes=comparisonNoteList(value.notes);if(notes)summary.append(notes);children.push(summary);
+  const delta=value.metrics_delta||{};
+  const totalsComplete=value.left&&value.left.metrics&&value.left.metrics.complete===true&&value.right&&value.right.metrics&&value.right.metrics.complete===true;
+  const deltaSection=node('section',undefined,'comparison-delta');
+  deltaSection.append(node('h3','Recorded differences · right minus left'),diagnosticList([['Request starts',comparisonDelta(delta.requests)],['Serialized request-body bytes',comparisonDelta(totalsComplete?delta.request_bytes:null,'bytes')],['Recorded request time',comparisonDelta(totalsComplete?delta.elapsed_ms:null,'ms')]],'diagnostic-facts'),node('p','Unknown measurements stay Unknown. These saved totals do not establish provider completion or model quality.','muted'));children.push(deltaSection);
+  const pair=node('div',undefined,'comparison-pair');pair.append(comparisonRunCard(value.left||{},'Left'),comparisonRunCard(value.right||{},'Right'));children.push(pair);
+  const files=Array.isArray(value.files)?value.files:[];
+  const fileList=node('ul',undefined,'comparison-file-list');
+  for(const file of files){
+    const item=node('li');item.append(node('h4',comparisonValue(file.path)));
+    const pair=node('div',undefined,'comparison-file-pair');
+    for(const side of ['left','right']){const section=node('section');section.append(node('h5',side==='left'?'Left':'Right'),diagnosticList([['Baseline SHA-256',comparisonValue(file[side+'_sha256'])],['Edit scope',comparisonPermission(file[side+'_editable'])]],'context-file-facts comparison-hashes'));pair.append(section);}
+    item.append(pair);fileList.append(item);
+  }
+  children.push(comparisonDetails('Selected file hashes and edit scope · '+(files.length?comparisonInteger(files.length)+' paths':'Unknown'),files.length?[fileList]:[node('p','Unknown · selected file evidence is unavailable.','muted')]));
+  const difference=value.patch_difference||{};
+  const patchChildren=[node('p','Saved patch text compared from left to right. This view does not apply or export either patch.','muted')];
+  patchChildren.push(difference.text===null||difference.text===undefined?node('p','Unknown · a saved patch-text comparison is unavailable.','muted'):node('pre',difference.text||'No saved patch-text difference is recorded.','code-view comparison-patch'));
+  if(difference.truncated)patchChildren.push(node('p','Patch difference is clipped; some lines or text are omitted.','context-notice'));
+  children.push(comparisonDetails('Saved patch-text difference',[...patchChildren]));
+  container.replaceChildren(...children);container.hidden=false;
+}
+$('comparison-open').addEventListener('click',async()=>{
+  if(comparisonOpen||comparisonOpening||busy||projectRefreshBusy)return;
+  const sequence=++comparisonOpenSequence;
+  comparisonOpening=true;comparisonHistoryReady=false;invalidateComparison('Waiting for the current live update to finish…');$('comparison-history-status').textContent='Saved history has not been requested yet.';$('comparison-history-notes').replaceChildren();$('comparison-panel').hidden=false;$('normal-workspace').hidden=true;$('comparison-open').setAttribute('aria-expanded','true');setComparisonControls();$('comparison-close').focus();
+  const readiness=await new Promise(resolve=>{
+    let settled=false;
+    const finish=value=>{if(settled)return;settled=true;clearTimeout(timer);if(comparisonOpeningCancel===cancel)comparisonOpeningCancel=null;resolve(value);};
+    const cancel=()=>finish('cancelled');
+    const timer=setTimeout(()=>finish('timeout'),10000);comparisonOpeningCancel=cancel;
+    normalRefreshInFlight.then(()=>finish('ready'));
+  });
+  if(sequence!==comparisonOpenSequence||!comparisonOpening)return;
+  comparisonOpening=false;comparisonOpen=true;setComparisonControls();
+  if(readiness!=='ready'){$('comparison-history-status').textContent='The earlier live update did not finish within 10 seconds.';$('comparison-status').textContent='Saved comparison is unavailable. Close this panel to return to the run view.';return;}
+  $('comparison-status').textContent='Choose two different saved runs, then compare.';
+  await loadComparisonHistory();if(comparisonOpen&&sequence===comparisonOpenSequence&&!$('comparison-left').disabled)$('comparison-left').focus();
+});
+$('comparison-close').addEventListener('click',()=>{
+  comparisonOpenSequence++;if(comparisonOpeningCancel)comparisonOpeningCancel();comparisonOpen=false;comparisonOpening=false;comparisonHistorySequence++;comparisonHistoryLoading=false;comparisonHistoryReady=false;invalidateComparison();$('comparison-panel').hidden=true;$('normal-workspace').hidden=false;$('comparison-open').setAttribute('aria-expanded','false');setComparisonControls();$('comparison-open').focus();refresh();
+});
+for(const side of ['left','right'])$('comparison-'+side).addEventListener('change',()=>{
+  comparisonLeftId=$('comparison-left').value;comparisonRightId=$('comparison-right').value;invalidateComparison('Selection changed. Compare to show the selected saved evidence.');setComparisonControls();
+});
+$('comparison-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(!comparisonOpen||comparisonBusy||comparisonHistoryLoading||!comparisonHistoryReady||!comparisonLeftId||!comparisonRightId||comparisonLeftId===comparisonRightId)return;
+  invalidateComparison('Reading saved comparison evidence…');const sequence=comparisonSequence,leftId=comparisonLeftId,rightId=comparisonRightId;comparisonBusy=true;setComparisonControls();
+  try{
+    const value=await api('/api/compare/'+encodeURIComponent(leftId)+'/'+encodeURIComponent(rightId));
+    if(!comparisonOpen||sequence!==comparisonSequence||leftId!==comparisonLeftId||rightId!==comparisonRightId)return;
+    if(!value||value.version!==1)throw new Error('COMPARE_RESPONSE');
+    renderComparison(value);$('comparison-status').textContent='Showing saved evidence for the selected runs.';
+  }catch(error){if(comparisonOpen&&sequence===comparisonSequence)$('comparison-status').textContent=errors[error.message]||'The saved comparison is unavailable. Inspect the private records.';}
+  finally{if(sequence===comparisonSequence){comparisonBusy=false;setComparisonControls();}}
 });
 
 function selectedProjectConfiguration(){return configuration&&configuration.projects.find(project=>project.id===$('project').value);}

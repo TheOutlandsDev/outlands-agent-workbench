@@ -13,13 +13,23 @@
     <div class="brand"><span class="brand-mark">O</span><div>OUTLANDS<small>AGENT WORKBENCH</small></div></div>
     <button id="new-task" class="new-task">＋ New task</button>
     <button id="setup-open" class="setup-open">Set up project</button>
+    <button id="comparison-open" class="comparison-open" type="button" aria-controls="comparison-panel" aria-expanded="false" disabled>Compare runs</button>
     <div class="section-label">TASK HISTORY <span id="history-count">0</span></div>
     <nav id="history" aria-label="Task history"><p class="empty-small">Your runs will appear here.</p></nav>
     <div class="sidebar-footer"><span class="status-dot"></span> Local workspace<small>One task at a time. Your source stays in place.</small></div>
   </aside>
   <main>
-    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.6</span></h1><p>A clear view from task to reviewed patch.</p></div><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></header>
+    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.7</span></h1><p>A clear view from task to reviewed patch.</p></div><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></header>
     <div id="alert" role="alert" hidden></div>
+    <section id="comparison-panel" class="composer panel comparison-panel" aria-labelledby="comparison-title" hidden>
+      <div class="panel-heading"><div><div class="eyebrow">PRIVATE SAVED EVIDENCE</div><h2 id="comparison-title">Compare runs</h2></div><button id="comparison-close" class="secondary" type="button">Close comparison</button></div>
+      <p class="muted comparison-boundary">Compare saved records without inference or changing either run. Statuses are shown as saved and may be stale. Recorded measurements do not establish provider completion or rank models. Live run updates pause until you close this panel.</p>
+      <p id="comparison-history-status" class="muted" role="status">Loading saved run history…</p>
+      <div id="comparison-history-notes"></div>
+      <form id="comparison-form"><div class="form-grid"><label>Left saved run<select id="comparison-left" required disabled></select></label><label>Right saved run<select id="comparison-right" required disabled></select></label></div><div class="composer-bottom"><p id="comparison-status" class="muted" role="status">Choose two different saved runs, then compare.</p><button id="comparison-submit" class="primary" type="submit" disabled>Compare saved runs</button></div></form>
+      <div id="comparison-result" hidden></div>
+    </section>
+    <div id="normal-workspace">
     <section id="setup-panel" class="composer panel setup-panel" aria-labelledby="setup-title" hidden>
       <div class="panel-heading"><h2 id="setup-title">Set up a project</h2><button id="setup-close" type="button" class="secondary">Close setup</button></div>
       <p class="muted">Select only the files this task needs. Review their hashes before saving. Your project is not scanned or changed.</p>
@@ -78,6 +88,7 @@
     <section class="workspace-card" aria-labelledby="workspace-title"><div class="pane-heading"><h3 id="workspace-title">Git review workspace</h3><span id="workspace-state" class="state-pill">Not created</span></div><p class="muted">Create a separate branch from the selected baseline, apply this accepted patch, and rerun the fixed checks. Your project and its Git history stay in place.</p><div class="review-buttons"><button id="workspace-create" class="secondary" disabled>Create Git workspace</button><button id="workspace-stop" class="danger" disabled>Stop workspace</button></div><p id="workspace-note" class="muted">Available after an accepted patch review.</p><dl id="workspace-details" class="hashes" hidden><dt>Review branch</dt><dd id="workspace-branch"></dd><dt>Workspace location</dt><dd id="workspace-path"></dd><dt>Baseline commit</dt><dd id="workspace-head"></dd></dl></section>
     </section>
     <section id="welcome" class="welcome"><div class="welcome-icon" aria-hidden="true">⌘</div><h2>Your next change starts here.</h2><p>Choose a configured project and a model.<br>Follow the work, inspect the evidence, then decide what to keep.</p><div class="workflow"><span>01 · Plan</span><i>→</i><span>02 · Edit &amp; test</span><i>→</i><span>03 · Review</span></div></section>
+    </div>
     <footer>OUTLANDS <span>·</span> Local agent tools <span>·</span> Runtime data stays outside the source package</footer>
   </main>
 </body>
