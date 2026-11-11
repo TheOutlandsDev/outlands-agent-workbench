@@ -5,13 +5,13 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.7 adds read-only comparisons of two saved runs, with task comparability,
-recorded outcomes, request measurements and bounded patch differences. It retains
-reviewed project refreshes, task revisions, scoped search, focused reads,
-request-size guards, Run Diagnostics, the foreground launcher, Git review
-workspaces and the isolated Python/Java task-to-reviewed-patch workflow. It
-remains a small Linux prototype with a Python engine and a compatible Java
-launcher.
+Version 0.8 adds advisory **Project readiness** inspections of selected source,
+exact task/config fingerprints, executable presence and saved admission evidence.
+It retains read-only run comparisons, reviewed project refreshes, task revisions,
+scoped search, focused reads, request-size guards, Run Diagnostics, the foreground
+launcher, Git review workspaces and the isolated Python/Java
+task-to-reviewed-patch workflow. It remains a small Linux prototype with a Python
+engine and a compatible Java launcher.
 See [validation and limits](VALIDATION.md) and [origins](ORIGINS.md).
 
 ## Requirements
@@ -190,6 +190,58 @@ enforces the plan requirement. An edit requires the current file hash and one ex
 span. Bytes outside that span are preserved, including surrounding whitespace
 and line endings. Whole-file `write_file` is refused. Tests are protected, and
 independent final checks run before a task becomes Ready for review.
+
+## Inspect project readiness
+
+Choose **Project readiness**, select an already configured project, then press
+**Inspect selected project**. The project selector remains usable when a saved
+admission block disables Run. The dated report shows exact saved/observed
+config and task fingerprints, selected file hashes and sizes, editable/protected
+scope, fixed checks and budgets, prerequisite presence and saved admission
+observations. A report can become stale; starting a task still performs its own
+authoritative checks.
+
+| Result | Meaning |
+| --- | --- |
+| Static checks passed | The required static observations passed at the displayed time. This does not authorize Run or qualify a model, sandbox or source correction. |
+| Source refresh required | Selected source hashes changed and no other issue was observed. Review a refresh separately. |
+| Blocked | Selected source, a required executable, a saved task/workspace state or a present request hold blocks new work. |
+| Needs inspection | Config/task drift, damaged or unavailable evidence, or a partial admission inventory needs inspection. New work remains blocked. |
+
+Fingerprints hash exact raw bytes, including JSON formatting. If config or task
+bytes differ from those loaded by the server, selected source rows remain
+**Not checked**. Changed paths or definitions are not silently adopted. Source
+inspection reads only already selected files, with 32 files and 32 KiB per file
+as its bounds. The 128-KiB combined size is a task eligibility threshold; the
+inspector can read the bounded files to report all available sizes and block an
+excessive total. It does not discover repository files.
+
+Prerequisites are checked for regular/executable presence only. Python,
+Bubblewrap and `prlimit` are required for checks; Git is optional for later Git
+workspace creation. Java tasks require a configured JDK with `java` and `javac`
+present. Inspection runs no executable, `--version` command or project check.
+
+Every report explicitly leaves these eight areas **Not checked**: provider
+availability, check execution, isolation capability, Java version, model context
+fit, process ownership, workspace freshness and source correctness. Saved
+`RUNNING`, recovery and uncertain statuses are observed without reconciling
+workers. A valid present hold blocks new work; an unreadable or malformed hold
+requires inspection and remains blocked. Neither condition is cleared here.
+
+Saved admission inspection considers at most 200 matching job/unfinished records,
+with directory enumeration bounded to 1,024 entries and a 2-MiB aggregate record
+budget. Partial or damaged evidence cannot produce a static pass. Internal paths,
+source contents, check output and raw exceptions are excluded from the report;
+the selected relative paths, goal and check specifications are still private
+project information. Keep the browser and private data directory private.
+
+Normal live polling pauses while readiness is opening or open. Opening waits up
+to ten seconds for an earlier live update, with **Close readiness** available to
+cancel. Readiness and comparison panels cannot open together. Changing the
+selected project invalidates the old report, and late responses are ignored.
+Closing returns to the normal live view and its polling/reconciliation. The
+readiness panel contains no Run, source edit, refresh, check-execution, retry,
+hold-clearing or recovery action.
 
 ## Refresh a configured project
 
@@ -444,8 +496,8 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs 270 unit methods (218 prior methods, 34 pure comparison methods and
-18 comparison/controller/HTTP methods). It compiles the Java client with Java 17
+This runs 328 unit methods: the prior 270, 30 pure readiness methods and
+28 readiness/controller/HTTP methods. It compiles the Java client with Java 17
 compatibility and warnings as errors, compares Python/Java scripted results,
 and runs actual isolated checks. Acceptance covers namespace boundaries,
 time/output limits, Java compilation diagnostics and protected-main execution,
@@ -458,15 +510,20 @@ reviewed hash revision. Goal-only revisions, restart persistence and refusal of 
 stale refresh save are also checked. Comparison acceptance uses invented saved
 Python/Java JSON histories, with guards against live-state, check, process and
 provider paths and unchanged saved-file/hold hashes. These histories are not
-model-generated results. The runner makes no AI inference requests. The
+model-generated results. Readiness acceptance uses invented configured Python
+and Java projects, executable-presence stubs that are never run, source/config
+drift, a missing Java compiler and a separate synthetic hold. Each inspection
+preserves private file hashes and performs zero checks or model requests; the
+runner's existing actual isolated checks remain separate. The runner makes no
+AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
 
 Real-model browser acceptance is a separate, explicit task; see
 [VALIDATION.md](VALIDATION.md) for the observed result and its narrow coverage.
-Version 0.7 was tested offline only. Comparisons, refreshes and context tools do
-not determine the cause or provider completion of the preserved uncertain Java
-trial from version 0.3.
+Version 0.8 was tested offline only. Readiness, comparisons, refreshes and context
+tools do not determine the cause or provider completion of the preserved
+uncertain Java trial from version 0.3.
 
 ## Publication and licensing
 

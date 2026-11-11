@@ -24,8 +24,15 @@ represent model-generated fixes. Revision data remains outside the public source
 package. Version 0.7 adds a pure saved-run comparison reducer, guarded private
 record loaders, read-only comparison endpoints/interface and offline regression
 checks. Its Python/Java comparison histories are invented JSON records, not
-model-generated patches or real-model qualification runs. Existing actual isolated-check
-acceptance remains separate. All new fixture snippets are invented source text.
+model-generated patches or real-model qualification runs. Version 0.8 adds a pure
+advisory readiness reducer, guarded static source/config/task readers, bounded
+saved-admission inspection, executable-presence observations and a read-only
+Project readiness interface. Its Python/Java projects, saved blockers and
+executable-presence stubs are invented fixtures. Readiness never executes those
+stubs, project checks, process probes or provider requests. Existing actual
+isolated-check acceptance remains separate. All new fixture snippets are
+invented source text; readiness records and private review evidence are excluded
+from the public source package.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.
