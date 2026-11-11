@@ -3,8 +3,9 @@ const token=document.querySelector('meta[name="workbench-token"]').content;
 const $=id=>document.getElementById(id);
 let configuration=null,selected=null,current=null,polling=false,busy=false,initialized=false,setupDraft=null;
 let contextRunId=null,contextSnapshot=null;
+let admissionReason=null,projectRefreshDraft=null,projectRefreshProject=null,projectRefreshBusy=false,projectRefreshSequence=0,revisionSequence=0;
 const friendly={REVIEW_READY:"Ready for review",RUNNING:"Running",STOP_REQUESTED:"Stop requested",FAILED:"Failed",REFUSED:"Refused",INTERRUPTED:"Interrupted",UNCERTAIN:"Uncertain",RECOVERY_REQUIRED:"Needs inspection"};
-const errors={SOURCE_HASH_CHANGED:"Source files changed. Update the configured task hashes before starting.",MODEL_REQUEST_ACTIVE:"A model request is active. Another run cannot start while this request is in progress.",UNCERTAIN_REQUEST_HELD:"A model request has an unresolved outcome. Inspect the private state before another run.",TASK_ACTIVE_OR_UNRESOLVED:"A task is running or needs inspection before another can start.",SCRIPTED_DEMO_ONLY:"The scripted exercise requires its original demo goal and files.",REVIEW_REQUIRED:"Accept a completed patch before exporting it.",RESULT_CHANGED:"The result changed. Inspect the run before recording a new review.",PATCH_CHANGED:"The patch no longer matches the recorded evidence.",ORIGINAL_SOURCE_CHANGED:"Original source changed after this run. The patch cannot be exported against that source.",SESSION_REQUIRED:"The local session changed. Reload this page.",PROJECT_SCOPE_CHANGED:"The project configuration changed. Inspect the original run scope.",WORKSPACE_ACTIVE_OR_UNRESOLVED:"A Git workspace is running or needs inspection. Its private records are preserved.",WORKSPACE_NEEDS_INSPECTION:"Inspect the existing workspace and worker log before deciding how to recover. It will not be recreated automatically.",GIT_CONTROL_FILE_REFUSED:"Git control files cannot be included in a review workspace.",WORKSPACE_BYTES_CHANGED:"Workspace files changed after verification. Inspect the workspace before continuing."};
+const errors={REFRESH_FIELDS:"The refresh request did not contain the required project and default goal.",REVISION_LIMIT:"This project has reached its saved revision limit. Inspect the preserved revision chain before continuing.",REVISION_RECORD_CHANGED:"A saved revision record changed. Inspect the preserved project history before continuing.",REFRESH_SNAPSHOT_LIMIT:"The selected source exceeds the refresh snapshot size bound.",REFRESH_UTF8:"Selected source could not be read as valid UTF-8 text.",REFRESH_NO_CHANGES:"No selected file hashes or default task goal changed. There is no new revision to save.",REFRESH_SOURCE_CHANGED:"Selected source changed after the preview. Review a new refresh before saving.",PROJECT_TASK_CHANGED:"The current project task changed. Reload the project and review a new refresh.",CONFIG_CHANGED:"Project configuration changed. Reload the project and review a new refresh.",DRAFT_EXPIRED:"The reviewed draft expired. Review a new refresh before saving.",PROJECT_UNKNOWN:"The selected project is no longer available. Reload the project list.",SOURCE_HASH_CHANGED:"Source files changed. Update the configured task hashes before starting.",MODEL_REQUEST_ACTIVE:"A model request is active. Another run cannot start while this request is in progress.",UNCERTAIN_REQUEST_HELD:"A model request has an unresolved outcome. Inspect the private state before another run.",TASK_ACTIVE_OR_UNRESOLVED:"A task is running or needs inspection before another can start.",SCRIPTED_DEMO_ONLY:"The scripted exercise requires its original demo goal and files.",REVIEW_REQUIRED:"Accept a completed patch before exporting it.",RESULT_CHANGED:"The result changed. Inspect the run before recording a new review.",PATCH_CHANGED:"The patch no longer matches the recorded evidence.",ORIGINAL_SOURCE_CHANGED:"Original source changed after this run. The patch cannot be exported against that source.",SESSION_REQUIRED:"The local session changed. Reload this page.",PROJECT_SCOPE_CHANGED:"The project configuration changed. Inspect the original run scope.",WORKSPACE_ACTIVE_OR_UNRESOLVED:"A Git workspace is running or needs inspection. Its private records are preserved.",WORKSPACE_NEEDS_INSPECTION:"Inspect the existing workspace and worker log before deciding how to recover. It will not be recreated automatically.",GIT_CONTROL_FILE_REFUSED:"Git control files cannot be included in a review workspace.",WORKSPACE_BYTES_CHANGED:"Workspace files changed after verification. Inspect the workspace before continuing."};
 const diagnosticStates={ACTIVE:"Request active",UNCERTAIN:"Outcome uncertain",COMPLETE:"Ready for review",FAILED:"Request failed",NOT_STARTED:"Not started",NEEDS_INSPECTION:"Needs inspection"};
 const diagnosticHolds={ACTIVE_REQUEST:"A model request is active. New model work remains blocked while it is in progress.",UNRESOLVED:"A request outcome is unresolved. Inspect the preserved private state before any recovery decision.",UNASSOCIATED:"A request hold is present but cannot be linked to this run. New tasks remain blocked.",ABSENT:"No request hold is recorded."};
 const diagnosticCompletion={RECORDED:"Response recorded",UNKNOWN:"Provider completion unknown",NOT_APPLICABLE:"Not applicable"};
@@ -140,9 +141,9 @@ function showError(error){$('alert').textContent=errors[error.message]||error.me
 function clearError(){$('alert').hidden=true;}
 async function api(path,body){const options={headers:{'X-Workbench-Token':token}};if(body!==undefined){options.method='POST';options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}const r=await fetch(path,options);const value=await r.json();if(!r.ok)throw new Error(value.error||'REQUEST_REFUSED');return value;}
 function stateClass(state){return state==='REVIEW_READY'?'good':['FAILED','REFUSED','UNCERTAIN','INTERRUPTED','RECOVERY_REQUIRED'].includes(state)?'bad':'';}
-function projectChanged(){const p=configuration.projects.find(p=>p.id===$('project').value);if(!p)return;const demo=$('model').querySelector('option[value="scripted-demo"]');demo.disabled=!p.scripted_available;if(demo.disabled&&$('model').value==='scripted-demo')$('model').value=configuration.models[0]||'';$('goal').value=p.goal;const files=$('scope-files');files.replaceChildren(...p.files.map(name=>node('span',name+(p.editable.includes(name)?' · editable':' · protected'),'file-chip'+(p.editable.includes(name)?' editable':''))));$('scope-note').textContent=p.checks.length+' named check'+(p.checks.length===1?'':'s')+' · Edits stay in a private copy';modelChanged();}
+function projectChanged(){const p=configuration.projects.find(p=>p.id===$('project').value);if(!p)return;const demo=$('model').querySelector('option[value="scripted-demo"]');demo.disabled=!p.scripted_available;if(demo.disabled&&$('model').value==='scripted-demo')$('model').value=configuration.models[0]||'';$('goal').value=p.goal;const files=$('scope-files');files.replaceChildren(...p.files.map(name=>node('span',name+(p.editable.includes(name)?' · editable':' · protected'),'file-chip'+(p.editable.includes(name)?' editable':''))));$('scope-note').textContent=p.checks.length+' named check'+(p.checks.length===1?'':'s')+' · Edits stay in a private copy';modelChanged();resetProjectRefresh(p);}
 function modelChanged(){$('goal').readOnly=$('model').value==='scripted-demo';if($('goal').readOnly){const p=configuration.projects.find(p=>p.id===$('project').value);if(p)$('goal').value=p.goal;}}
-function setAdmission(reason){const blocked=Boolean(reason);$('admission').hidden=!blocked;$('admission').textContent=reason?(errors[reason]||reason.replaceAll('_',' ').toLowerCase()):'';for(const id of ['start','project','model','goal'])$(id).disabled=blocked||busy||(id==='start'&&!$('model').value);}
+function setAdmission(reason){const blocked=Boolean(reason);if(blocked&&admissionReason!==reason)invalidateProjectRefresh();admissionReason=reason||null;$('admission').hidden=!blocked;$('admission').textContent=reason?(errors[reason]||reason.replaceAll('_',' ').toLowerCase()):'';for(const id of ['start','project','model','goal'])$(id).disabled=blocked||busy||projectRefreshBusy||(id==='start'&&!$('model').value);setProjectRefreshControls();}
 function renderHistory(rows){$('history-count').textContent=String(rows.length);if(!rows.length){$('history').replaceChildren(node('p','Your runs will appear here.','empty-small'));return;}$('history').replaceChildren(...rows.map(row=>{const b=node('button',undefined,'history-item'+(row.id===selected?' selected':''));b.append(node('strong',row.project_name),node('small',(friendly[row.state]||row.state)+' · '+row.id.slice(0,6)));b.addEventListener('click',()=>{selected=row.id;current=null;refresh();});return b;}));}
 function renderRun(v){const changed=!current||current.id!==v.id;current=v;$('welcome').hidden=true;$('run-panel').hidden=false;$('run-project').textContent=v.project_name.toUpperCase();$('run-title').textContent='Task '+v.id.slice(0,8);$('run-meta').textContent=v.goal;$('run-state').textContent=friendly[v.state]||v.state;$('run-state').className='state-pill '+stateClass(v.state);$('stop').disabled=!['RUNNING','STOP_REQUESTED'].includes(v.state)||v.state==='STOP_REQUESTED';$('budget-label').textContent=v.turns+' / '+v.max_turns+' model turns';$('budget-bar').max=v.max_turns;$('budget-bar').value=v.turns;$('run-mode').textContent=v.backend==='scripted-demo'?'SCRIPTED · NO INFERENCE':v.model;renderDiagnostics(v);renderContext(v);$('plan').replaceChildren(...(v.plan.length?v.plan.map(s=>node('li',s)):[node('li','Waiting for the agent’s plan.','muted')]));$('events').replaceChildren(...v.events.map(e=>{const li=node('li');li.append(node('span',e.text),node('small','#'+String(e.index).padStart(2,'0')+' · '+e.kind.replaceAll('_',' ')));return li;}));$('activity-empty').hidden=v.events.length>0;$('diff').textContent=v.patch||'The patch will appear after the task finishes.';
   $('checks').replaceChildren(...v.checks.map(c=>{const card=node('section',undefined,'check-card');const heading=node('div',undefined,'check-heading');heading.append(node('strong',c.label),node('span',c.exit_code===0?'PASS':'FAIL','state-pill '+(c.exit_code===0?'good':'bad')));card.append(heading,node('p',(c.tests_ran||0)+' tests · exit '+c.exit_code+(c.timed_out?' · timed out':''),'muted'),node('pre',c.output||'No output','code-view'));return card;}));
@@ -161,7 +162,7 @@ $('export').addEventListener('click',async()=>{if(!current)return;clearError();t
 function activatePane(button){for(const b of document.querySelectorAll('[data-pane]')){const active=b===button;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;$(b.dataset.pane+'-pane').hidden=!active;}}
 document.querySelectorAll('[data-pane]').forEach(button=>{button.addEventListener('click',()=>activatePane(button));button.addEventListener('keydown',event=>{const tabs=[...document.querySelectorAll('[data-pane]')];const index=tabs.indexOf(button);let next;if(event.key==='ArrowRight')next=tabs[(index+1)%tabs.length];else if(event.key==='ArrowLeft')next=tabs[(index+tabs.length-1)%tabs.length];else if(event.key==='Home')next=tabs[0];else if(event.key==='End')next=tabs[tabs.length-1];if(next){event.preventDefault();activatePane(next);next.focus();}});});
 function renderProjects(id){$('project').replaceChildren(...configuration.projects.map(p=>{const o=node('option',p.name);o.value=p.id;return o;}));if(id)$('project').value=id;projectChanged();}
-async function boot(){try{configuration=await api('/api/config');const scripted=node('option','Scripted exercise · no inference');scripted.value='scripted-demo';$('model').replaceChildren(scripted,...configuration.models.map(m=>{const o=node('option',m);o.value=m;return o;}));renderProjects();$('setup-language').querySelector('option[value="java"]').disabled=!configuration.java_available;await refresh();setInterval(refresh,1500);}catch(error){showError(error);}}
+async function boot(){try{configuration=await api('/api/config');const scripted=node('option','Scripted exercise · no inference');scripted.value='scripted-demo';$('model').replaceChildren(scripted,...configuration.models.map(m=>{const o=node('option',m);o.value=m;return o;}));renderProjects();setAdmission(configuration.admission_block);$('setup-language').querySelector('option[value="java"]').disabled=!configuration.java_available;await refresh();setInterval(refresh,1500);}catch(error){showError(error);}}
 boot();
 
 function setupInvalidate(){setupDraft=null;$('setup-review').hidden=true;}
@@ -183,6 +184,118 @@ $('setup-save').addEventListener('click',async()=>{
   if(!setupDraft)return;clearError();$('setup-save').disabled=true;
   try{const project=await api('/api/project-save',{draft:setupDraft});configuration=await api('/api/config');renderProjects(project.id);setupInvalidate();$('setup-panel').hidden=true;await refresh();}
   catch(error){showError(error);}finally{$('setup-save').disabled=false;}
+});
+
+function selectedProjectConfiguration(){return configuration&&configuration.projects.find(project=>project.id===$('project').value);}
+function invalidateProjectRefresh(){projectRefreshDraft=null;projectRefreshSequence++;$('refresh-review').hidden=true;}
+function setProjectRefreshStatus(text){$('refresh-status').textContent=text||'';$('refresh-status').hidden=!text;}
+function setProjectRefreshControls(){
+  const project=selectedProjectConfiguration();
+  const blocked=Boolean(admissionReason);
+  const disabled=!project||blocked||busy||projectRefreshBusy;
+  $('refresh-open').disabled=!project||projectRefreshBusy;
+  $('refresh-close').disabled=projectRefreshBusy;
+  $('refresh-goal').disabled=disabled;
+  $('refresh-preview').disabled=disabled||!$('refresh-goal').value.trim();
+  $('refresh-save').disabled=disabled||!projectRefreshDraft||projectRefreshDraft.project!==project.id||projectRefreshDraft.goal!==$('refresh-goal').value;
+  $('refresh-admission').hidden=!blocked;
+  $('refresh-admission').textContent=blocked?(errors[admissionReason]||'New project revisions are currently blocked.')+' Revision history remains available.':'';
+}
+function renderRefreshChecks(container,checks){
+  const rows=Array.isArray(checks)?checks.map(value=>[typeof value==='string'?value:'Check',typeof value==='string'?null:value]):checks&&typeof checks==='object'?Object.entries(checks):[];
+  container.replaceChildren(...(rows.length?rows.map(([name,command])=>{const item=node('li');item.append(node('strong',name));if(command!==null)item.append(node('code',typeof command==='string'?command:JSON.stringify(command)));return item;}):[node('li','No checks recorded.','muted')]));
+}
+function resetProjectRefresh(project){
+  invalidateProjectRefresh();revisionSequence++;
+  projectRefreshProject=project.id;
+  $('refresh-project-name').textContent=project.name+' · '+project.id;
+  $('refresh-goal').value=project.goal;
+  $('refresh-current-hash').textContent=project.task_sha256||'Not recorded';
+  $('refresh-files').replaceChildren(...project.files.map(path=>node('span',path+' · '+(project.editable.includes(path)?'editable':'protected'),'file-chip'+(project.editable.includes(path)?' editable':''))));
+  renderRefreshChecks($('refresh-checks'),project.checks);
+  $('revision-history').replaceChildren(node('p','Open refresh to load revision history.','muted'));
+  $('revision-history-limit').textContent='Read-only history';
+  $('revision-history-truncated').hidden=true;
+  setProjectRefreshStatus('');setProjectRefreshControls();
+  if(!$('refresh-panel').hidden)loadProjectRevisions(project.id);
+}
+async function loadProjectRevisions(projectId){
+  const sequence=++revisionSequence;
+  $('revision-history').replaceChildren(node('p','Loading saved revisions…','muted'));
+  try{
+    const history=await api('/api/project-revisions/'+encodeURIComponent(projectId));
+    if(sequence!==revisionSequence||projectRefreshProject!==projectId)return;
+    $('refresh-current-hash').textContent=history.task_sha256||'Not recorded';
+    $('revision-history-limit').textContent='Up to '+diagnosticInteger(history.limit)+' saved revisions';
+    $('revision-history-truncated').hidden=!history.truncated;
+    const revisions=Array.isArray(history.revisions)?history.revisions:[];
+    if(!revisions.length){$('revision-history').replaceChildren(node('p','No saved revisions.','muted'));return;}
+    const list=node('ol',undefined,'revision-list');
+    for(const revision of revisions){
+      const card=node('li',undefined,'revision-card');
+      const heading=node('div',undefined,'revision-heading');
+      heading.append(node('h4',revision.id));
+      if(revision.current)heading.append(node('span','Current','state-pill good'));
+      card.append(heading,diagnosticList([['Saved (UTC)',diagnosticStarted(revision.created*1000)],['Changed file hashes',diagnosticInteger(revision.files_changed)],['Default goal changed',revision.goal_changed===true?'Yes':revision.goal_changed===false?'No':'Not recorded']]),diagnosticList([['Parent task SHA-256',revision.parent_task_sha256||'Not recorded'],['Task SHA-256',revision.task_sha256||'Not recorded']],'context-file-facts revision-hashes'));
+      list.append(card);
+    }
+    $('revision-history').replaceChildren(list);
+  }catch(error){
+    if(sequence!==revisionSequence||projectRefreshProject!==projectId)return;
+    $('refresh-current-hash').textContent='Unavailable · project state needs inspection';
+    invalidateProjectRefresh();setProjectRefreshControls();
+    $('revision-history').replaceChildren(node('p',errors[error.message]||'Revision history could not be loaded. Inspect the private project records.','muted'));
+    $('revision-history-limit').textContent='History unavailable';
+    $('revision-history-truncated').hidden=true;
+  }
+}
+function renderProjectRefreshPreview(scope){
+  const files=Array.isArray(scope.files)?scope.files:[];
+  $('refresh-summary').textContent=diagnosticInteger(scope.files_changed)+' selected file hashes changed · Default goal '+(scope.goal_changed?'changed':'unchanged')+' · '+diagnosticInteger(files.length)+' selected files · '+diagnosticBytes(scope.total_bytes);
+  $('refresh-review-facts').replaceChildren(diagnosticList([['Parent task SHA-256',scope.parent_task_sha256],['New task SHA-256',scope.task_sha256]],'context-file-facts refresh-task-hashes'),node('h3','Reviewed default goal'),node('pre',scope.goal,'refresh-reviewed-goal'),diagnosticList([['Model-turn limit',diagnosticInteger(scope.max_turns)],['Per-request timeout',diagnosticTimeout(scope.request_seconds)]],'diagnostic-facts refresh-budget'));
+  $('refresh-scope').replaceChildren(...files.map(file=>{
+    const item=node('li');
+    const heading=node('div',undefined,'refresh-file-heading');
+    heading.append(node('strong',file.path+' · '+(file.editable?'editable':'protected')),node('span',file.changed?'Hash changed':'Unchanged','state-pill'+(file.changed?'':' good')));
+    item.append(heading,diagnosticList([['Configured SHA-256',file.old_sha256],['Current source SHA-256',file.sha256],['Current source size',diagnosticBytes(file.bytes)]],'context-file-facts'));
+    return item;
+  }));
+  renderRefreshChecks($('refresh-review-checks'),scope.checks);
+  $('refresh-review').hidden=false;
+}
+$('refresh-open').addEventListener('click',()=>{
+  const project=selectedProjectConfiguration();if(!project||projectRefreshBusy)return;
+  clearError();$('refresh-panel').hidden=false;$('refresh-open').setAttribute('aria-expanded','true');resetProjectRefresh(project);
+  if(!$('refresh-goal').disabled)$('refresh-goal').focus();
+});
+$('refresh-close').addEventListener('click',()=>{
+  if(projectRefreshBusy)return;invalidateProjectRefresh();revisionSequence++;$('refresh-panel').hidden=true;$('refresh-open').setAttribute('aria-expanded','false');setProjectRefreshControls();$('refresh-open').focus();
+});
+$('refresh-goal').addEventListener('input',()=>{invalidateProjectRefresh();setProjectRefreshStatus('');setProjectRefreshControls();});
+$('refresh-form').addEventListener('submit',async event=>{
+  event.preventDefault();const project=selectedProjectConfiguration();if(!project||admissionReason||busy||projectRefreshBusy)return;
+  clearError();invalidateProjectRefresh();setProjectRefreshStatus('');
+  const sequence=projectRefreshSequence,projectId=project.id,goal=$('refresh-goal').value;
+  projectRefreshBusy=true;setAdmission(admissionReason);
+  try{
+    const scope=await api('/api/project-refresh-preview',{project:projectId,goal});
+    if(sequence!==projectRefreshSequence||projectRefreshProject!==projectId||$('project').value!==projectId||$('refresh-goal').value!==goal||admissionReason||$('refresh-panel').hidden)return;
+    projectRefreshDraft={draft:scope.draft,project:projectId,goal};renderProjectRefreshPreview(scope);
+  }catch(error){if(sequence===projectRefreshSequence){invalidateProjectRefresh();showError(error);}}
+  finally{projectRefreshBusy=false;setAdmission(admissionReason);}
+});
+$('refresh-save').addEventListener('click',async()=>{
+  const draft=projectRefreshDraft;
+  if(!draft||admissionReason||busy||projectRefreshBusy||draft.project!==$('project').value||draft.goal!==$('refresh-goal').value)return;
+  clearError();projectRefreshBusy=true;setAdmission(admissionReason);
+  let saved=false;
+  try{
+    const result=await api('/api/project-refresh-save',{draft:draft.draft});saved=true;invalidateProjectRefresh();
+    setProjectRefreshStatus('Task revision '+result.revision+' saved. No inference started and no source files were written.');
+    configuration=await api('/api/config');renderProjects(result.id);setAdmission(configuration.admission_block);
+    setProjectRefreshStatus('Task revision '+result.revision+' saved. No inference started and no source files were written.');
+  }catch(error){invalidateProjectRefresh();showError(error);if(saved)setProjectRefreshStatus('The task revision was saved. Reload the page to load the current project configuration.');}
+  finally{projectRefreshBusy=false;setAdmission(admissionReason);}
 });
 
 function renderWorkspace(v,ready,accepted){
