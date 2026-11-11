@@ -5,7 +5,11 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.13 adds **Reviewed Snapshot Export**: review a verified workspace
+Version 0.14 adds **Snapshot Export Project Check**: compare a private snapshot
+export with an explicitly selected project, then verify its forward patch in
+memory when current selected bytes match the original baseline. Already-tested,
+mixed, different or missing bytes are reported without reconstruction proof.
+It retains **Reviewed Snapshot Export**: review a verified workspace
 recheck’s exact tested snapshot, record a separate private acceptance, then
 explicitly download a pinned four-member patch bundle. Export performs no new
 checks or model requests. It retains **Workspace Recheck**: inspect manual
@@ -529,6 +533,70 @@ applies files, executes Git/checks/models, accesses a configured project, or
 changes records or holds. Internal checksums alone cannot establish authenticity;
 compare a whole-archive digest obtained independently when available.
 
+## Check a snapshot export against a project
+
+Choose **Check snapshot export**, select an already configured project and a
+private v0.13 snapshot-export ZIP, and optionally supply a whole-archive SHA-256
+from a trusted channel. Press **Check snapshot against project** explicitly.
+Choosing a file alone sends nothing. The loopback server keeps the archive in
+memory and writes no run, report, acceptance, source or workspace files.
+
+The archive is verified before task/source access. Config and task bytes must
+still match the approved loaded configuration. The export's task format,
+selected paths, editable/protected permissions, fixed check specifications and
+budgets must match that task before any selected source is read. Archive paths
+never extend the approved project scope. A mismatch shows the difference and
+skips source reads. Config/task guards are checked again after comparison.
+
+| Observation | Meaning |
+| --- | --- |
+| Baseline match | Every selected file matches the original export baseline; strict forward reconstruction must also verify |
+| Tested match | Every selected file matches the recorded tested snapshot; forward reconstruction is not checked |
+| Mixed match | Selected files mix baseline and tested bytes; reconstruction is not checked |
+| Different | At least one selected file differs from both applicable recorded hashes |
+| Needs inspection | Missing, unreadable, unsupported, oversized, mismatched or changed evidence prevents a complete result |
+
+Only complete baseline-matching bytes support reconstruction. The helper applies
+the exact diff to a fresh in-memory copy, checks selected scope, protected files,
+file/aggregate bounds and every tested snapshot hash, then regenerates the
+canonical diff and requires identical patch bytes. It rereads the selected
+baseline afterward to detect observed drift. A failed reconstruction or changed
+observation removes verification and requires inspection. No reverse reconstruction
+is attempted for tested or mixed selections, and nothing is applied to disk.
+
+The report separates file observations, task-hash matches and reconstruction
+status. A task pin mismatch remains visible even if current bytes match an
+exported baseline. Check observations within the export are recorded evidence;
+comparison runs no checks, Git commands or model requests, reads no holds, and
+performs no process reconciliation or repair. It works under an unrelated model
+hold and requires no JDK. The panel pauses normal polling while open, invalidates
+results when inputs change and does not upload automatically.
+
+The helper observes only the at-most 32 declared UTF-8 files, each at most
+32,768 bytes. Complete per-file observations may read up to 1 MiB so an oversized
+selection is reported accurately; reconstruction eligibility remains 131,072
+aggregate bytes. The archive is limited to 2 MiB, the comparison JSON to 65,536
+bytes and the browser response to 131,072 bytes. Links, special files and unsafe
+paths are refused. Sequential observations require a trusted, stable store and
+are not an atomic filesystem snapshot or an adoption authorization.
+
+The same read-only comparison is available from the CLI:
+
+```sh
+python3 -B snapshot_project_check.py /absolute/private-snapshot-export.zip \
+  --project /absolute/project --task /absolute/approved-task.json \
+  --expect-sha256 SHA256_FROM_TRUSTED_CHANNEL
+```
+
+The digest option is optional. The CLI verifies the archive before opening the
+task, checks the exact task bytes again before returning, and prints a bounded
+JSON report. Exit 0 means baseline match with verified forward reconstruction or
+tested-byte match; tested match explicitly leaves reconstruction unchecked. Exit
+1 means another observation state; exit 2 means fixed input refusal. None means
+safe adoption, authenticity, source correctness or fresh test execution. Keep
+archives and reports private: relative filenames, checks and hashes are project
+information. The earlier six-member bundle checker remains a separate format.
+
 ## Check a private bundle against a project
 
 Choose **Check bundle against project**, select an already configured project,
@@ -829,8 +897,8 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-This runs the full offline unit suites, including snapshot-export engine and
-controller/HTTP regressions. It compiles the Java client with Java 17
+This runs the full offline unit suites, including snapshot-export and selected
+snapshot-project engine/controller/HTTP regressions. It compiles the Java client with Java 17
 compatibility and warnings as errors, compares Python/Java scripted results,
 and runs actual isolated checks. Acceptance covers namespace boundaries,
 time/output limits, Java compilation diagnostics and protected-main execution,
@@ -875,7 +943,13 @@ discovery across the entire repository.
 
 Real-model browser acceptance is a separate, explicit task; see
 [VALIDATION.md](VALIDATION.md) for the observed result and its narrow coverage.
-Version 0.13 adds no real-model qualification. Snapshot exports, workspace
+Snapshot-project acceptance separately creates actual checked Python/Java
+snapshots, then compares their private exports under guards against runtime
+execution and writes. It checks baseline reconstruction, tested/different/missing
+observations, project drift and preservation; the inspector performs no checks
+or model requests of its own.
+
+Version 0.14 adds no real-model qualification. Snapshot exports, workspace
 rechecks, bundle review workspaces, project checks, bundles, readiness,
 comparisons, refreshes and context
 tools do not determine the cause or provider completion of the preserved

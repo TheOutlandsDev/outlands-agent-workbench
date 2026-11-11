@@ -20,7 +20,7 @@
     <div class="sidebar-footer"><span class="status-dot"></span> Local workspace<small>One task at a time. Your source stays in place.</small></div>
   </aside>
   <main>
-    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.13</span></h1><p>A clear view from task to reviewed patch.</p></div><div class="header-actions"><button id="bundle-workspace-open" class="secondary" type="button" aria-controls="bundle-workspace-panel" aria-expanded="false" disabled>Bundle review workspace</button><button id="project-check-open" class="secondary" type="button" aria-controls="project-check-panel" aria-expanded="false" disabled>Check bundle against project</button><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></div></header>
+    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.14</span></h1><p>A clear view from task to reviewed patch.</p></div><div class="header-actions"><button id="snapshot-project-open" class="secondary" type="button" aria-controls="snapshot-project-panel" aria-expanded="false" disabled>Check snapshot export</button><button id="bundle-workspace-open" class="secondary" type="button" aria-controls="bundle-workspace-panel" aria-expanded="false" disabled>Bundle review workspace</button><button id="project-check-open" class="secondary" type="button" aria-controls="project-check-panel" aria-expanded="false" disabled>Check bundle against project</button><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></div></header>
     <div id="alert" role="alert" hidden></div>
     <section id="comparison-panel" class="composer panel comparison-panel" aria-labelledby="comparison-title" hidden>
       <div class="panel-heading"><div><div class="eyebrow">PRIVATE SAVED EVIDENCE</div><h2 id="comparison-title">Compare runs</h2></div><button id="comparison-close" class="secondary" type="button">Close comparison</button></div>
@@ -53,6 +53,16 @@
         <div class="composer-bottom"><p id="project-check-status" class="muted" role="status">Select a project and a private ZIP, then check explicitly.</p><button id="project-check-submit" class="primary" type="submit" disabled>Check selected project</button></div>
       </form>
       <div id="project-check-result" hidden></div>
+    </section>
+    <section id="snapshot-project-panel" class="composer panel project-check-panel snapshot-project-panel" aria-labelledby="snapshot-project-title" hidden>
+      <div class="panel-heading"><div><div class="eyebrow">PRIVATE SELECTED-BYTE OBSERVATIONS</div><h2 id="snapshot-project-title">Snapshot export project check</h2></div><button id="snapshot-project-close" class="secondary" type="button">Close snapshot check</button></div>
+      <p class="muted project-check-boundary">Compare a private snapshot export with the selected configured project. This check does not write project files. This check runs no project checks, Git commands or model requests and does not read or change a hold. Matching bytes and forward reconstruction do not authorize applying a patch or establish source correctness.</p>
+      <form id="snapshot-project-form">
+        <label>Configured project<select id="snapshot-project-project" required disabled></select></label>
+        <div class="form-grid project-check-inputs"><label>Private snapshot export ZIP<input id="snapshot-project-file" type="file" accept=".zip,application/zip" required disabled aria-describedby="snapshot-project-file-note"><small id="snapshot-project-file-note" class="muted">1 byte–2 MiB. The ZIP is sent only when you click Check snapshot against project. Selecting a file starts no upload.</small></label><label>Trusted whole-archive SHA-256 · optional<input id="snapshot-project-sha" type="text" pattern="[0-9a-f]{64}" maxlength="64" autocomplete="off" spellcheck="false" placeholder="64 lowercase hexadecimal characters" disabled><small class="muted">Use a digest from a trusted channel when available. Embedded unsigned checksums do not establish authenticity.</small></label></div>
+        <div class="composer-bottom"><p id="snapshot-project-status" class="muted" role="status">Select a project and private snapshot ZIP, then check explicitly.</p><button id="snapshot-project-submit" class="primary" type="submit" disabled>Check snapshot against project</button></div>
+      </form>
+      <div id="snapshot-project-result" hidden></div>
     </section>
     <section id="bundle-workspace-panel" class="composer panel bundle-workspace-panel" aria-labelledby="bundle-workspace-title" hidden>
       <div class="panel-heading"><div><div class="eyebrow">SEPARATE PRIVATE WORKTREE</div><h2 id="bundle-workspace-title">Bundle review workspace</h2></div><button id="bundle-workspace-close" class="secondary" type="button">Close workspace panel</button></div>

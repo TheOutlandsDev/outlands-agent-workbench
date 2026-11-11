@@ -30,6 +30,8 @@ from bundle_workspace import prepare as prepare_bundle_workspace
 from workspace_recheck import inspect as inspect_recheck
 from workspace_recheck import history_pin as recheck_history_pin
 from snapshot_export import prepare as prepare_snapshot_export
+from snapshot_export import verify_export as verify_snapshot_export
+from snapshot_project_check import check_project as check_snapshot_project
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -1475,6 +1477,30 @@ class Manager:
             require(len(canonical(result)) <= 131072, "PROJECT_CHECK_OUTPUT_LIMIT")
             return result
 
+    def snapshot_project_check(self, project_id, archive_raw, expected_sha256=None):
+        """Observe a private snapshot export against one approved selected project."""
+        with self.lock:
+            require(type(project_id) is str and project_id in self.projects, "SNAPSHOT_PROJECT_PROJECT_UNKNOWN")
+            require(type(archive_raw) is bytes and len(archive_raw) > 0, "SNAPSHOT_PROJECT_INPUT")
+            require(len(archive_raw) <= MAX_ARCHIVE, "SNAPSHOT_PROJECT_LIMIT")
+            # Reject unverified archives before opening any configured task/source.
+            verify_snapshot_export(archive_raw, expected_sha256)
+            project = self.projects[project_id]
+            def guard_project():
+                for path, expected in [(self.config_path, self.config_raw), (project["task"], project["task_raw"])]:
+                    fingerprint = self.readiness_fingerprint(path, expected)
+                    require(fingerprint["status"] != "LIMIT", "SNAPSHOT_PROJECT_LIMIT")
+                    require(fingerprint["status"] == "MATCH", "SNAPSHOT_PROJECT_PROJECT_CHANGED")
+            guard_project()
+            report = check_snapshot_project(archive_raw, project["source"], project["task_raw"], expected_sha256)
+            guard_project()
+            result = {"version": 1, "project": {"id": project_id, "name": project["name"]},
+                      "checked_at_ms": time.time_ns() // 1000000,
+                      "config_sha256": sha(self.config_raw), "task_sha256": sha(project["task_raw"]),
+                      "comparison": report}
+            require(len(canonical(result)) <= 131072, "SNAPSHOT_PROJECT_OUTPUT_LIMIT")
+            return result
+
     def _bundle_workspace_prepare(self, project_id, raw, expected_sha256=None):
         require(type(project_id) is str and project_id in self.projects, "BUNDLE_WORKSPACE_PROJECT_UNKNOWN")
         require(type(raw) is bytes and 0 < len(raw) <= MAX_ARCHIVE, "BUNDLE_WORKSPACE_INPUT_LIMIT")
@@ -2319,6 +2345,26 @@ def make_handler(manager, token, origin):
                 self.guard(True)
                 require(self.headers.get("Origin") == origin, "ORIGIN_REFUSED")
                 path = urlsplit(self.path).path
+                if path.startswith("/api/snapshot-project-check/"):
+                    require(self.headers.get("Transfer-Encoding") is None, "SNAPSHOT_PROJECT_INPUT")
+                    types = self.headers.get_all("Content-Type", [])
+                    require(len(types) == 1 and types[0].split(";", 1)[0].strip().lower() == "application/zip",
+                            "SNAPSHOT_PROJECT_INPUT")
+                    lengths = self.headers.get_all("Content-Length", [])
+                    require(len(lengths) == 1 and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
+                            "SNAPSHOT_PROJECT_INPUT")
+                    length = int(lengths[0])
+                    require(length > 0, "SNAPSHOT_PROJECT_INPUT")
+                    require(length <= MAX_ARCHIVE, "SNAPSHOT_PROJECT_LIMIT")
+                    hashes = self.headers.get_all("X-Snapshot-SHA256", [])
+                    require(len(hashes) <= 1 and (not hashes or re.fullmatch(r"[0-9a-f]{64}", hashes[0]) is not None),
+                            "SNAPSHOT_PROJECT_INPUT")
+                    raw = self.rfile.read(length)
+                    require(len(raw) == length, "SNAPSHOT_PROJECT_INPUT")
+                    result = manager.snapshot_project_check(path.removeprefix("/api/snapshot-project-check/"),
+                                                            raw, hashes[0] if hashes else None)
+                    self.send(200, canonical(result))
+                    return
                 if path.startswith("/api/bundle-project-check/") or path.startswith("/api/bundle-workspace-preview/"):
                     require(self.headers.get("Transfer-Encoding") is None, "PROJECT_CHECK_INPUT")
                     require(self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()

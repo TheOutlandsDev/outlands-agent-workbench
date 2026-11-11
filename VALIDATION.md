@@ -1,126 +1,116 @@
-# Version 0.13 validation
+# Version 0.14 validation
 
-Offline qualification on one Linux host passed **550 unit methods in 24 suites**:
-the prior 500, 31 snapshot-export engine methods and 19 controller/HTTP methods.
-The full runner also passed actual isolated Python/Java creation and manual-edit
-rechecks before export, exact patch reconstruction and the earlier acceptance
-probes. No model request was made. Real bundles, workspaces, snapshots, exports,
-acceptance notes and runtime records remain private.
+Offline qualification on one Linux host passed **601 unit methods in 26 suites**:
+the prior 550, 35 snapshot-project helper methods and 16 controller/HTTP methods.
+The full runner also passed actual isolated Python/Java/mixed creation and
+manual-edit snapshot rechecks before export, project comparison and the earlier
+acceptance probes. Snapshot-project inspection performed zero checks or model
+requests. Real exports, source/workspaces, snapshots and records remain private.
 
 | Area | Observed result |
 | --- | --- |
-| Retained suites | All prior 500 methods and acceptance probes passed |
-| Snapshot-export engine | 31 methods passed |
-| Controller and HTTP | 19 methods passed |
-| Exact patch scope | Approved original baseline to the selected VERIFIED tested snapshot; initial imported fix and later tested manual comments both present |
-| Python and Java | Actual isolated creation/recheck checks passed; exported patch reconstructed the exact selected tested bytes |
-| Formatting | UTF-8, CRLF, missing final LF, empty-file changes and multiple hunks round-tripped; ambiguous separators refused |
-| Recorded checks | Full bounded check evidence, exact configured names/specifications, types, passing observations, hashes and clipped receipt display validated |
-| Archive | Four deterministic stored ZIP members; fixed metadata, sizes, checksums, paths and finite schemas checked without extraction |
-| Privacy | No raw records, goals, host paths, timestamps, private Git refs, prompts, check output or acceptance notes in verification data |
-| Acceptance | Five-minute one-use preview, explicit private note, exact receipt/review pins and separate download |
-| History | Current recheck and acceptance tips bound; a later acceptance invalidates an earlier download; no older fallback |
-| Stale evidence | Changed source/config/task/Git, protected files, snapshot, saved checks and receipts refused |
-| Failure | Partial, malformed, PREPARING and FAILED acceptance evidence blocks exports; own-review mutation retains FAILED evidence |
-| Bounds | Receipt count/aggregate/reserve, record sizes, snapshot, patch, preview and archive limits enforced |
-| No execution | Export preview/accept/download/history and verifier guarded against Git/check/provider/process/admission/reconciliation calls |
-| Unrelated hold | Export operations worked without reading or changing the synthetic hold; execution admission remained blocked |
-| HTTP | Session/Host/Origin/fetch guards, exact declared JSON framing, duplicate lengths, transfer encoding and ZIP response checked |
-| Browser | Explicit Python/Java review, acceptance and download; Unicode note boundary, selection invalidation and stale-history refusal observed |
-| Restart and teardown | Final server downloaded identical retained Java bytes without changing saved records; owned loopback port closed |
+| Retained qualification | All prior 550 methods and acceptance probes passed |
+| Snapshot-project helper | 35 methods passed |
+| Controller and HTTP | 16 methods passed |
+| Baseline reconstruction | Exact forward patch on selected original baseline reconstructed every tested hash and reproduced the canonical diff |
+| Other byte states | Tested, mixed, different and missing observations gave no forward or reverse reconstruction proof |
+| Actual checked fixtures | Separate isolated Python/Java/mixed initial and manual-edit snapshot checks passed before inspection |
+| Profile guards | Format, selected path set, permissions, check specifications and budgets compared; mismatch skipped source reads |
+| Project guards | Config/task pins checked before and after inspection; changed or unreadable evidence refused |
+| Input ordering | Invalid archive or trusted hash refused before task/config/source reads |
+| Patch evidence | Self-consistently rehashed wrong patch refused reconstruction; protected files and exact snapshot bounds enforced |
+| Formatting | UTF-8, CRLF, missing final LF and empty-file changes checked without normalization |
+| Source observations | Missing, changed, binary, invalid UTF-8, oversized, linked and special inputs reported/refused within bounds |
+| Observed drift | Successful reconstruction reread its selected baseline; changed observations removed verification |
+| Private output | Relative approved paths and bounded hashes only; no goals, source text, check output, host paths or run IDs |
+| No runtime action | No inspector writes, extraction, Git/check/provider execution, executable probes, admission or hold inspection |
+| HTTP | Session/Host/Origin/fetch guards and exact binary MIME/length/hash framing enforced |
+| Browser | Baseline Python/Java, tested/mixed/different/missing, wrong trusted digest and result invalidation observed |
+| Hold and restart | Inspection under a separate synthetic hold; execution still blocked; fresh final server changed no saved bytes |
+| Teardown | Owned loopback port closed; original uncertain Java result/hold hashes unchanged |
 
 ## Evidence classes
 
-Unit fixtures contain invented Python/Java source and saved passing observations,
-using real private Git worktrees with fake check runners. They prove controller
-and reducer behavior, not historical agent execution. Browser trials likewise
-used invented creation/recheck observations; downloaded ZIPs independently
-verified and reconstructed the exact fixture snapshots from their baselines.
+Unit and browser fixtures use invented selected source, real private Git
+worktrees and fake saved passing observations. They test reduction, controller
+and interface behavior; they do not authenticate historical checks or establish
+agent competence. Focused helper and integration suites passed their first runs.
+No development test failure was hidden, rerun or relabelled.
 
-Full acceptance separately ran the actual fixed isolated Python/Java checks to
-create review workspaces, added invented manual UTF-8 comments, and ran actual
-snapshot rechecks before exporting. Preview, acceptance, download and the
-verifier ran under no-runtime guards after those checks. They performed zero new
-check executions or model requests. Original source/worktree/Git bytes, earlier
-creation/recheck records and synthetic holds stayed unchanged; explicit export
-acceptance added only its own private receipt and displayed-review record.
-A deliberately altered snapshot was refused and its private negative stage
-retained. Newer acceptance history invalidated the earlier download.
+Full acceptance separately created Python, Java and mixed review workspaces
+using actual isolated checks, added invented manual comments, and ran actual
+snapshot rechecks before preparing private v0.13 exports. Only then did it inspect
+them under guards against execution, providers, extraction and old-record writes.
+No JDK was configured for the inspector itself. Baselines reconstructed exactly;
+tested/mixed/different/missing stages were separately labelled without that proof.
+Intentional source changes between observations are retained as fixture stages;
+the inspector did not make them. Each inspection preserved its input-stage bytes,
+and earlier creation/recheck/workspace/Git evidence and synthetic holds remained
+unchanged. Check execution belongs to fixture preparation, not inspection.
 
-Initial focused HTTP testing had one test-only MIME expectation mismatch:
-the valid response included `charset=utf-8`. The assertion was corrected to
-compare its media type; that first failure was retained privately. Later focused
-suites and the full qualification passed. Independent review also found and
-fixed prior-review integrity and own-review mutation gaps before final testing.
-UI review corrected inspection invalidation and lone-surrogate note handling.
-No failed operational run or uncertain model request was retried or relabelled.
+Browser checks independently observed Python and Java baseline reconstruction,
+then intentional tested, mixed, changed and missing stages. Project/hash edits
+invalidated old results, and a wrong supplied whole-archive digest refused before
+comparison. The final server loaded retained state under a synthetic hold and
+reported mixed bytes without reconstruction or writes; all saved bytes matched
+afterward. Review corrected trusted-digest wording and replaced broad claims that
+files stayed unchanged with precise statements that the check wrote no project
+files, since other actors may change source during observation.
 
-## Review and integrity boundaries
+## Inspection contract
 
-Export preparation requires the exact selected VERIFIED recheck receipt and
-request, original initial receipt/task, complete full check evidence and matching
-original creation/project/config/bundle/Git pins. It re-inspects current selected
-workspace bytes and requires the tested snapshot/hash to remain current. The
-saved recheck preview is reconstructed using its original saved history pin;
-current global histories separately bind the new export review.
+Only the strict four-member `outlands-reviewed-snapshot-export-v1` format is
+accepted. Its stored framing, schemas, paths, fixed metadata, checksums and
+optional trusted archive hash are verified before task/source access. Omitted
+original records remain represented by unsigned hashes; a valid packet does
+not authenticate those records, source ownership, provider completion or tests.
+The older six-member reviewed bundle format stays separate and unchanged.
 
-The patch compares approved original baseline bytes with that tested snapshot,
-including the initial bundle changes and later tested editable refinements.
-Only selected editable files may differ; protected files must match. The
-canonical unified diff is parsed and applied in memory against the baseline,
-then required to reconstruct the exact snapshot. No filesystem patch is applied.
-Unsupported or ambiguous line syntax is refused rather than normalized.
+The explicitly selected approved task must match export format, scope, editable
+permissions, configured check names/specifications and budgets before any source
+read. Export paths never expand approved scope. Cached config/task fingerprints
+are checked before and after the comparison, and CLI task bytes are reread before
+returning. Current source hashes are compared with baseline and tested hashes;
+configured task-pin matches remain a separate advisory observation.
 
-The deterministic `outlands-reviewed-snapshot-export-v1` archive contains exactly
-`changes.diff`, `verification.json`, `README.txt` and `SHA256SUMS`. Verification
-carries relative scope, selected hashes, fixed task profile/check specifications
-and finite passing observations. Original records are omitted and represented
-by hashes. The patch and filenames still contain private project information.
-The archive is unencrypted, unsigned and private. Embedded checksums establish
-integrity, not authenticity, ownership, source correctness, provider completion
-or permission to adopt changes. The verifier neither extracts nor executes it.
+Only a complete matching baseline supports strict forward reconstruction. The
+diff is applied to a fresh in-memory copy, resulting paths/protected bytes and
+all tested hashes must match, size bounds remain valid, and regenerated canonical
+diff bytes must equal the archive patch. A final selected-byte reread removes
+verification if observed drift occurs. Reconstruction failure becomes
+NEEDS_INSPECTION with a finite reason. No reverse reconstruction is provided for
+tested or mixed content, and no missing/different case establishes applicability.
 
-Human acceptance remains outside the archive to avoid a circular acceptance/hash
-claim. Explicit acceptance binds the displayed summary, preview, whole archive
-and current histories in two private files. It consumes the draft before writing
-and revalidates after staging. Late failure retains FAILED or unresolved partial
-evidence, blocks further exports and does not change normal execution admission.
-Every accepted review is validated when traversing history. No cleanup, repair,
-retry, hold clearing, Git adoption or model recovery is provided.
-
-Download revalidates the exact accepted receipt, saved review, reconstructed
-artifact and histories without writes. Parent acceptance history excludes only
-the selected acceptance itself; any later acceptance invalidates the old pin.
-Restart discards previews but permits explicitly selected saved acceptance to
-download when every fresh guard still matches. Histories never select an older
-approval as a substitute. Changed content needs a valid fresh recheck; a history
-pin change alone needs fresh explicit review and acceptance.
+The operation writes no source, workspace, acceptance or run record, performs no
+archive extraction or filesystem apply, and runs no Git/check/model/provider
+request, admission reconciliation or hold read/write. An unrelated hold remains
+independent of this advisory inspection. The browser sends inputs only after an
+explicit check action and discards stale results when inputs or panel state change.
+No result authorizes execution, source adoption, a commit or clearing a hold.
 
 ## Bounds and remaining limits
 
 | Input/output | Bound |
 | --- | --- |
-| Selected files | 32 UTF-8 files, 32,768 bytes/file, 131,072 total |
-| Full check evidence | 2,097,152 bytes |
-| Patch / verification / archive | 1,048,576 / 262,144 / 2,097,152 bytes |
-| Summary / review preview | 65,536 / 131,072 bytes |
-| Diff display | 8,192 UTF-8 bytes and 240 lines; truncation labelled |
-| Preview | One memory draft, five-minute validity, one-use acceptance |
-| Private acceptance | 200 records, 2 MiB aggregate raw receipts, 32,768-byte receipt reserve |
-| Saved review | 131,072 bytes each; at most 200 traversed |
-| Note | 1,000 Unicode code points, 2,000 UTF-8 bytes, no NUL or invalid Unicode |
-| JSON request / history response | 32,768 / 262,144 bytes |
+| Approved selected files | 32 named UTF-8 files, 32,768 bytes/file |
+| Complete selected observation | At most 1 MiB to classify all bounded files |
+| Reconstruction eligibility | 131,072 aggregate source/result bytes |
+| Private archive / task | 2,097,152 / 262,144 bytes |
+| Comparison / browser JSON | 65,536 / 131,072 bytes |
+| Reconstruction output | Memory only, selected scope and recorded tested hashes |
 
-This retains the documented simple private Git/index-v2/loose-object subset.
-The host/config/private store must remain trusted and stable. Sequential
-observations are not atomic multiwriter snapshots or proof that no intermediate
-change occurred. Saved checks and unsigned hashes cannot authenticate an agent
-run. Real-model Java qualification remains uncertain and untested by this work;
-the original held result and hold retain their prior hashes.
+The readers refuse unsafe links/special files and unsupported text. Observations
+are sequential on a trusted, stable host/store, not an atomic multiwriter
+snapshot or proof that no intermediate change occurred. TESTED_MATCH means only
+observed bytes match recorded tested hashes; checks are not rerun and reverse
+applicability remains unverified. Unsigned integrity and a trusted whole-archive
+hash are separate from authentication and source correctness.
 
-No inference, recovery, retry, eviction, service/deployment change or license
+The original uncertain Java trial remains unqualified; its cause and provider
+completion are unknown, and its result/hold retain their prior hashes. No model
+request, recovery, retry, eviction, service/deployment change or license
 assignment occurred. Earlier evidence remains in
-[version 0.12 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/5a939ed98a6b741ec8942ecb6ee486b33396dad1/VALIDATION.md).
+[version 0.13 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/224fcfb8fcfff40186183101961a71b274865aad/VALIDATION.md).
 Qualification used Python 3.12.7, isolated Python 3.10.12, Git 2.34.1 and Temurin
 JDK 21.0.13+9 targeting Java 17 on Linux. Local passes are not GitHub CI passes.
 Licensing remains **UNASSIGNED**; see [origins](ORIGINS.md).
