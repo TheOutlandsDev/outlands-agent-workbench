@@ -18,7 +18,7 @@ from isolation import check as isolated_check
 from java_check import check as isolated_java_check
 
 FORMAT = "outlands-coding-agent-v1"
-MAX_FILE = 16384
+MAX_FILE = 32768
 MAX_JSON = 262144
 
 
@@ -277,6 +277,11 @@ TOOLS = [
 ]
 
 
+def tools_for_messages(messages):
+    planned = any(m.get("role") == "tool" and m.get("tool_name") == "set_plan" for m in messages)
+    return TOOLS[1:] if planned else TOOLS[:1]
+
+
 class Ollama:
     def __init__(self, model):
         require(
@@ -310,17 +315,20 @@ class Ollama:
             {
                 "model": self.model,
                 "messages": messages,
-                "tools": TOOLS,
+                "tools": tools_for_messages(messages),
                 "stream": False,
                 "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 1024},
             }
         )
         connection = http.client.HTTPConnection("127.0.0.1", 11434, timeout=seconds)
+        phase = "SEND"
         try:
             connection.request(
                 "POST", "/api/chat", payload, {"Content-Type": "application/json"}
             )
+            phase = "HEADER"
             response = connection.getresponse()
+            phase = "BODY"
             body = response.read(MAX_JSON + 1)
             require(response.status == 200, "PROVIDER_HTTP")
             result = parse(body)
@@ -329,6 +337,8 @@ class Ollama:
                 "PROVIDER_INCOMPLETE",
             )
             return result["message"]
+        except TimeoutError:
+            raise Refused("PROVIDER_" + phase + "_TIMEOUT") from None
         finally:
             connection.close()
 

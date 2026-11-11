@@ -19,6 +19,8 @@ from urllib.parse import urlsplit
 
 from java_check import validate_jdk
 from project_setup import prepare
+from git_workspace import inspect as inspect_workspace
+from git_workspace import validate_files as validate_workspace_files
 
 from agent import (
     Refused,
@@ -146,7 +148,7 @@ class Manager:
                 "DATA_OUTSIDE_SOURCE",
             )
         private_dir(self.data)
-        for name in ["jobs", "tasks", "runs", "state", "projects"]:
+        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces"]:
             private_dir(self.data / name)
         self.server_lock = os.open(
             self.data / "server.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
@@ -159,6 +161,81 @@ class Manager:
             raise Refused("SERVER_ALREADY_RUNNING") from None
         self.lock = threading.RLock()
         self.children = {}
+        self.workspace_children = {}
+
+    def workspace_receipt(self, run_id):
+        path = self.run_path(run_id) / "git-workspace.json"
+        entry = self.workspace_children.get(run_id)
+        receipt = json_file(path) if path.exists() else None
+        if entry is not None and entry[0].poll() is not None:
+            child, log = self.workspace_children.pop(run_id)
+            log.close()
+            if receipt is not None and receipt["status"] == "PREPARING":
+                receipt.update(status="FAILED", reason="WORKSPACE_INTERRUPTED", finished=int(time.time()))
+                replace_json(path, receipt)
+        return receipt
+
+    def create_workspace(self, request):
+        with self.lock:
+            require(isinstance(request, dict) and set(request) == {"id", "result_sha256", "patch_sha256"}, "WORKSPACE_FIELDS")
+            run_id = request["id"]
+            self.export(run_id)
+            self.verified_artifact(run_id, request["result_sha256"], request["patch_sha256"])
+            run = self.run_path(run_id)
+            task = json_file(self.data / "tasks" / (run_id + ".json"))
+            validate_workspace_files(task)
+            existing = self.workspace_receipt(run_id)
+            destination = self.data / "workspaces" / run_id
+            if existing is not None:
+                require(existing["result_sha256"] == request["result_sha256"] and existing["patch_sha256"] == request["patch_sha256"], "WORKSPACE_ARTIFACT_CHANGED")
+                require(existing["status"] in ["PREPARING", "VERIFIED"], "WORKSPACE_NEEDS_INSPECTION")
+                if existing["status"] == "VERIFIED":
+                    inspect_workspace(destination, task, self.result(run_id), existing)
+                return existing
+            blocked = self.admission()
+            require(blocked is None, blocked or "ADMISSION")
+            receipt = {"status": "PREPARING", "created": int(time.time()), "source_applied": False,
+                       "result_sha256": request["result_sha256"], "patch_sha256": request["patch_sha256"]}
+            write_new(run / "git-workspace.json", canonical(receipt))
+            meta = self.metadata(run_id)
+            command = [sys.executable, "-B", str(HERE / "git_workspace.py"), "--run-dir", str(run),
+                       "--source", meta["source"], "--destination", str(destination),
+                       "--result-sha256", request["result_sha256"], "--patch-sha256", request["patch_sha256"]]
+            if self.jdk_home is not None:
+                command += ["--jdk-home", str(self.jdk_home)]
+            fd = os.open(run / "workspace-worker.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            log = os.fdopen(fd, "wb")
+            try:
+                child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                         start_new_session=True, env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "PYTHONNOUSERSITE": "1"})
+            except OSError:
+                log.close()
+                receipt.update(status="FAILED", reason="WORKSPACE_START_FAILED")
+                replace_json(run / "git-workspace.json", receipt)
+                raise Refused("WORKSPACE_START_FAILED") from None
+            self.workspace_children[run_id] = (child, log)
+            return receipt
+
+    def stop_workspace(self, run_id):
+        with self.lock:
+            self.meta_path(run_id)
+            entry = self.workspace_children.get(run_id)
+            require(entry is not None and entry[0].poll() is None, "NO_OWNED_ACTIVE_WORKSPACE")
+            child = entry[0]
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                child.wait()
+            self.workspace_receipt(run_id)
+            return {"status": "STOP_REQUESTED"}
 
     def project_preview(self, request):
         with self.lock:
@@ -278,6 +355,10 @@ class Manager:
         hold = self.data / "state/hold.json"
         if hold.exists() or hold.is_symlink():
             return "UNCERTAIN_REQUEST_HELD"
+        for row in rows:
+            receipt = self.workspace_receipt(row["id"])
+            if receipt is not None and receipt["status"] in ["PREPARING", "FAILED"]:
+                return "WORKSPACE_ACTIVE_OR_UNRESOLVED"
         if any(
             r["state"] in ["RUNNING", "STOP_REQUESTED", "RECOVERY_REQUIRED"]
             for r in rows
@@ -443,6 +524,7 @@ class Manager:
             last_review = json_file(reviews[-1]) if reviews else None
             for entry in checks:
                 entry["output"] = entry.get("output", "")[:8192]
+            workspace = self.workspace_receipt(run_id)
             return {
                 "id": run_id,
                 "project_name": meta["project_name"],
@@ -463,6 +545,8 @@ class Manager:
                 "patch": patch_text,
                 "review": last_review,
                 "pending_events": pending,
+                "workspace": {**workspace, "owned_active": run_id in self.workspace_children}
+                if workspace is not None else None,
                 "admission_block": self.admission(),
             }
 
@@ -532,6 +616,8 @@ class Manager:
                 "REVIEW_FIELDS",
             )
             require(request["verdict"] in ["accepted", "rejected"], "REVIEW_VERDICT")
+            workspace = self.workspace_receipt(request["id"])
+            require(workspace is None or workspace["status"] != "PREPARING", "WORKSPACE_ACTIVE_OR_UNRESOLVED")
             require(
                 isinstance(request["note"], str) and len(request["note"]) <= 2000,
                 "REVIEW_NOTE",
@@ -605,6 +691,13 @@ class Manager:
         }
 
     def close(self):
+        for run_id in list(self.workspace_children):
+            try:
+                self.stop_workspace(run_id)
+            except Refused:
+                pass
+        for run_id in list(self.workspace_children):
+            self.workspace_receipt(run_id)
         for run_id in list(self.children):
             try:
                 self.stop(run_id)
@@ -734,6 +827,11 @@ def make_handler(manager, token, origin):
                     result = manager.project_preview(request)
                 elif path == "/api/project-save":
                     result = manager.project_save(request)
+                elif path == "/api/workspace":
+                    result = manager.create_workspace(request)
+                elif path == "/api/workspace-stop":
+                    require(isinstance(request, dict) and set(request) == {"id"}, "STOP_FIELDS")
+                    result = manager.stop_workspace(request["id"])
                 elif path == "/api/stop":
                     require(
                         isinstance(request, dict) and set(request) == {"id"},
