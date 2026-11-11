@@ -20,7 +20,7 @@
     <div class="sidebar-footer"><span class="status-dot"></span> Local workspace<small>One task at a time. Your source stays in place.</small></div>
   </aside>
   <main>
-    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.9</span></h1><p>A clear view from task to reviewed patch.</p></div><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></header>
+    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.10</span></h1><p>A clear view from task to reviewed patch.</p></div><div class="header-actions"><button id="project-check-open" class="secondary" type="button" aria-controls="project-check-panel" aria-expanded="false" disabled>Check bundle against project</button><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></div></header>
     <div id="alert" role="alert" hidden></div>
     <section id="comparison-panel" class="composer panel comparison-panel" aria-labelledby="comparison-title" hidden>
       <div class="panel-heading"><div><div class="eyebrow">PRIVATE SAVED EVIDENCE</div><h2 id="comparison-title">Compare runs</h2></div><button id="comparison-close" class="secondary" type="button">Close comparison</button></div>
@@ -43,6 +43,16 @@
       <div class="bundle-actions"><button id="bundle-preview" class="secondary" type="button" disabled>Preview private bundle</button><button id="bundle-download" class="primary" type="button" disabled>Download private bundle</button></div>
       <p id="bundle-status" class="muted" role="status">Preview the accepted artifact before downloading.</p>
       <div id="bundle-result" hidden></div>
+    </section>
+    <section id="project-check-panel" class="composer panel project-check-panel" aria-labelledby="project-check-title" hidden>
+      <div class="panel-heading"><div><div class="eyebrow">PRIVATE STATIC OBSERVATIONS</div><h2 id="project-check-title">Check bundle against project</h2></div><button id="project-check-close" class="secondary" type="button">Close project check</button></div>
+      <p class="muted project-check-boundary">Compare an unsigned private bundle with the selected configured project. This does not extract or apply files, execute task checks, authorize Run or establish authenticity. Observations are sequential, may become stale and are not an atomic filesystem snapshot.</p>
+      <form id="project-check-form">
+        <label>Configured project<select id="project-check-project" required disabled></select></label>
+        <div class="form-grid project-check-inputs"><label>Private local ZIP<input id="project-check-file" type="file" accept=".zip,application/zip" required disabled aria-describedby="project-check-file-note"><small id="project-check-file-note" class="muted">1 byte–2 MiB. The ZIP is sent only when you click Check selected project. It is not stored by this endpoint.</small></label><label>Trusted whole-archive SHA-256 · optional<input id="project-check-sha" type="text" pattern="[0-9a-f]{64}" maxlength="64" autocomplete="off" spellcheck="false" placeholder="64 lowercase hexadecimal characters" disabled><small class="muted">A supplied digest checks these archive bytes. Embedded unsigned checksums do not establish authenticity.</small></label></div>
+        <div class="composer-bottom"><p id="project-check-status" class="muted" role="status">Select a project and a private ZIP, then check explicitly.</p><button id="project-check-submit" class="primary" type="submit" disabled>Check selected project</button></div>
+      </form>
+      <div id="project-check-result" hidden></div>
     </section>
     <div id="normal-workspace">
     <section id="setup-panel" class="composer panel setup-panel" aria-labelledby="setup-title" hidden>
