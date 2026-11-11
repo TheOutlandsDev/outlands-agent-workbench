@@ -26,6 +26,7 @@ from run_comparison import compare_runs
 from project_readiness import summarize as summarize_readiness
 from patch_bundle import MAX_ARCHIVE, build_bundle, verify_bundle
 from bundle_project_check import check_project
+from bundle_workspace import prepare as prepare_bundle_workspace
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -268,7 +269,7 @@ class Manager:
                 "DATA_OUTSIDE_SOURCE",
             )
         private_dir(self.data)
-        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions"]:
+        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces"]:
             private_dir(self.data / name)
         self.server_lock = os.open(
             self.data / "server.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
@@ -282,6 +283,8 @@ class Manager:
         self.lock = threading.RLock()
         self.children = {}
         self.workspace_children = {}
+        self.bundle_workspace_children = {}
+        self.bundle_workspace_draft = None
 
     @staticmethod
     def readiness_fingerprint(path, expected):
@@ -432,6 +435,27 @@ class Manager:
                 if not valid:
                     note("ADMISSION_RECORD_INVALID")
             elif not verified_workspace_receipt(receipt):
+                note("ADMISSION_RECORD_INVALID")
+        try:
+            names, bundle_truncated = self.readiness_entries(self.data / "bundle-workspaces", lambda _: True, 200)
+        except OSError:
+            names, bundle_truncated = [], False
+            note("ADMISSION_UNAVAILABLE")
+        if bundle_truncated:
+            truncated = True
+            note("ADMISSION_RECORD_LIMIT")
+        for name in names:
+            if ID.fullmatch(name) is None:
+                note("ADMISSION_RECORD_INVALID")
+                continue
+            workspaces += 1
+            receipt = record(self.data / "bundle-workspaces", name + "/receipt.json", 262144)
+            if (type(receipt) is not dict or receipt.get("id") != name
+                    or receipt.get("source_applied") is not False):
+                note("ADMISSION_RECORD_INVALID")
+            elif type(receipt.get("status")) is str and receipt["status"] in {"PREPARING", "FAILED", "INTERRUPTED"}:
+                note("WORKSPACE_ACTIVE_OR_UNRESOLVED")
+            elif not verified_workspace_receipt({**receipt, "result_sha256": receipt.get("bundle_sha256")}):
                 note("ADMISSION_RECORD_INVALID")
         return {"hold": hold, "jobs_inspected": jobs, "workspaces_inspected": workspaces,
                 "truncated": truncated, "reasons": reasons}
@@ -1004,6 +1028,12 @@ class Manager:
             receipt = self.workspace_receipt(row["id"])
             if receipt is not None and not verified_workspace_receipt(receipt):
                 return "WORKSPACE_ACTIVE_OR_UNRESOLVED"
+        try:
+            for receipt in self.bundle_workspaces()["workspaces"]:
+                if receipt["status"] != "VERIFIED":
+                    return "BUNDLE_WORKSPACE_ACTIVE_OR_UNRESOLVED"
+        except (Refused, OSError, ValueError, KeyError, TypeError):
+            return "BUNDLE_WORKSPACE_NEEDS_INSPECTION"
         if any(
             r["state"] in ["RUNNING", "STOP_REQUESTED", "RECOVERY_REQUIRED"]
             for r in rows
@@ -1328,6 +1358,162 @@ class Manager:
             require(len(canonical(result)) <= 131072, "PROJECT_CHECK_OUTPUT_LIMIT")
             return result
 
+    def _bundle_workspace_prepare(self, project_id, raw, expected_sha256=None):
+        require(type(project_id) is str and project_id in self.projects, "BUNDLE_WORKSPACE_PROJECT_UNKNOWN")
+        require(type(raw) is bytes and 0 < len(raw) <= MAX_ARCHIVE, "BUNDLE_WORKSPACE_INPUT_LIMIT")
+        project = self.projects[project_id]
+        for path, expected in [(self.config_path, self.config_raw), (project["task"], project["task_raw"])]:
+            require(self.readiness_fingerprint(path, expected)["status"] == "MATCH",
+                    "BUNDLE_WORKSPACE_PROJECT_CHANGED")
+        prepared = prepare_bundle_workspace(raw, project["source"], project["task_raw"], expected_sha256)
+        binding = {"version": 1, "project_id": project_id, "bundle_sha256": sha(raw),
+                   "task_sha256": sha(project["task_raw"]), "config_sha256": sha(self.config_raw),
+                   "prepared": prepared["summary"]}
+        return project, prepared, sha(canonical(binding))
+
+    def bundle_workspace_preview(self, project_id, raw, expected_sha256=None):
+        """One memory-only, expiring review; no admission reconciliation or execution."""
+        with self.lock:
+            self.bundle_workspace_draft = None
+            project, prepared, pin = self._bundle_workspace_prepare(project_id, raw, expected_sha256)
+            now = time.time_ns() // 1000000
+            result = {"version": 1, "preview_id": secrets.token_hex(8), "preview_sha256": pin,
+                      "project": {"id": project_id, "name": project["name"]},
+                      "bundle_sha256": sha(raw), "task_sha256": sha(project["task_raw"]),
+                      "config_sha256": sha(self.config_raw), "expires_at_ms": now + 300000,
+                      "workspace_ready": True, "patch_sha256": prepared["summary"]["patch_sha256"],
+                      "files": prepared["summary"]["files"],
+                      "comparison": check_project(raw, project["source"], project["task_raw"], sha(raw))}
+            require(result["comparison"]["status"] == "BASELINE_MATCH", "BUNDLE_WORKSPACE_BASELINE_REQUIRED")
+            require(len(canonical(result)) <= 131072, "BUNDLE_WORKSPACE_OUTPUT_LIMIT")
+            self.bundle_workspace_draft = {"response": result, "raw": raw,
+                                           "deadline": time.monotonic() + 300}
+            return copy.deepcopy(result)
+
+    def bundle_workspace_create(self, request):
+        with self.lock:
+            require(type(request) is dict and set(request) == {"preview_id", "preview_sha256"},
+                    "BUNDLE_WORKSPACE_FIELDS")
+            draft = self.bundle_workspace_draft
+            require(draft is not None, "BUNDLE_WORKSPACE_PREVIEW_REQUIRED")
+            value = draft["response"]
+            require(request["preview_id"] == value["preview_id"]
+                    and request["preview_sha256"] == value["preview_sha256"], "BUNDLE_WORKSPACE_PREVIEW_CHANGED")
+            if time.monotonic() >= draft["deadline"] or time.time_ns() // 1000000 >= value["expires_at_ms"]:
+                self.bundle_workspace_draft = None
+                raise Refused("BUNDLE_WORKSPACE_PREVIEW_EXPIRED")
+            blocked = self.admission()
+            require(blocked is None, blocked or "ADMISSION")
+            project_id = value["project"]["id"]
+            project, prepared, pin = self._bundle_workspace_prepare(project_id, draft["raw"], value["bundle_sha256"])
+            require(pin == value["preview_sha256"], "BUNDLE_WORKSPACE_PREVIEW_CHANGED")
+            require(self.jdk_home is not None or not any(isinstance(spec, dict) and spec.get("kind") == "java-main"
+                    for spec in project["definition"]["checks"].values()), "JDK_REQUIRED")
+            # Consume the draft before any persistent work. A partial failure is never a retry token.
+            self.bundle_workspace_draft = None
+            workspace_id = secrets.token_hex(8)
+            job = self.data / "bundle-workspaces" / workspace_id
+            job.mkdir(mode=0o700, exist_ok=False)
+            receipt = {"version": 1, "format": "outlands-bundle-workspace-v1", "id": workspace_id,
+                       "project_id": project_id, "status": "PREPARING", "created": int(time.time()),
+                       "bundle_sha256": value["bundle_sha256"], "preview_sha256": pin,
+                       "config_sha256": value["config_sha256"], "task_sha256": value["task_sha256"],
+                       "patch_sha256": prepared["summary"]["patch_sha256"], "source_applied": False}
+            write_new(job / "receipt.json", canonical(receipt))
+            try:
+                write_new(job / "task.json", project["task_raw"])
+                write_new(job / "bundle.zip", draft["raw"])
+                worker_request = {"version": 1, "id": workspace_id, "project_id": project_id,
+                                  "source": str(project["source"]), "config_path": str(self.config_path),
+                                  "config_sha256": value["config_sha256"], "task_path": str(project["task"]),
+                                  "task_sha256": value["task_sha256"], "bundle_sha256": value["bundle_sha256"],
+                                  "preview_sha256": pin}
+                write_new(job / "request.json", canonical(worker_request))
+                command = [sys.executable, "-B", str(HERE / "bundle_workspace.py"), "--job-dir", str(job)]
+                if self.jdk_home is not None:
+                    command += ["--jdk-home", str(self.jdk_home)]
+                fd = os.open(job / "worker.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                log = os.fdopen(fd, "wb")
+                try:
+                    child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                             start_new_session=True,
+                                             env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "PYTHONNOUSERSITE": "1"})
+                except BaseException:
+                    log.close()
+                    raise
+                self.bundle_workspace_children[workspace_id] = (child, log)
+            except (OSError, ValueError, Refused, subprocess.SubprocessError):
+                receipt.update(status="FAILED", reason="BUNDLE_WORKSPACE_START_FAILED", finished=int(time.time()))
+                replace_json(job / "receipt.json", receipt)
+                raise Refused("BUNDLE_WORKSPACE_START_FAILED") from None
+            return self.bundle_workspace_view(workspace_id)
+
+    def bundle_workspace_view(self, workspace_id):
+        with self.lock:
+            require(type(workspace_id) is str and ID.fullmatch(workspace_id) is not None,
+                    "BUNDLE_WORKSPACE_ID")
+            job = self.data / "bundle-workspaces" / workspace_id
+            entry = self.bundle_workspace_children.get(workspace_id)
+            exited = entry is not None and entry[0].poll() is not None
+            if exited:
+                child, log = self.bundle_workspace_children.pop(workspace_id)
+                log.close()
+            raw = readiness_read_file(job, "receipt.json", 262144)
+            receipt = parse(raw)
+            require(type(receipt) is dict and receipt.get("id") == workspace_id
+                    and type(receipt.get("version")) is int and receipt["version"] == 1
+                    and receipt.get("source_applied") is False and type(receipt.get("status")) is str
+                    and receipt["status"] in {"PREPARING", "VERIFIED", "FAILED", "INTERRUPTED"},
+                    "BUNDLE_WORKSPACE_RECORD_INVALID")
+            require(all(type(receipt.get(key)) is str and re.fullmatch(r"[0-9a-f]{64}", receipt[key]) is not None
+                        for key in ["bundle_sha256", "preview_sha256", "config_sha256", "task_sha256", "patch_sha256"]),
+                    "BUNDLE_WORKSPACE_RECORD_INVALID")
+            require(type(receipt.get("project_id")) is str and ALIAS.fullmatch(receipt["project_id"]) is not None,
+                    "BUNDLE_WORKSPACE_RECORD_INVALID")
+            if receipt["status"] == "VERIFIED":
+                require(verified_workspace_receipt({**receipt, "result_sha256": receipt["bundle_sha256"]}),
+                        "BUNDLE_WORKSPACE_RECORD_INVALID")
+            if exited:
+                if receipt["status"] == "PREPARING":
+                    receipt.update(status="INTERRUPTED", reason="BUNDLE_WORKSPACE_INTERRUPTED", finished=int(time.time()))
+                    replace_json(job / "receipt.json", receipt, raw)
+            return {**receipt, "owned_active": workspace_id in self.bundle_workspace_children}
+
+    def bundle_workspaces(self):
+        with self.lock:
+            names, truncated = self.readiness_entries(self.data / "bundle-workspaces", lambda _: True, 200)
+            require(not truncated, "BUNDLE_WORKSPACE_RECORD_LIMIT")
+            result = []
+            for name in names:
+                require(ID.fullmatch(name) is not None, "BUNDLE_WORKSPACE_RECORD_INVALID")
+                row = self.bundle_workspace_view(name)
+                result.append({key: row[key] for key in ["version", "id", "project_id", "status", "created",
+                              "bundle_sha256", "preview_sha256", "source_applied", "owned_active", "finished", "reason",
+                              "path", "branch", "baseline_commit"] if key in row})
+            response = {"version": 1, "workspaces": result}
+            require(len(canonical(response)) <= 262144, "BUNDLE_WORKSPACE_OUTPUT_LIMIT")
+            return response
+
+    def bundle_workspace_stop(self, workspace_id):
+        with self.lock:
+            self.bundle_workspace_view(workspace_id)
+            entry = self.bundle_workspace_children.get(workspace_id)
+            require(entry is not None and entry[0].poll() is None, "NO_OWNED_ACTIVE_BUNDLE_WORKSPACE")
+            child = entry[0]
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                child.wait()
+            return self.bundle_workspace_view(workspace_id)
+
     def _bundle_bytes(self, run_id):
         """Verify saved accepted artifacts without live reconciliation or writes."""
         require(type(run_id) is str and ID.fullmatch(run_id) is not None, "BUNDLE_RUN_UNKNOWN")
@@ -1484,6 +1670,14 @@ class Manager:
         }
 
     def close(self):
+        self.bundle_workspace_draft = None
+        for workspace_id in list(self.bundle_workspace_children):
+            try:
+                self.bundle_workspace_stop(workspace_id)
+            except Refused:
+                pass
+        for workspace_id in list(self.bundle_workspace_children):
+            self.bundle_workspace_view(workspace_id)
         for run_id in list(self.workspace_children):
             try:
                 self.stop_workspace(run_id)
@@ -1596,6 +1790,10 @@ def make_handler(manager, token, origin):
                 elif path.startswith("/api/bundle-preview/"):
                     run_id = path.removeprefix("/api/bundle-preview/")
                     self.send(200, canonical(manager.bundle_preview(run_id)))
+                elif path == "/api/bundle-workspaces":
+                    self.send(200, canonical(manager.bundle_workspaces()))
+                elif path.startswith("/api/bundle-workspace/"):
+                    self.send(200, canonical(manager.bundle_workspace_view(path.removeprefix("/api/bundle-workspace/"))))
                 else:
                     self.send(404, canonical({"error": "NOT_FOUND"}))
             except (Refused, OSError, ValueError, KeyError, TypeError) as exc:
@@ -1619,7 +1817,7 @@ def make_handler(manager, token, origin):
                 self.guard(True)
                 require(self.headers.get("Origin") == origin, "ORIGIN_REFUSED")
                 path = urlsplit(self.path).path
-                if path.startswith("/api/bundle-project-check/"):
+                if path.startswith("/api/bundle-project-check/") or path.startswith("/api/bundle-workspace-preview/"):
                     require(self.headers.get("Transfer-Encoding") is None, "PROJECT_CHECK_INPUT")
                     require(self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
                             == "application/zip", "PROJECT_CHECK_INPUT")
@@ -1634,8 +1832,12 @@ def make_handler(manager, token, origin):
                             "PROJECT_CHECK_INPUT")
                     raw = self.rfile.read(length)
                     require(len(raw) == length, "PROJECT_CHECK_INPUT")
-                    result = manager.bundle_project_check(path.removeprefix("/api/bundle-project-check/"),
-                                                          raw, hashes[0] if hashes else None)
+                    if path.startswith("/api/bundle-project-check/"):
+                        result = manager.bundle_project_check(path.removeprefix("/api/bundle-project-check/"),
+                                                              raw, hashes[0] if hashes else None)
+                    else:
+                        result = manager.bundle_workspace_preview(path.removeprefix("/api/bundle-workspace-preview/"),
+                                                                  raw, hashes[0] if hashes else None)
                     self.send(200, canonical(result))
                     return
                 require(
@@ -1643,9 +1845,17 @@ def make_handler(manager, token, origin):
                     == "application/json",
                     "JSON_REQUIRED",
                 )
+                if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop"}:
+                    lengths = self.headers.get_all("Content-Length", [])
+                    require(self.headers.get("Transfer-Encoding") is None and len(lengths) == 1
+                            and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
+                            "BUNDLE_WORKSPACE_INPUT")
                 length = int(self.headers.get("Content-Length", "0"))
                 require(0 < length <= 32768, "REQUEST_LIMIT")
-                request = parse(self.rfile.read(length))
+                raw = self.rfile.read(length)
+                if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop"}:
+                    require(len(raw) == length, "BUNDLE_WORKSPACE_INPUT")
+                request = parse(raw)
                 if path == "/api/start":
                     result = manager.start(request)
                 elif path == "/api/project-preview":
@@ -1661,6 +1871,11 @@ def make_handler(manager, token, origin):
                 elif path == "/api/workspace-stop":
                     require(isinstance(request, dict) and set(request) == {"id"}, "STOP_FIELDS")
                     result = manager.stop_workspace(request["id"])
+                elif path == "/api/bundle-workspace-create":
+                    result = manager.bundle_workspace_create(request)
+                elif path == "/api/bundle-workspace-stop":
+                    require(type(request) is dict and set(request) == {"id"}, "STOP_FIELDS")
+                    result = manager.bundle_workspace_stop(request["id"])
                 elif path == "/api/stop":
                     require(
                         isinstance(request, dict) and set(request) == {"id"},
