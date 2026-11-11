@@ -46,6 +46,14 @@ version 0.9 archive verifier without changing that format. Source comparisons
 and saved fixture evidence do not represent new model runs. Uploaded archives,
 comparison reports and private project records remain excluded from the public
 source package.
+Version 0.11 adds strict in-memory bundle patch reconstruction, private
+selected-file Git review workspaces, expiring preview pins, owned-worker
+lifecycle/admission integration, browser controls and invented Python/Java
+regression fixtures. It reuses the existing archive verifier, Git helper and
+fixed isolated check runners. No external patch implementation is bundled.
+Offline rerun checks are separate from the invented bundle's saved check rows;
+neither is a real-model qualification run. Private bundles, generated repositories,
+requests, check output and histories remain excluded from the public source.
 Qualification trials also used private copies of two existing offline planning
 utilities with fictional inputs. Their source, proposed patches, histories and
 records are not included in this public repository or newly licensed by it.
