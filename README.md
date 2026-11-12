@@ -5,7 +5,12 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.26 adds **Saved Review History**: explicitly list bounded observed
+Version 0.27 adds **Complete Review Workflow Verification**: the restricted
+offline harness can inspect the completed scripted run through normal history,
+saved evidence, the explicit review-history list and selected detail. Restart
+inspection reuses the same saved artifacts without another worker or check.
+This is offline scripted-workflow evidence, not real-model or Java-agent
+qualification. It retains **Saved Review History**: explicitly list bounded observed
 review receipts for one selected run, then inspect an earlier verdict, private
 note, recorded time and artifact hashes without replacing its current decision.
 Damaged or partial history remains visible as uncertain; historical inspection
@@ -1566,6 +1571,36 @@ Keep fixture configuration, runtime records, source copies, logs, claims,
 diagnostics, check output, review/export receipts and downloaded patches private.
 See [VALIDATION.md](VALIDATION.md) for the qualified scope and retained outcomes.
 
+## Verify the completed offline review workflow
+
+The complete acceptance runner below first creates one new private scripted
+Python workflow and runs its actual fixed checks. A later dependent verification
+stage reuses that same-version completed accepted fixture: normal history and
+selected-run view, explicit saved-history search and saved-evidence review,
+review-history list and selected historical detail. It restarts the same fixture
+and compares its saved decision, note, time and artifact hashes without another
+Run, acceptance, export, worker or check. Prior separate Java checks remain
+independent evidence; no Java agent or real model is qualified.
+
+The restricted offline server permits only the two exact additional read-only
+POST history routes and records their request counts separately. Existing
+source-bound launch receipts, one-attempt admission, Host/origin/session guards,
+JSON framing, file safety/pin checks and response bounds are unchanged. A saved
+fixture from another source directory is not silently adopted or rewritten.
+The dependent verification stage refuses missing dependency or failed/partial
+evidence without initialization, cleanup or retry.
+
+After the runner finishes, use the existing offline-workflow serve command with
+its completed private workflow root and the exact same source checkout to
+inspect it in a browser. Do not click Run or Accept again. Normal completed
+history and the selected result remain available; choose Search run history,
+search the saved run ID, explicitly review its saved evidence, list receipt
+history, select a receipt and inspect it. Stop and restart the same command,
+reload the page and repeat inspection. A new server session clears cached
+cards. This browser check verifies completed-feed composition and persistence;
+it does not show the earlier running-to-completed transition. Keep all receipts,
+histories, notes, worker evidence and exported patches private.
+
 ## Run acceptance checks
 
 Use a shell with umask 022 for the complete suite: an existing negative
@@ -1581,7 +1616,7 @@ new acceptance directory under an owner-only private parent.
 )
 ```
 
-Final v0.26 offline qualification passed 1,117 unit methods across 50 suites, including
+Final v0.27 offline qualification passed 1,145 unit methods across 52 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1692,6 +1727,17 @@ VALIDATION.md records that limit, the retained socket-denied sandbox attempt,
 corrected frontend collector, native completion and two blocked unclassified
 browser routes. These local checks are not a GitHub CI or real-model claim.
 
+Version 0.27 adds 14 restricted-harness methods and 14 dependent-verification
+methods. The final native runner passes 1,145 methods across 52 suites. The new
+last stage reads the earlier actual same-source scripted workflow through normal
+history/view, metadata search/open, v2 saved review and receipt list/detail, then
+repeats after a fresh-token restart. It preserves the complete fixture and starts
+zero new workers, checks, review writes or exports. The 624 inherited isolated
+frontend checks pass with unchanged JavaScript/CSS. Two read-only native browser
+sessions verify the same completed normal feed and exact note/time/hash persistence;
+they do not observe the earlier RUNNING transition. VALIDATION.md records retained
+test corrections, exact normal CLI receipt additions and qualification limits.
+
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
@@ -1704,7 +1750,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.26 adds no real-model qualification. The offline harness, saved-run reviews, preset previews, named task presets, snapshot review workspaces,
+Version 0.27 adds no real-model qualification. The offline harness, saved-run reviews, preset previews, named task presets, snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context

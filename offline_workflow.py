@@ -41,7 +41,8 @@ DATA_DIRS = {"jobs", "tasks", "runs", "state", "projects", "workspaces", "revisi
              "workspace-rechecks", "snapshot-exports", "snapshot-workspaces", "snapshot-workspace-rechecks",
              "snapshot-reexports", "snapshot-workspace-edits", "task-presets"}
 COUNTER_KEYS = ("start_requests", "start_attempts", "worker_launches", "history_requests", "view_requests",
-                "metadata_search_requests", "metadata_open_requests", "saved_review_requests", "review_requests",
+                "metadata_search_requests", "metadata_open_requests", "saved_review_requests",
+                "saved_review_history_requests", "saved_review_history_entry_requests", "review_requests",
                 "export_requests", "parent_provider_attempts", "parent_outbound_attempts", "denied_requests")
 PROTECTED = ("workspace/config.json", "workspace/task.json", "workspace/project/calculator.py",
              "workspace/project/test_calculator.py")
@@ -512,7 +513,9 @@ def offline_handler(manager, token, origin, counters):
             path = urlsplit(self.path).path
             routes = {"/api/start": "start_requests", "/api/review": "review_requests", "/api/stop": None,
                       "/api/run-history-search": "metadata_search_requests", "/api/run-history-open": "metadata_open_requests",
-                      "/api/run-history-review": "saved_review_requests"} if post else {
+                      "/api/run-history-review": "saved_review_requests",
+                      "/api/saved-review-history": "saved_review_history_requests",
+                      "/api/saved-review-history-entry": "saved_review_history_entry_requests"} if post else {
                       "/": None, "/app.js": None, "/style.css": None, "/api/config": None,
                       "/api/history": "history_requests", "/api/comparison-history": None}
             if not post:

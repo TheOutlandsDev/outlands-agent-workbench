@@ -1,137 +1,111 @@
-# Version 0.26 validation
+# Version 0.27 validation
 
-Native offline qualification passed **1,117 unit methods across 50 suites**:
-1,079 prior methods, 21 pure history methods and 17 new controller/HTTP methods.
-All prior and new acceptance stages passed. All **117 qualified code, static
-and example input hashes** stayed unchanged through native and browser checks.
-Final isolated frontend qualification passed **624 checks**: 255 inherited and
-369 history checks, including 16 actual pure-helper fixture cases and 16 guarded
-controller review/list/detail fixture pairs. These are local results, not CI.
+Native offline qualification passed **1,145 unit methods across 52 suites**:
+1,117 inherited methods plus 14 restricted-harness and 14 dependent-verification
+methods. All earlier and new acceptance stages passed on the first complete
+native run. All **120 qualified code, static and example hashes** stayed unchanged.
+The **624 inherited isolated frontend checks** passed (255 inherited checks and
+369 history checks). These are local results, not GitHub CI.
 
-| Area | Observed result |
-| --- | --- |
-| History | Ascending canonical receipt ordinals; list omits notes, explicit detail preserves one full valid note |
-| Decision separation | Inspecting an older acceptance never replaces the current Stale or Unknown decision |
-| Artifact relation | Each usable receipt separately matches, differs from or cannot compare with current saved artifacts |
-| Formatting | Canonical result-content hash follows the existing writer; raw result-file fingerprint remains separate |
-| Damage | Missing, malformed, gapped, partial and read-limited observations remain explicit without raw-content echoes |
-| Safety | Original owner-only no-follow bounded inspector reused, including unread-record safety/identity checks |
-| Freshness | Four list pins, five detail pins, evidence/history double inspections and strict selected-row equality |
-| UI | Explicit list/select/inspect, literal text notes, large safe epochs, context/busy/stale guards and cached-view clearing |
-| Preservation | All 120 prior Manager methods, current v2 decision reader, writer/export/Run and original pure helpers unchanged |
-| Actual receipt | Earlier completed accepted scripted Python receipt read through memory HTTP without another worker/check |
-| Separate checks | Actual copied-source Python four tests and Java one protected-main check passed independently of seeded history |
-| Restart | Same selected Java historical note, time and hashes returned under unrelated invented hold |
-| Teardown | Two owned native browser sessions stopped successfully; direct loopback probe confirmed closed listener |
+## Scope and evidence classes
 
-## Retained attempts and evidence classes
+The restricted offline harness adds exactly two saved-history POST routes and
+separate request counters. It delegates the existing four-pin list and five-pin
+selected-detail handlers. Existing request authentication, framing and size
+bounds remain intact. Production engine, saved-review readers, review writer,
+export gates, admission, worker implementation and earlier offline-workflow QA
+are unchanged. Browser JavaScript/CSS are identical to version 0.26; HTML changes
+only the version badge.
 
-The 21-method pure suite passed on its first focused run. Controller qualification
-first passed 16 methods, then 17 after a missing/existing-actual-dependency test
-was added. Invented dependency test receipts and fake check outcomes are not
-actual worker evidence. The complete native runner separately exercises actual
-scripted tasks and isolated checks.
+The 14 new engine tests and 14 integration tests use deliberately invented
+fixtures, fake check results and fabricated worker/Java/prior-report receipts.
+They test strict routing, authentication, framing, exact pins, malformed and
+missing dependencies, source mismatch, stale evidence and read-only restart.
+These unit fixtures are not actual worker or Java execution evidence.
 
-The first new frontend collector failed before invoking validators because it
-extracted only the first line of a multiline helper. The failed script/log remain
-retained. Correcting that collector required no application fix. Later source
-improvements added defensive complete saved-review-context validation, Task-input
-invalidation and exact note equality when a selected entry is also the current
-card's highest usable receipt. Final 624-check qualification covers those changes,
-all actual synthetic helper/controller outputs, exact requests, malformed fields,
-bounds, Unicode/control notes, stale responses, busy locks and unchanged current
-card/three-pin handler behavior. Isolated Node checks are not browser acceptance.
+The first focused integration attempt passed 11 of 12 methods and retained one
+incorrect spy assertion: normal run view also calls admission, which legitimately
+reads history again. The expectation was corrected without changing production
+behavior. Two additional cases tightened dependency-counter and receipt checks;
+the final 14-method focused suite passed. The failed log remains private. No
+consumed actual worker/model attempt was retried or cleaned up.
 
-The first complete-run attempt inside the execution sandbox stopped in unchanged
-HTTP tests because socket creation returned EPERM, after 55 agent methods passed.
-It never reached the actual acceptance workflow. That partial root and failure
-logs remain retained. A fresh native qualification root then passed the complete
-runner using identical source under the documented umask 022. No consumed actual
-agent/model attempt was replayed or cleaned up. No real model was called.
+## Actual native workflow verification
 
-The new acceptance requires the earlier runner stage's completed accepted scripted
-Python receipt. Missing dependency refuses without fixture recreation or rerun.
-Read-only list/detail HTTP calls preserve its entire private fixture and current
-decision, with zero new workers or checks. Separate seeded Python/Java histories
-cover matching accepted/rejected entries, stale artifacts, invalid latest content,
-gaps, formatting-only changes, empty catalogs, oversized records and absent run
-directories. Current decisions and all private bytes/modes remain identical across
-reads and restart. Independent selected-copy checks pass four Python tests and
-one Java protected main; one Java test is one main program, not assertion count.
-The existing Python/Java launcher, isolation, Git/workspace and other acceptance
-stages remain covered by the full runner.
+The existing earlier acceptance stage creates a fresh same-source private
+fixture and runs one actual scripted Python worker with real isolated baseline,
+agent and final checks (four tests at each phase). Its separate invented Java
+fixture passes one actual protected-main check; that is one main program, not
+an assertion count. This is scripted execution, with no real-model inference.
+The existing full runner also retains its Python/Java launcher, isolation,
+Git/workspace, refresh, comparison, readiness, bundle and snapshot acceptances.
 
-## Browser observations and limits
+The new last stage requires that earlier completed accepted workflow and its
+exact report, export, worker-exit and Java receipt hashes. It verifies source-bound
+launch arguments before opening the fixture. Missing, malformed, partial or
+foreign-source dependencies refuse without recreation, adoption, cleanup or retry.
+It reads the earlier Java evidence without running another Java check or agent.
 
-A private fixture contains 16 invented Python/Java histories. Its normal live
-history feed is deliberately empty to isolate saved-only inspection. Metadata
-search, v2 saved review and new list/detail routes are actual guarded Manager/HTTP
-methods. This fixture does not qualify normal live-feed reconciliation or actual
-model-generated outcomes.
+Using the restricted HTTP handler, the stage keeps normal history and run view
+real, explicitly searches and opens saved metadata, reads the v2 saved review,
+lists receipts and inspects the selected receipt. It repeats with a fresh manager,
+token and counters after restart. The same note, recorded time, current decision
+and artifact pins return exactly. Every original fixture byte and mode remains
+unchanged. Guard attempts and new worker launches, checks, model requests, review
+writes and export requests are all zero. Saved-only guards are scoped to the
+explicit saved routes; terminal history/view refresh is not replaced or hidden.
 
-Initial sandbox browser setup created its complete baseline but socket creation
-was denied before a listener or read began; all route/execution counters were
-zero. That startup/closure evidence remains retained. Two later native read-only
-server sessions reused the complete baseline without resetting it.
+## Browser observations
 
-Browser checks covered an earlier rejected note while current decision stayed
-Stale, an older acceptance while invalid latest evidence kept current Unknown,
-invalid detail with no note, canonical/raw formatting distinction, gaps, read
-limits, empty and missing catalogs, literal combining/astral Unicode, CRLF, NUL
-and markup, and exact fallback for an out-of-browser-range safe epoch. Read
-flows preserved the unsent Task draft, model/project values, comparison slots
-and export controls. A declared additive invented receipt invalidated an old
-evidence pin: one explicit detail request refused, discarded old cards and
-required a new explicit search/review/list. It was not automatically retried.
-Fresh review kept current Unknown while still allowing an older observed entry.
+Two owned native browser sessions use that same completed current-source actual
+fixture through the public offline CLI and unchanged normal history/view feed.
+A private observational wrapper delegates those routes and records finite request
+paths/statuses outside the fixture. It refuses task, review-write and export
+actions and guards worker, check, provider, process, Git and outbound paths.
 
-After a second declared invented addition created an unrelated hold, restart
-cleared cached cards and kept Task/Run disabled. Explicit search/review/list/detail
-returned identical Java historical note, time and artifact hashes. Across both
-sessions there were 11 searches, 11 saved reviews, 11 lists and 10 detail requests,
-including one intentional stale refusal. All 162 original fixture files and 35
-directories retained bytes/modes; only the two declared invented files were
-added, giving 164 files and 35 directories. Both browser console captures had
-zero warnings/errors. Execution, provider, outbound, process, Git, check and
-read-guard-violation counters were zero. Two other blocked route requests occurred,
-one per successful session; their pathnames/origins/purposes were not recorded
-and are not inferred. Both owned servers exited successfully, and a direct
-native ECONNREFUSED probe verified the loopback listener closed.
+The initial page shows one completed ready-for-review scripted run, its original
+plan. Task remains read-only for the scripted model. Explicit search,
+saved-evidence review, history list, selection and detail show the existing
+acceptance, private note, time and exact result/patch hashes. No Run, Accept,
+Reject or download action is requested. Model/project values, Task and export
+controls remain unchanged. Restart clears cached review cards; repeating those
+explicit reads returns identical decision, note, time, hashes and form state.
+The browser does not observe the earlier RUNNING-to-completed transition.
 
-Python-level guards are not operating-system-wide packet auditing. Invented
-seeded observations, actual scripted workflow evidence, isolated frontend checks
-and separate fixed-check execution are distinct evidence classes. Private
-fixtures, receipts, configuration, histories, notes, logs, patches and screenshots
-remain outside the public source.
+Across both sessions, normal history and run view each receive six requests;
+search, saved review, history list and selected detail each receive two. The
+wrapper records two denied GET `/favicon.ico` requests, each returning 403
+`SESSION_REQUIRED`; no cause is inferred beyond these recorded request paths and
+responses. Browser warning/error captures are empty. All execution/write guards
+and worker/start/check/review-write/export/provider/outbound counters remain zero.
 
-## Protocol, bounds and trust
+Each public CLI session adds only its exact new session/shutdown receipt pair.
+Every preexisting fixture file and directory retains bytes and modes. These four
+normal CLI receipts across two sessions do not alter runtime, worker, review,
+acceptance or export evidence. Both servers exit successfully; a direct native
+ECONNREFUSED probe confirms the loopback listener closed.
 
-The existing v2 saved-review envelope and three-pin request are unchanged. New
-list requests carry exact run ID, metadata, history and evidence hashes; detail
-adds a canonical selected receipt name. Each response is version 1 with the
-same four pins and one bounded history object. List rows exclude every note;
-detail adds the full valid selected note or null for an unusable record. Unknown
-selection refuses rather than falling back. Individually usable observed entries
-can remain inspectable in damaged catalogs without establishing current decision
-or globally latest history.
+## Limits, privacy and licensing
 
-The reused inspector admits at most 1,024 directory entries plus a lookahead,
-256 event names and 100 canonical review names. Events retain their 2-MiB
-logical budget; receipts retain 32,768 bytes plus refusal byte per file and a
-separate 262,144-byte aggregate budget. Unread admitted entries still undergo
-owner/mode/type/link/identity checks. Full or bounded-prefix hashes and missing,
-invalid, limited and catalog markers remain in the saved-evidence pin. A prefix
-is not a full-file fingerprint. Both evidence and metadata history are checked
-twice. Requests are capped at 32,768 bytes and complete canonical responses at
-65,536 bytes; valid notes are not silently clipped. Notes retain the existing
-2,000-code-point/8,000-UTF-8-byte rule and safe integer timestamp range.
+This qualifies one complete offline scripted review workflow and completed-feed
+browser persistence. It does not qualify a real model, a Java agent, browser
+observation of execution, arbitrary tasks, deployment or current source adoption.
+The new stage performs no second actual task or check. Python-level interception
+is not operating-system-wide packet auditing.
 
-All reads require trusted stable single-owner storage; sequential guards are
-not atomic multiwriter snapshots or crash-durability guarantees. Historical
-verdicts and artifact relations establish neither author authenticity, live
-source correctness, adoption nor permission to export or execute. The original
-uncertain Java trial remains held and unqualified; cause/provider completion
-remain unknown. Only its two authorized preservation hashes were compared by
-root, with no held Manager/runtime/recovery/retry access. Licensing stays
-**UNASSIGNED**. Prior evidence remains in [version 0.25 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/317160c3d2ddbe660f7ac4c3160dea812d7dad27/VALIDATION.md).
+Stable trusted single-owner storage remains required. Bounded sequential reads
+are not atomic multiwriter snapshots or crash-durability guarantees. Saved human
+verdicts and artifact relations do not establish author authenticity, source
+correctness, adoption or execution/export permission. Earlier history damage,
+Unicode, formatting and stale-response coverage remains inherited; it is distinct
+from this milestone's single completed actual browser fixture.
+
+Real records, histories, notes, configs, run roots, worker evidence, patches,
+exports, logs, browser screenshots and private helper tools remain outside public
+source. The original uncertain Java trial remains held and unqualified; cause
+and provider completion remain unknown. Root compared only its two authorized
+preservation hashes, with no held Manager/runtime/provider/recovery/retry access.
+Licensing remains **UNASSIGNED**. Naming-only provenance checks do not establish
+ownership or redistribution rights. Earlier evidence and retained attempts are
+in [version 0.26 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/96214eea8333de7bca1efc5e01aa7e2e4ed87893/VALIDATION.md).
 See [origins](ORIGINS.md) for attribution and licensing limits.

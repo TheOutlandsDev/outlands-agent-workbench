@@ -255,3 +255,17 @@ real-model qualification or license is introduced. Existing notices, unresolved
 rights and the original uncertain Java hold remain unchanged. Licensing stays
 UNASSIGNED. Bounded naming-only provenance checks are separate from technical
 testing and do not establish originality, ownership or redistribution rights.
+
+
+## Version 0.27: complete review workflow verification
+
+This milestone extends only the existing restricted offline harness with two
+exact read-only history routes and separate counters. It adds dependent
+verification of the same-version completed scripted workflow and terminal
+restart. Production engine, saved-review readers, UI JavaScript/CSS, writer,
+export gates and admission remain unchanged. A completed fixture is not
+adopted across source directories, replayed or relabelled. Native scripted
+checks, normal-feed completed-result browser inspection and real-model
+qualification remain separate evidence classes. No new dependency or license
+is introduced; real records remain private, the original uncertain Java trial
+remains held/unqualified and licensing stays UNASSIGNED.
