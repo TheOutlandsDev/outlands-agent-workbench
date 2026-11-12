@@ -5,7 +5,10 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.21 adds **Preset preview and comparison**: explicitly view a saved goal
+Version 0.22 adds **Run history search and filters**: explicitly search saved
+job metadata by ID or task text, filter by project/outcome, review pinned saved
+metadata and choose an existing comparison side. These actions never reconcile
+workers or start a task. It retains **Preset preview and comparison**: explicitly view a saved goal
 beside the current Task draft without changing Task. A highlight spans the first
 through last difference; Load remains a separate explicit action. It retains
 **Named task presets**: privately save the current Task under a
@@ -1209,6 +1212,59 @@ must remain private. The summary uses at most 16 request rows and the first 256
 events, reporting when that event limit is reached. Viewing diagnostics performs
 no provider request, retry, replay or recovery. The existing hold remains in place.
 
+## Search and filter saved run history
+
+Choose **Search run history** in the sidebar. It opens the existing read-only
+Compare panel, waits for the earlier live update, and pauses normal polling.
+Opening the panel does not submit a search. Enter literal, case-sensitive text
+from a run ID or saved task goal, optionally choose a saved project ID/outcome,
+then explicitly **Search saved runs**. Empty text includes all inspected records.
+
+Project choices come from saved metadata, including historical projects that are
+no longer configured. Missing or invalid recognized values appear as Unknown;
+stored outcomes are observations, not live process or provider status. Search
+examines complete valid saved goal fields before clipping result labels, so a
+match beyond the beginning of a long goal can still be found. No regex, case
+folding or Unicode normalization is applied. Counts distinguish inspected,
+matched and returned rows. Catalog or result limits are explicit; a partial
+inspection does not establish globally complete or newest history.
+
+Select a result, then explicitly **Review selected saved metadata** to see its
+complete cleaned goal, saved project/outcome/time and current record/history
+hashes. It reads only saved job metadata, not source, task definitions, results,
+events, holds or worker processes. It writes no record and never changes Task,
+model, selected project or Run admission.
+
+Explicitly **Use selected run as Left** or **Use selected run as Right** to
+recheck the saved metadata and fill only that comparison slot. Choose the other
+side deliberately, then use the existing **Compare saved runs** action to read saved
+checks/results/diff evidence under its own unchanged guards. Handoff does not
+submit Compare or choose another run to make a pair. Metadata review does not
+replace full saved-evidence comparison.
+
+Typing or changing filters sends no request and discards old results/details.
+**Clear history filters** resets them without searching. New search, selection,
+comparison context or panel navigation invalidates dependent observations; stale
+responses cannot fill an old selection. Closing returns to the existing live
+view and resumes its normal updates. Read-only search/review/handoff can remain
+available under an unrelated admission hold while Task and Run stay blocked.
+
+Each inspection admits at most 200 exact job names and 1,024 directory entries,
+with one lookahead entry to detect truncation. Only guarded owner-private regular
+single-link job JSON is read: 32,768 bytes/record and a 2-MiB logical read budget
+per inspection, including refusal-byte reservation. Each operation performs two
+inspections and checks the observed raw history pin again. Up to 100 result rows
+are returned, reduced further when necessary to fit the 65,536-byte response;
+the true inspected-set match count is retained. Query text is 0–128 UTF-8 bytes,
+without NUL/newlines/invalid Unicode. HTTP input is at most 32,768 bytes. Labels
+are at most 160 UTF-8 bytes with explicit clipping; selected metadata review can
+return the full bounded goal. Malformed, unsafe or oversized records refuse
+without repair, cleanup or fallback. These sequential observations assume trusted
+stable single-owner storage and are not an atomic multiwriter snapshot.
+
+Queries, goals, saved IDs, metadata, comparisons and hashes contain private
+project context. Keep real histories and evidence out of public uploads.
+
 ## Compare saved runs
 
 Choose **Compare runs**, select two different saved-run IDs, then press
@@ -1326,7 +1382,7 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-Final v0.21 offline qualification passed 919 unit methods across 40 suites, including
+Final v0.22 offline qualification passed 961 unit methods across 42 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1402,6 +1458,17 @@ and loaded goals. Preview itself starts no agent, check or model request. Browse
 qualification also covers empty and identical drafts, Unicode highlights, literal
 markup text, Close and input invalidation, scripted read-only Task and held Run.
 
+Run-history acceptance uses invented Python/Java saved observations for literal
+full-goal and ID search, project/state/unknown filters, pinned metadata review,
+deliberate comparison handoffs, separate explicit Compare, restart and retained
+holds. Saved outcomes are seeded observations, not executed agent results.
+Separate actual fixed checks pass on selected Python/Java copies. The final
+frontend passed 183 isolated Node validator/handoff checks and browser checks
+for explicit actions, Unicode, literal markup, local invalidation and held-state
+review. The browser fixture stubs the normal live history feed empty to isolate
+this panel; it does not qualify live worker reconciliation. See validation for
+the frontend-only amendment and retained test-collector corrections.
+
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
@@ -1414,7 +1481,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.21 adds no real-model qualification. Preset previews, named task presets, snapshot review workspaces,
+Version 0.22 adds no real-model qualification. Preset previews, named task presets, snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context
