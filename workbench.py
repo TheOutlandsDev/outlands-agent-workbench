@@ -38,6 +38,7 @@ from snapshot_workspace import valid_receipt as valid_snapshot_workspace_receipt
 from snapshot_recheck import inspect as inspect_snapshot_recheck
 from snapshot_recheck import history_pin as snapshot_recheck_history_pin
 from snapshot_recheck import valid_receipt as valid_snapshot_recheck_receipt
+from snapshot_editor import read as read_snapshot_editor, prepare as prepare_snapshot_editor, save as save_snapshot_editor
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -413,7 +414,7 @@ class Manager:
                 "DATA_OUTSIDE_SOURCE",
             )
         private_dir(self.data)
-        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks", "snapshot-exports", "snapshot-workspaces", "snapshot-workspace-rechecks", "snapshot-reexports"]:
+        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks", "snapshot-exports", "snapshot-workspaces", "snapshot-workspace-rechecks", "snapshot-reexports", "snapshot-workspace-edits"]:
             private_dir(self.data / name)
         self.server_lock = os.open(
             self.data / "server.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
@@ -437,6 +438,7 @@ class Manager:
         self.snapshot_recheck_draft = None
         self.snapshot_workspace_children = {}
         self.snapshot_recheck_children = {}
+        self.snapshot_editor_draft = None
 
     @staticmethod
     def readiness_fingerprint(path, expected):
@@ -471,12 +473,18 @@ class Manager:
             os.close(fd)
         return sorted(names), truncated
 
-    def readiness_admission(self):
+    def readiness_admission(self, editor_exclude_id=None):
         """Inspect saved admission evidence without reconciling any worker."""
         reasons, budget = [], 2097152
         def note(code):
             if code not in reasons:
                 reasons.append(code)
+        try:
+            edits, _ = self._snapshot_editor_records(editor_exclude_id)
+            if any(row["status"] != "SAVED" for row in edits):
+                note("WORKSPACE_ACTIVE_OR_UNRESOLVED")
+        except (Refused, OSError, ValueError):
+            note("ADMISSION_RECORD_INVALID")
         def record(root, name, ceiling=32768):
             nonlocal budget
             if budget <= 1:
@@ -1243,6 +1251,10 @@ class Manager:
         return entry is not None and entry[0].poll() is None
 
     def admission(self):
+        try:
+            self._snapshot_editor_settled()
+        except (Refused, OSError, ValueError):
+            return "SNAPSHOT_EDITOR_UNRESOLVED"
         rows = self.history(limit=None)
         present, held_run = self.request_hold()
         if present:
@@ -2234,6 +2246,9 @@ class Manager:
             receipt = parse(raw)
             require(valid_snapshot_recheck_receipt(receipt) and receipt["id"] == attempt_id, "SNAPSHOT_REEXPORT_RECORD_INVALID")
             require(receipt["status"] == "VERIFIED", "SNAPSHOT_REEXPORT_VERIFIED_REQUIRED")
+            edits, _ = self._snapshot_editor_settled()
+            require(not any(row["workspace_id"] == receipt["workspace_id"] and attempt_id in row["prior_recheck_ids"]
+                            for row in edits), "SNAPSHOT_REEXPORT_RECHECK_REQUIRED")
             self._snapshot_recheck_inspection(receipt["workspace_id"])
             return prepare_snapshot_reexport(attempt, expected_receipt_sha256 or sha(raw))
         except Refused as exc:
@@ -2565,7 +2580,213 @@ class Manager:
                 child.wait()
             return self.recheck_view(attempt_id)
 
-    def _snapshot_recheck_inspection(self, workspace_id):
+    @staticmethod
+    def _snapshot_editor_valid_receipt(value):
+        core = {"version", "format", "id", "workspace_id", "path", "status", "created", "source_applied",
+                "workspace_write_state", "before_sha256", "after_sha256", "snapshot_sha256", "preview_sha256",
+                "prior_recheck_ids"}
+        try:
+            require(type(value) is dict and core <= set(value), "SNAPSHOT_EDITOR_RECORD_INVALID")
+            require(type(value["version"]) is int and value["version"] == 1
+                    and value["format"] == "outlands-snapshot-workspace-edit-v1"
+                    and value["source_applied"] is False, "SNAPSHOT_EDITOR_RECORD_INVALID")
+            require(all(type(value[key]) is str and ID.fullmatch(value[key]) is not None
+                        for key in ("id", "workspace_id")), "SNAPSHOT_EDITOR_RECORD_INVALID")
+            relative(value["path"])
+            require(type(value["created"]) is int and 0 <= value["created"] <= 9007199254740991,
+                    "SNAPSHOT_EDITOR_RECORD_INVALID")
+            require(all(type(value[key]) is str and re.fullmatch(r"[0-9a-f]{64}", value[key]) is not None
+                        for key in ("before_sha256", "after_sha256", "snapshot_sha256", "preview_sha256")),
+                    "SNAPSHOT_EDITOR_RECORD_INVALID")
+            ids = value["prior_recheck_ids"]
+            require(type(ids) is list and len(ids) <= 200 and all(type(item) is str and ID.fullmatch(item)
+                    for item in ids) and ids == sorted(set(ids)), "SNAPSHOT_EDITOR_RECORD_INVALID")
+            state = value["status"]
+            if state == "PREPARING":
+                return set(value) == core and value["workspace_write_state"] == "MAY_HAVE_CHANGED"
+            require(type(value.get("finished")) is int and value["created"] <= value["finished"] <= 9007199254740991,
+                    "SNAPSHOT_EDITOR_RECORD_INVALID")
+            if state == "SAVED":
+                return (set(value) == core | {"finished", "saved_snapshot_sha256"}
+                        and value["workspace_write_state"] == "SAVED"
+                        and type(value["saved_snapshot_sha256"]) is str
+                        and re.fullmatch(r"[0-9a-f]{64}", value["saved_snapshot_sha256"]) is not None)
+            return (state == "FAILED" and set(value) == core | {"finished", "reason"}
+                    and value["workspace_write_state"] == "MAY_HAVE_CHANGED"
+                    and value["reason"] in {"SNAPSHOT_EDITOR_WRITE_FAILED", "SNAPSHOT_EDITOR_WRITE_UNCERTAIN"})
+        except (Refused, ValueError, TypeError, KeyError):
+            return False
+
+    def _snapshot_editor_records(self, exclude_id=None, reserve_bytes=0):
+        """Bounded saved edit evidence only. No reconciliation, repair or fallback."""
+        try:
+            require(exclude_id is None or type(exclude_id) is str and ID.fullmatch(exclude_id),
+                    "SNAPSHOT_EDITOR_RECORD_INVALID")
+            root = self.data / "snapshot-workspace-edits"
+            names, limited = self.readiness_entries(root, lambda _: True, 200)
+            require(not limited, "SNAPSHOT_EDITOR_LIMIT")
+            require(type(reserve_bytes) is int and 0 <= reserve_bytes <= 32768, "SNAPSHOT_EDITOR_LIMIT")
+            rows, pins, budget = [], [], 2097152 - reserve_bytes
+            for name in names:
+                require(ID.fullmatch(name) is not None, "SNAPSHOT_EDITOR_RECORD_INVALID")
+                if name == exclude_id:
+                    continue
+                files, clipped = self.readiness_entries(root / name, lambda _: True, 8)
+                require(not clipped and set(files) <= {"receipt.json", "original.bin", "candidate.bin", "replacement.next"}
+                        and "receipt.json" in files, "SNAPSHOT_EDITOR_RECORD_INVALID")
+                require(budget > 0, "SNAPSHOT_EDITOR_LIMIT")
+                raw = readiness_read_file(root / name, "receipt.json", min(32768, budget))
+                budget -= len(raw)
+                receipt = parse(raw)
+                require(self._snapshot_editor_valid_receipt(receipt) and receipt["id"] == name,
+                        "SNAPSHOT_EDITOR_RECORD_INVALID")
+                if receipt["status"] == "SAVED":
+                    require(set(files) == {"receipt.json", "original.bin", "candidate.bin"},
+                            "SNAPSHOT_EDITOR_RECORD_INVALID")
+                    for filename, key in (("original.bin", "before_sha256"), ("candidate.bin", "after_sha256")):
+                        require(sha(readiness_read_file(root / name, filename, 32768)) == receipt[key],
+                                "SNAPSHOT_EDITOR_RECORD_INVALID")
+                rows.append(receipt)
+                pins.append({"id": name, "sha256": sha(raw)})
+            return rows, sha(canonical(pins))
+        except (Refused, OSError, ValueError, TypeError, KeyError, RecursionError):
+            raise Refused("SNAPSHOT_EDITOR_UNRESOLVED") from None
+
+    def _snapshot_editor_settled(self, exclude_id=None):
+        rows, pin = self._snapshot_editor_records(exclude_id)
+        require(all(row["status"] == "SAVED" for row in rows), "SNAPSHOT_EDITOR_UNRESOLVED")
+        return rows, pin
+
+    def _snapshot_editor_admission(self, exclude_id=None):
+        saved = self.readiness_admission(editor_exclude_id=exclude_id)
+        reasons = list(saved["reasons"])
+        if saved["truncated"] and "ADMISSION_RECORD_LIMIT" not in reasons:
+            reasons.append("ADMISSION_RECORD_LIMIT")
+        if any((self.children, self.workspace_children, self.bundle_workspace_children, self.recheck_children,
+                self.snapshot_workspace_children, self.snapshot_recheck_children)):
+            reasons.append("OWNED_WORKER_RECORD_PRESENT")
+        reasons = sorted(set(reasons))
+        return {"blocked": bool(reasons), "reasons": reasons}
+
+    def _snapshot_editor_attempt_ids(self, workspace_id):
+        root = self.data / "snapshot-workspace-rechecks"
+        history = snapshot_recheck_history_pin(root)
+        names, limited = self.readiness_entries(root, lambda _: True, 200)
+        require(not limited, "SNAPSHOT_EDITOR_LIMIT")
+        ids = []
+        for name in names:
+            value = parse(readiness_read_file(root / name, "receipt.json", 262144))
+            require(valid_snapshot_recheck_receipt(value) and value["id"] == name, "SNAPSHOT_EDITOR_UNRESOLVED")
+            if value["workspace_id"] == workspace_id:
+                ids.append(name)
+        require(history == snapshot_recheck_history_pin(root), "SNAPSHOT_EDITOR_STALE")
+        return ids, history
+
+    def snapshot_editor_files(self, request):
+        with self.lock:
+            self.snapshot_editor_draft = None
+            require(type(request) is dict and set(request) == {"workspace_id"}, "SNAPSHOT_EDITOR_FIELDS")
+            inspected = self._snapshot_recheck_inspection(request["workspace_id"])
+            result = {"version": 1, "workspace_id": request["workspace_id"],
+                "snapshot_sha256": inspected["summary"]["snapshot_sha256"],
+                "files": [{"path": row["path"], "editable": True, "sha256": row["current_sha256"], "bytes": row["bytes"]}
+                          for row in inspected["summary"]["files"] if row["editable"]],
+                "admission": self._snapshot_editor_admission()}
+            require(len(canonical(result)) <= 65536, "SNAPSHOT_EDITOR_OUTPUT_LIMIT")
+            return result
+
+    def snapshot_editor_open(self, request):
+        with self.lock:
+            self.snapshot_editor_draft = None
+            require(type(request) is dict and set(request) == {"workspace_id", "path"}, "SNAPSHOT_EDITOR_FIELDS")
+            inspected = self._snapshot_recheck_inspection(request["workspace_id"])
+            result = read_snapshot_editor(inspected, request["path"])
+            result["admission"] = self._snapshot_editor_admission()
+            require(len(canonical(result)) <= 262144, "SNAPSHOT_EDITOR_OUTPUT_LIMIT")
+            return result
+
+    def snapshot_editor_preview(self, request):
+        with self.lock:
+            self.snapshot_editor_draft = None
+            require(type(request) is dict and set(request) == {"workspace_id", "path", "expected_sha256", "old_text", "new_text"},
+                    "SNAPSHOT_EDITOR_FIELDS")
+            inspected = self._snapshot_recheck_inspection(request["workspace_id"])
+            prepared = prepare_snapshot_editor(inspected, request["path"], request["expected_sha256"],
+                                                request["old_text"], request["new_text"])
+            _, edits_pin = self._snapshot_editor_settled()
+            prior_ids, history = self._snapshot_editor_attempt_ids(request["workspace_id"])
+            admission = self._snapshot_editor_admission()
+            pin = sha(canonical({"edit": prepared["summary"], "history": history, "edits": edits_pin,
+                                 "prior_recheck_ids": prior_ids}))
+            result = {"version": 1, "workspace_id": request["workspace_id"], "preview_id": secrets.token_hex(8),
+                "preview_sha256": pin, "expires_at_ms": time.time_ns() // 1000000 + 300000,
+                "edit": prepared["summary"], "admission": admission}
+            require(len(canonical(result)) <= 131072, "SNAPSHOT_EDITOR_OUTPUT_LIMIT")
+            self.snapshot_editor_draft = {"response": result, "prepared": prepared, "prior_ids": prior_ids,
+                "history": history, "edits_pin": edits_pin, "deadline": time.monotonic() + 300}
+            return copy.deepcopy(result)
+
+    def _snapshot_editor_invalidate(self):
+        for name in ("snapshot_editor_draft", "snapshot_recheck_draft", "snapshot_reexport_draft",
+                     "snapshot_export_draft", "snapshot_workspace_draft", "bundle_workspace_draft", "recheck_draft"):
+            setattr(self, name, None)
+
+    def snapshot_editor_save(self, request):
+        with self.lock:
+            draft = self.snapshot_editor_draft
+            self._snapshot_editor_invalidate()
+            require(type(request) is dict and set(request) == {"preview_id", "preview_sha256"}, "SNAPSHOT_EDITOR_FIELDS")
+            require(draft is not None, "SNAPSHOT_EDITOR_PREVIEW_REQUIRED")
+            response, prepared = draft["response"], draft["prepared"]
+            require(request["preview_id"] == response["preview_id"] and request["preview_sha256"] == response["preview_sha256"],
+                    "SNAPSHOT_EDITOR_PREVIEW_CHANGED")
+            require(time.monotonic() < draft["deadline"] and time.time_ns() // 1000000 < response["expires_at_ms"],
+                    "SNAPSHOT_EDITOR_PREVIEW_EXPIRED")
+            workspace_id = response["workspace_id"]
+            rows, edits_pin = self._snapshot_editor_settled()
+            require(len(rows) < 200 and edits_pin == draft["edits_pin"], "SNAPSHOT_EDITOR_STALE")
+            self._snapshot_editor_records(reserve_bytes=32768)
+            require(not self._snapshot_editor_admission()["blocked"], "SNAPSHOT_EDITOR_BLOCKED")
+            inspected = self._snapshot_recheck_inspection(workspace_id)
+            require(inspected["summary"] == prepared["inspection"], "SNAPSHOT_EDITOR_STALE")
+            prior_ids, history = self._snapshot_editor_attempt_ids(workspace_id)
+            require(prior_ids == draft["prior_ids"] and history == draft["history"], "SNAPSHOT_EDITOR_STALE")
+            identifier = secrets.token_hex(8)
+            directory = self.data / "snapshot-workspace-edits" / identifier
+            directory.mkdir(mode=0o700, exist_ok=False)
+            edit = prepared["summary"]
+            receipt = {"version": 1, "format": "outlands-snapshot-workspace-edit-v1", "id": identifier,
+                "workspace_id": workspace_id, "path": edit["path"], "status": "PREPARING", "created": int(time.time()),
+                "source_applied": False, "workspace_write_state": "MAY_HAVE_CHANGED", "prior_recheck_ids": prior_ids,
+                **{key: edit[key] for key in ("before_sha256", "after_sha256", "snapshot_sha256")},
+                "preview_sha256": response["preview_sha256"]}
+            initial_raw = canonical(receipt)
+            write_new(directory / "receipt.json", initial_raw)
+            def guard():
+                require(readiness_read_file(directory, "receipt.json", 32768) == initial_raw, "SNAPSHOT_EDITOR_STALE")
+                _, pin = self._snapshot_editor_settled(identifier)
+                require(pin == draft["edits_pin"], "SNAPSHOT_EDITOR_STALE")
+                require(not self._snapshot_editor_admission(identifier)["blocked"], "SNAPSHOT_EDITOR_BLOCKED")
+                current = self._snapshot_recheck_inspection(workspace_id, identifier)
+                require(current["summary"] == prepared["inspection"], "SNAPSHOT_EDITOR_STALE")
+                ids, observed = self._snapshot_editor_attempt_ids(workspace_id)
+                require(ids == prior_ids and observed == history, "SNAPSHOT_EDITOR_STALE")
+            try:
+                result = save_snapshot_editor(self.data / "snapshot-workspaces" / workspace_id, prepared, directory, guard)
+            except (Refused, OSError, ValueError, TypeError, KeyError) as error:
+                reason = "SNAPSHOT_EDITOR_WRITE_UNCERTAIN" if str(error) == "SNAPSHOT_EDITOR_WRITE_UNCERTAIN" else "SNAPSHOT_EDITOR_WRITE_FAILED"
+                failed = {**receipt, "status": "FAILED", "finished": max(receipt["created"], int(time.time())), "reason": reason}
+                replace_json(directory / "receipt.json", failed, initial_raw)
+                raise Refused(reason) from None
+            saved = {**receipt, "status": "SAVED", "workspace_write_state": "SAVED",
+                     "finished": max(receipt["created"], int(time.time())), "saved_snapshot_sha256": result["snapshot_sha256"]}
+            require(self._snapshot_editor_valid_receipt(saved), "SNAPSHOT_EDITOR_RECORD_INVALID")
+            # If finalization fails, retained PREPARING/.next evidence blocks later work.
+            replace_json(directory / "receipt.json", saved, initial_raw)
+            return {"version": 1, "workspace_id": workspace_id, "edit_id": identifier, "status": "SAVED", **result}
+
+    def _snapshot_recheck_inspection(self, workspace_id, editor_exclude_id=None):
+        self._snapshot_editor_settled(editor_exclude_id)
         require(type(workspace_id) is str and ID.fullmatch(workspace_id) is not None, "SNAPSHOT_RECHECK_ID")
         job = self.data / "snapshot-workspaces" / workspace_id
         try:
@@ -2903,6 +3124,7 @@ class Manager:
         }
 
     def close(self):
+        self.snapshot_editor_draft = None
         self.recheck_draft = None
         self.snapshot_export_draft = None
         self.snapshot_reexport_draft = None
@@ -3153,6 +3375,26 @@ def make_handler(manager, token, origin):
                         result = manager.bundle_workspace_preview(path.removeprefix("/api/bundle-workspace-preview/"),
                                                                   raw, hashes[0] if hashes else None)
                     self.send(200, canonical(result))
+                    return
+                if path.startswith("/api/snapshot-editor-"):
+                    routes = {"/api/snapshot-editor-files": manager.snapshot_editor_files,
+                              "/api/snapshot-editor-open": manager.snapshot_editor_open,
+                              "/api/snapshot-editor-preview": manager.snapshot_editor_preview,
+                              "/api/snapshot-editor-save": manager.snapshot_editor_save}
+                    require(path in routes, "SNAPSHOT_EDITOR_INPUT")
+                    types, lengths = self.headers.get_all("Content-Type", []), self.headers.get_all("Content-Length", [])
+                    require(self.headers.get("Transfer-Encoding") is None and len(types) == 1
+                            and types[0].split(";", 1)[0].strip().lower() == "application/json"
+                            and len(lengths) == 1 and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
+                            "SNAPSHOT_EDITOR_INPUT")
+                    length = int(lengths[0])
+                    require(0 < length <= 262144, "SNAPSHOT_EDITOR_LIMIT")
+                    raw = self.rfile.read(length)
+                    require(len(raw) == length, "SNAPSHOT_EDITOR_INPUT")
+                    result = routes[path](parse(raw))
+                    encoded = canonical(result)
+                    require(len(encoded) <= 262144, "SNAPSHOT_EDITOR_OUTPUT_LIMIT")
+                    self.send(200, encoded)
                     return
                 if path in {"/api/snapshot-workspace-create", "/api/snapshot-workspace-stop",
                             "/api/snapshot-workspace-recheck-preview", "/api/snapshot-workspace-recheck-start",

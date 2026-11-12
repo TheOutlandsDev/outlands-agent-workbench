@@ -5,7 +5,11 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.17 adds **Reviewed snapshot re-export**: explicitly review the complete
+Version 0.18 adds **Scoped workspace editor**: explicitly select an approved
+editable file in a verified private snapshot review worktree, load its exact
+current text, preview one unique replacement and save the pinned change. A fresh
+passing snapshot recheck is required before controller re-export. Editing runs
+no checks or model requests. It retains **Reviewed snapshot re-export**: explicitly review the complete
 original-baseline-to-tested-snapshot patch from a verified snapshot-workspace
 recheck, save a separate private acceptance, then download a pinned version 2
 bundle. Export executes no checks, Git command or model request. It retains
@@ -438,6 +442,64 @@ The host and private store must remain trusted and stable: sequential rechecks
 are not a multiwriter transaction or an atomic filesystem snapshot. Keep these
 archives, generated repositories, source copies, notes and logs out of public
 source and uploads.
+
+## Edit a private snapshot review workspace
+
+Select a verified creation in **Snapshot workspace history**, then use **Scoped
+workspace editor**. This first editor supports that snapshot workspace type only.
+
+1. Choose **List editable workspace files**, select a file, then **Open selected
+   workspace file**. The full bounded UTF-8 text is read-only until an explicit replacement
+   is reviewed. The file hash, byte count and line-ending label are displayed.
+2. Select text in the displayed file and choose **Use selected file text**, or
+   enter a nonempty exact old span. A captured selection retains its original
+   line endings even though browser textareas normalize their display. Editing
+   that old-span input discards the captured span. For typed multiline spans,
+   choose LF or CRLF explicitly; mixed files may require a captured selection.
+3. Enter the replacement and its intended line endings, then **Preview workspace edit**.
+   The old span must occur exactly once, including overlapping matches. Review
+   the before/after hashes, byte counts and bounded diff. Bytes outside that span
+   remain exact, including whitespace, line endings and missing final newlines.
+4. Within five minutes, choose **Save reviewed workspace edit**. One save consumes the
+   preview. Source/task/config/creation/check/Git controls, all selected bytes,
+   edit/recheck history and read-only admission observations are rechecked.
+5. Explicitly inspect and run a new snapshot recheck, then review and export its
+   verified snapshot. A saved edit records earlier recheck IDs; controller
+   re-export refuses them even when an edit restores identical old tested bytes.
+
+Reads and previews perform no checks, Git commands, provider requests or worker
+reconciliation. They display saved admission blocks. Saving refuses a hold,
+active or unresolved saved execution, an owned-worker entry, stale source or
+changed controls. A save writes only the selected existing private worktree file
+and a new private edit record under `DATA/snapshot-workspace-edits/ID/`. The
+original project and historical creation/recheck/acceptance records stay intact.
+Protected files, new files, deletions, path escapes, links and Git controls cannot
+be edited. A current file must be owner-owned, have one link and use mode 0600, 0644 or
+0664 below its owner-only private job directory. Saves preserve that mode;
+retained original/candidate copies use 0600.
+
+The edit record retains original and candidate bytes. Its finite
+`outlands-snapshot-workspace-edit-v1` receipt records SAVED or a retained
+PREPARING/FAILED state. An unresolved, malformed or partial edit blocks subsequent
+writes, execution and controller snapshot recheck/re-export. A failure can leave
+the target changed with uncertain finalization; nothing is automatically rolled
+back, cleaned up or retried. Inspect the retained private evidence before any
+separate recovery decision. No recovery control is provided here.
+
+Scope and size remain 32 UTF-8 files, 32,768 bytes per file and 131,072 total.
+The JSON request/full-text response is capped at 262,144 bytes; previews at
+131,072, with a 240-line/8,192-byte diff and explicit clipping. The journal permits
+200 records and 2 MiB aggregate receipts with a 32,768-byte reservation for a new
+record. Retained source copies are separately bounded to two 32,768-byte files per
+saved edit. Previews expire after five minutes or restart; parent-input and
+selection changes discard browser pins. A restarted server requires a new
+explicit read/preview before saving.
+
+These operations assume a trusted stable single-owner store. Sequential guards
+and atomic replacement are not a multiwriter compare-and-swap transaction. The
+standalone archive verifier checks packet hashes/evidence, without a private edit
+journal or human approval claim. Archive formats and the original Java hold are
+unchanged. Real editor records, worktrees and bundles remain private.
 
 ## Recheck a snapshot review workspace
 
@@ -1105,7 +1167,7 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-Final offline qualification passed 744 unit methods across 32 suites, including
+Final offline qualification passed 792 unit methods across 34 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1155,6 +1217,15 @@ recorded observations. The final qualification retains all earlier client,
 isolation, prerequisite, time/output, Git and preservation probes. See
 [validation and limits](VALIDATION.md) for the preserved development failures,
 final run and browser-review scope; these are local results, not a CI claim.
+Editor acceptance loads and previews exact selected-file replacements under guards
+against execution, explicitly saves only the target and new private journal,
+refuses pre-edit attempts, runs separate actual Python/Java rechecks and exports
+strict v2 packets. It verifies original source/Git and prior-evidence preservation,
+then retains a separate synthetic hold and refuses another save without writes.
+Editor integration tests cover exact Unicode/CRLF bytes, stale controls, saved
+admission, one-use previews, restart, uncertain writes, partial records, bounds
+and a new-attempt requirement even after a byte-identical revert.
+
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
@@ -1167,7 +1238,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.17 adds no real-model qualification. Snapshot review workspaces,
+Version 0.18 adds no real-model qualification. Snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context

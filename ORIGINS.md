@@ -153,3 +153,13 @@ verified fields, without fabricated legacy records. No external archive/parser
 implementation or new third-party dependency was added. Real exports, source
 copies, worktrees, notes, check output and histories stay outside public source.
 Recorded observations are not new model results; no license is assigned.
+
+Version 0.18 adds explicit exact-span editing of approved existing files in
+verified private snapshot review workspaces, a separate private edit journal,
+read-only saved-admission guards, browser selection/line-ending handling and
+invented Python/Java edit-recheck-export fixtures. It adapts the existing exact
+replacement, snapshot inspection, guarded file I/O and deterministic diff helpers.
+No external editor, UI framework, copied parser or new dependency is included.
+Original/candidate source copies and real edit/runtime evidence stay private.
+The existing archive formats, notices, original Java hold and unassigned license
+remain unchanged. Offline tests and fixed checks do not qualify a local model.
