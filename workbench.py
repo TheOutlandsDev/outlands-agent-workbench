@@ -34,6 +34,9 @@ from snapshot_export import verify_export as verify_snapshot_export
 from snapshot_project_check import check_project as check_snapshot_project
 from snapshot_workspace import prepare as prepare_snapshot_workspace
 from snapshot_workspace import valid_receipt as valid_snapshot_workspace_receipt
+from snapshot_recheck import inspect as inspect_snapshot_recheck
+from snapshot_recheck import history_pin as snapshot_recheck_history_pin
+from snapshot_recheck import valid_receipt as valid_snapshot_recheck_receipt
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -360,7 +363,7 @@ class Manager:
                 "DATA_OUTSIDE_SOURCE",
             )
         private_dir(self.data)
-        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks", "snapshot-exports", "snapshot-workspaces"]:
+        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks", "snapshot-exports", "snapshot-workspaces", "snapshot-workspace-rechecks"]:
             private_dir(self.data / name)
         self.server_lock = os.open(
             self.data / "server.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
@@ -380,7 +383,9 @@ class Manager:
         self.recheck_draft = None
         self.snapshot_export_draft = None
         self.snapshot_workspace_draft = None
+        self.snapshot_recheck_draft = None
         self.snapshot_workspace_children = {}
+        self.snapshot_recheck_children = {}
 
     @staticmethod
     def readiness_fingerprint(path, expected):
@@ -593,6 +598,31 @@ class Manager:
                 note("ADMISSION_RECORD_INVALID")
             receipt = record(self.data / "snapshot-workspaces", name + "/receipt.json", 262144)
             if not valid_snapshot_workspace_receipt(receipt) or receipt["id"] != name:
+                note("ADMISSION_RECORD_INVALID")
+            elif receipt["status"] != "VERIFIED":
+                note("WORKSPACE_ACTIVE_OR_UNRESOLVED")
+        try:
+            names, recheck_truncated = self.readiness_entries(self.data / "snapshot-workspace-rechecks", lambda _: True, 200)
+        except OSError:
+            names, recheck_truncated = [], False
+            note("ADMISSION_UNAVAILABLE")
+        if recheck_truncated:
+            truncated = True
+            note("ADMISSION_RECORD_LIMIT")
+        for name in names:
+            if ID.fullmatch(name) is None:
+                note("ADMISSION_RECORD_INVALID")
+                continue
+            workspaces += 1
+            try:
+                pending, limited = self.readiness_entries(self.data / "snapshot-workspace-rechecks" / name,
+                                                          lambda item: item == "receipt.json.next", 1)
+                if pending or limited:
+                    note("ADMISSION_RECORD_INVALID")
+            except (OSError, Refused):
+                note("ADMISSION_RECORD_INVALID")
+            receipt = record(self.data / "snapshot-workspace-rechecks", name + "/receipt.json", 262144)
+            if not valid_snapshot_recheck_receipt(receipt) or receipt["id"] != name:
                 note("ADMISSION_RECORD_INVALID")
             elif receipt["status"] != "VERIFIED":
                 note("WORKSPACE_ACTIVE_OR_UNRESOLVED")
@@ -850,6 +880,7 @@ class Manager:
             self.recheck_draft = None
             self.snapshot_export_draft = None
             self.snapshot_workspace_draft = None
+            self.snapshot_recheck_draft = None
             write_new(run / "git-workspace.json", canonical(receipt))
             meta = self.metadata(run_id)
             command = [sys.executable, "-B", str(HERE / "git_workspace.py"), "--run-dir", str(run),
@@ -1187,6 +1218,12 @@ class Manager:
                 return "SNAPSHOT_WORKSPACE_ACTIVE_OR_UNRESOLVED"
         except (Refused, OSError, ValueError, KeyError, TypeError):
             return "SNAPSHOT_WORKSPACE_NEEDS_INSPECTION"
+        try:
+            if any(row["status"] != "VERIFIED" or row.get("owned_active") is True
+                   for row in self._snapshot_recheck_rows()):
+                return "SNAPSHOT_RECHECK_ACTIVE_OR_UNRESOLVED"
+        except (Refused, OSError, ValueError, KeyError, TypeError):
+            return "SNAPSHOT_RECHECK_NEEDS_INSPECTION"
         if any(
             r["state"] in ["RUNNING", "STOP_REQUESTED", "RECOVERY_REQUIRED"]
             for r in rows
@@ -1218,6 +1255,7 @@ class Manager:
             self.recheck_draft = None
             self.snapshot_export_draft = None
             self.snapshot_workspace_draft = None
+            self.snapshot_recheck_draft = None
             require(self.jdk_home is not None or not any(
                 isinstance(spec, dict) and spec.get("kind") == "java-main"
                 for spec in task["checks"].values()), "JDK_REQUIRED")
@@ -1559,6 +1597,7 @@ class Manager:
         """Read-only eligibility and a single memory preview; no admission/worker calls."""
         with self.lock:
             self.snapshot_workspace_draft = None
+            self.snapshot_recheck_draft = None
             project, prepared, pin = self._snapshot_workspace_prepare(project_id, raw, expected_sha256)
             comparison = check_snapshot_project(raw, project["source"], project["task_raw"], sha(raw))
             require(comparison["status"] == "BASELINE_MATCH" and comparison["task_pins_match"] is True
@@ -1589,6 +1628,7 @@ class Manager:
                     "SNAPSHOT_WORKSPACE_PREVIEW_CHANGED")
             if time.monotonic() >= draft["deadline"] or time.time_ns() // 1000000 >= value["expires_at_ms"]:
                 self.snapshot_workspace_draft = None
+                self.snapshot_recheck_draft = None
                 raise Refused("SNAPSHOT_WORKSPACE_PREVIEW_EXPIRED")
             blocked = self.admission()
             require(blocked is None, blocked or "ADMISSION")
@@ -1600,6 +1640,7 @@ class Manager:
             require(len(self._snapshot_workspace_rows(reserve_bytes=262144)) < 200, "SNAPSHOT_WORKSPACE_RECORD_LIMIT")
             # Consume before persistent work. A partial creation is retained, never a retry token.
             self.snapshot_workspace_draft = None
+            self.snapshot_recheck_draft = None
             self.bundle_workspace_draft = None
             self.recheck_draft = None
             self.snapshot_export_draft = None
@@ -1644,14 +1685,18 @@ class Manager:
                 raise Refused("SNAPSHOT_WORKSPACE_START_FAILED") from None
             return self.snapshot_workspace_view(identifier)
 
-    def _snapshot_workspace_record(self, identifier):
+    def _snapshot_workspace_record(self, identifier, allow_pending=False):
         try:
             job = self.data / "snapshot-workspaces" / identifier
-            extras, limited = self.readiness_entries(job, lambda name: name == "receipt.json.next", 1)
-            require(not limited and not extras, "SNAPSHOT_WORKSPACE_RECORD_INVALID")
             raw = readiness_read_file(job, "receipt.json", 262144)
             value = parse(raw)
             require(valid_snapshot_workspace_receipt(value) and value["id"] == identifier,
+                    "SNAPSHOT_WORKSPACE_RECORD_INVALID")
+            extras, limited = self.readiness_entries(job, lambda name: name == "receipt.json.next", 1)
+            require(not limited, "SNAPSHOT_WORKSPACE_RECORD_INVALID")
+            # A live owned worker may be between writing its terminal next file and
+            # atomic replacement. Report only its saved PREPARING state until exit.
+            require(not extras or allow_pending and value["status"] == "PREPARING",
                     "SNAPSHOT_WORKSPACE_RECORD_INVALID")
             return raw, value
         except Refused as exc:
@@ -1670,7 +1715,7 @@ class Manager:
             if exited:
                 child, log = self.snapshot_workspace_children.pop(identifier)
                 log.close()
-            raw, receipt = self._snapshot_workspace_record(identifier)
+            raw, receipt = self._snapshot_workspace_record(identifier, entry is not None and not exited)
             if exited and receipt["status"] == "PREPARING":
                 receipt.update(status="INTERRUPTED", reason="SNAPSHOT_WORKSPACE_INTERRUPTED", finished=int(time.time()))
                 replace_json(self.data / "snapshot-workspaces" / identifier / "receipt.json", receipt, raw)
@@ -1684,7 +1729,7 @@ class Manager:
             for name in names:
                 require(ID.fullmatch(name) is not None, "SNAPSHOT_WORKSPACE_RECORD_INVALID")
                 row = self.snapshot_workspace_view(name)
-                raw, _ = self._snapshot_workspace_record(name)
+                raw, _ = self._snapshot_workspace_record(name, name in self.snapshot_workspace_children)
                 total += len(raw)
                 require(total <= 2097152 - reserve_bytes, "SNAPSHOT_WORKSPACE_RECORD_LIMIT")
                 rows.append({key: row[key] for key in ["version", "format", "id", "project_id", "status", "created",
@@ -1778,6 +1823,7 @@ class Manager:
             self.recheck_draft = None
             self.snapshot_export_draft = None
             self.snapshot_workspace_draft = None
+            self.snapshot_recheck_draft = None
             workspace_id = secrets.token_hex(8)
             job = self.data / "bundle-workspaces" / workspace_id
             job.mkdir(mode=0o700, exist_ok=False)
@@ -2118,6 +2164,7 @@ class Manager:
             self.recheck_draft = None
             self.snapshot_export_draft = None
             self.snapshot_workspace_draft = None
+            self.snapshot_recheck_draft = None
             require(type(request) is dict and set(request) == {"workspace_id"}, "RECHECK_FIELDS")
             inspected = self._recheck_inspection(request["workspace_id"])
             history = recheck_history_pin(self.data / "workspace-rechecks")
@@ -2153,6 +2200,7 @@ class Manager:
             self.bundle_workspace_draft = None
             self.snapshot_export_draft = None
             self.snapshot_workspace_draft = None
+            self.snapshot_recheck_draft = None
             attempt_id = secrets.token_hex(8)
             attempt = self.data / "workspace-rechecks" / attempt_id
             attempt.mkdir(mode=0o700, exist_ok=False)
@@ -2250,6 +2298,186 @@ class Manager:
                     pass
                 child.wait()
             return self.recheck_view(attempt_id)
+
+    def _snapshot_recheck_inspection(self, workspace_id):
+        require(type(workspace_id) is str and ID.fullmatch(workspace_id) is not None, "SNAPSHOT_RECHECK_ID")
+        job = self.data / "snapshot-workspaces" / workspace_id
+        try:
+            pending, limited = self.readiness_entries(job, lambda name: name == "receipt.json.next", 1)
+            require(not pending and not limited, "SNAPSHOT_RECHECK_RECORD_INVALID")
+            creation_raw = readiness_read_file(job, "receipt.json", 262144)
+            creation = parse(creation_raw)
+            request = parse(readiness_read_file(job, "request.json", 32768))
+        except FileNotFoundError:
+            raise Refused("SNAPSHOT_RECHECK_CREATION_REQUIRED") from None
+        except (Refused, OSError, ValueError):
+            raise Refused("SNAPSHOT_RECHECK_RECORD_INVALID") from None
+        require(type(creation) is dict and type(request) is dict
+                and type(creation.get("project_id")) is str and creation["project_id"] in self.projects,
+                "SNAPSHOT_RECHECK_CREATION_REQUIRED")
+        project = self.projects[creation["project_id"]]
+        require(request.get("project_id") == project["id"] and request.get("id") == workspace_id
+                and request.get("source") == str(project["source"])
+                and request.get("task_path") == str(project["task"])
+                and request.get("config_path") == str(self.config_path)
+                and request.get("task_sha256") == sha(project["task_raw"])
+                and request.get("config_sha256") == sha(self.config_raw), "SNAPSHOT_RECHECK_PROJECT_CHANGED")
+        for path, expected in [(self.config_path, self.config_raw), (project["task"], project["task_raw"])]:
+            require(self.readiness_fingerprint(path, expected)["status"] == "MATCH", "SNAPSHOT_RECHECK_PROJECT_CHANGED")
+        inspected = inspect_snapshot_recheck(job, sha(creation_raw))
+        return inspected
+
+    def snapshot_recheck_preview(self, request):
+        """Read only saved creation evidence, current selected bytes and Git metadata."""
+        with self.lock:
+            self.snapshot_recheck_draft = None
+            self.recheck_draft = None
+            self.bundle_workspace_draft = None
+            self.snapshot_export_draft = None
+            self.snapshot_workspace_draft = None
+            require(type(request) is dict and set(request) == {"workspace_id"}, "SNAPSHOT_RECHECK_FIELDS")
+            inspected = self._snapshot_recheck_inspection(request["workspace_id"])
+            history = snapshot_recheck_history_pin(self.data / "snapshot-workspace-rechecks")
+            pin = sha(canonical({"inspection": inspected["summary"], "history_sha256": history}))
+            result = {"version": 1, "workspace_id": request["workspace_id"], "preview_id": secrets.token_hex(8),
+                      "preview_sha256": pin, "expires_at_ms": time.time_ns() // 1000000 + 300000,
+                      "history_sha256": history, "inspection": inspected["summary"],
+                      "java_required": any(isinstance(spec, dict) and spec.get("kind") == "java-main"
+                                           for spec in inspected["task"]["checks"].values()),
+                      "java_available": self.jdk_home is not None}
+            require(len(canonical(result)) <= 131072, "SNAPSHOT_RECHECK_OUTPUT_LIMIT")
+            self.snapshot_recheck_draft = {"response": result, "deadline": time.monotonic() + 300}
+            return copy.deepcopy(result)
+
+    def snapshot_recheck_start(self, request):
+        with self.lock:
+            require(type(request) is dict and set(request) == {"preview_id", "preview_sha256"}, "SNAPSHOT_RECHECK_FIELDS")
+            draft = self.snapshot_recheck_draft
+            require(draft is not None, "SNAPSHOT_RECHECK_PREVIEW_REQUIRED")
+            value = draft["response"]
+            require(request["preview_id"] == value["preview_id"]
+                    and request["preview_sha256"] == value["preview_sha256"], "SNAPSHOT_RECHECK_PREVIEW_CHANGED")
+            if time.monotonic() >= draft["deadline"] or time.time_ns() // 1000000 >= value["expires_at_ms"]:
+                self.snapshot_recheck_draft = None
+                raise Refused("SNAPSHOT_RECHECK_PREVIEW_EXPIRED")
+            blocked = self.admission()
+            require(blocked is None, blocked or "ADMISSION")
+            inspected = self._snapshot_recheck_inspection(value["workspace_id"])
+            require(len(self._snapshot_recheck_rows(reserve_bytes=262144)) < 200, "SNAPSHOT_RECHECK_LIMIT")
+            history = snapshot_recheck_history_pin(self.data / "snapshot-workspace-rechecks")
+            pin = sha(canonical({"inspection": inspected["summary"], "history_sha256": history}))
+            require(pin == value["preview_sha256"], "SNAPSHOT_RECHECK_PREVIEW_CHANGED")
+            require(self.jdk_home is not None or not any(isinstance(spec, dict) and spec.get("kind") == "java-main"
+                    for spec in inspected["task"]["checks"].values()), "JDK_REQUIRED")
+            self.snapshot_recheck_draft = None
+            self.recheck_draft = None
+            self.bundle_workspace_draft = None
+            self.snapshot_export_draft = None
+            self.snapshot_workspace_draft = None
+            attempt_id = secrets.token_hex(8)
+            attempt = self.data / "snapshot-workspace-rechecks" / attempt_id
+            attempt.mkdir(mode=0o700, exist_ok=False)
+            receipt = {"version": 1, "format": "outlands-snapshot-workspace-recheck-v1", "id": attempt_id,
+                       "workspace_id": value["workspace_id"], "status": "PREPARING", "created": int(time.time()),
+                       "source_applied": False, "workspace_modified": False,
+                       "creation_sha256": inspected["summary"]["creation_sha256"],
+                       "preview_sha256": pin, "history_sha256": history}
+            write_new(attempt / "receipt.json", canonical(receipt))
+            try:
+                worker_request = {"version": 1, "id": attempt_id, "workspace_id": value["workspace_id"],
+                                  "job_dir": str(self.data / "snapshot-workspaces" / value["workspace_id"]),
+                                  "preview_sha256": pin, "creation_sha256": receipt["creation_sha256"],
+                                  "history_sha256": history}
+                write_new(attempt / "request.json", canonical(worker_request))
+                command = [sys.executable, "-B", str(HERE / "snapshot_recheck.py"), "--attempt-dir", str(attempt)]
+                if self.jdk_home is not None:
+                    command += ["--jdk-home", str(self.jdk_home)]
+                fd = os.open(attempt / "worker.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                log = os.fdopen(fd, "wb")
+                try:
+                    child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                             start_new_session=True,
+                                             env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "PYTHONNOUSERSITE": "1"})
+                except BaseException:
+                    log.close()
+                    raise
+                self.snapshot_recheck_children[attempt_id] = (child, log)
+            except (OSError, ValueError, Refused, subprocess.SubprocessError):
+                receipt.update(status="FAILED", reason="SNAPSHOT_RECHECK_START_FAILED", finished=max(receipt["created"], int(time.time())))
+                replace_json(attempt / "receipt.json", receipt)
+                raise Refused("SNAPSHOT_RECHECK_START_FAILED") from None
+            return self.snapshot_recheck_view(attempt_id)
+
+    def snapshot_recheck_view(self, attempt_id):
+        with self.lock:
+            require(type(attempt_id) is str and ID.fullmatch(attempt_id) is not None, "SNAPSHOT_RECHECK_ID")
+            attempt = self.data / "snapshot-workspace-rechecks" / attempt_id
+            entry = self.snapshot_recheck_children.get(attempt_id)
+            exited = entry is not None and entry[0].poll() is not None
+            if exited:
+                child, log = self.snapshot_recheck_children.pop(attempt_id)
+                log.close()
+            try:
+                raw = readiness_read_file(attempt, "receipt.json", 262144)
+                receipt = parse(raw)
+            except (Refused, OSError, ValueError):
+                raise Refused("SNAPSHOT_RECHECK_RECORD_INVALID") from None
+            require(valid_snapshot_recheck_receipt(receipt) and receipt["id"] == attempt_id, "SNAPSHOT_RECHECK_RECORD_INVALID")
+            try:
+                pending, limited = self.readiness_entries(attempt, lambda name: name == "receipt.json.next", 1)
+            except (Refused, OSError, ValueError):
+                raise Refused("SNAPSHOT_RECHECK_RECORD_INVALID") from None
+            require(not limited, "SNAPSHOT_RECHECK_RECORD_INVALID")
+            require(not pending or entry is not None and not exited and receipt["status"] == "PREPARING",
+                    "SNAPSHOT_RECHECK_RECORD_INVALID")
+            if exited and receipt["status"] == "PREPARING":
+                receipt.update(status="INTERRUPTED", reason="SNAPSHOT_RECHECK_INTERRUPTED", finished=max(receipt["created"], int(time.time())))
+                replace_json(attempt / "receipt.json", receipt, raw)
+            return {**receipt, "owned_active": attempt_id in self.snapshot_recheck_children}
+
+    def _snapshot_recheck_rows(self, reserve_bytes=0):
+        names, truncated = self.readiness_entries(self.data / "snapshot-workspace-rechecks", lambda _: True, 200)
+        require(not truncated, "SNAPSHOT_RECHECK_LIMIT")
+        rows, record_bytes = [], 0
+        for name in names:
+            require(ID.fullmatch(name) is not None, "SNAPSHOT_RECHECK_RECORD_INVALID")
+            row = self.snapshot_recheck_view(name)
+            record_bytes += len(readiness_read_file(self.data / "snapshot-workspace-rechecks" / name, "receipt.json", 262144))
+            require(record_bytes <= 2097152 - reserve_bytes, "SNAPSHOT_RECHECK_LIMIT")
+            rows.append({key: row[key] for key in ["version", "id", "workspace_id", "status", "created", "finished",
+                        "reason", "source_applied", "workspace_modified", "owned_active", "creation_sha256",
+                        "preview_sha256", "history_sha256", "snapshot_sha256"] if key in row})
+        return rows
+
+    def snapshot_rechecks(self, workspace_id):
+        with self.lock:
+            require(type(workspace_id) is str and ID.fullmatch(workspace_id) is not None, "SNAPSHOT_RECHECK_ID")
+            rows = self._snapshot_recheck_rows()
+            result = {"version": 1, "workspace_id": workspace_id,
+                      "history_sha256": snapshot_recheck_history_pin(self.data / "snapshot-workspace-rechecks"),
+                      "rechecks": [row for row in rows if row["workspace_id"] == workspace_id]}
+            require(len(canonical(result)) <= 262144, "SNAPSHOT_RECHECK_OUTPUT_LIMIT")
+            return result
+
+    def snapshot_recheck_stop(self, attempt_id):
+        with self.lock:
+            self.snapshot_recheck_view(attempt_id)
+            entry = self.snapshot_recheck_children.get(attempt_id)
+            require(entry is not None and entry[0].poll() is None, "NO_OWNED_ACTIVE_SNAPSHOT_RECHECK")
+            child = entry[0]
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                child.wait()
+            return self.snapshot_recheck_view(attempt_id)
 
     def _bundle_bytes(self, run_id):
         """Verify saved accepted artifacts without live reconciliation or writes."""
@@ -2410,6 +2638,14 @@ class Manager:
         self.recheck_draft = None
         self.snapshot_export_draft = None
         self.snapshot_workspace_draft = None
+        self.snapshot_recheck_draft = None
+        for attempt_id in list(self.snapshot_recheck_children):
+            try:
+                self.snapshot_recheck_stop(attempt_id)
+            except Refused:
+                pass
+        for attempt_id in list(self.snapshot_recheck_children):
+            self.snapshot_recheck_view(attempt_id)
         for identifier in list(self.snapshot_workspace_children):
             try:
                 self.snapshot_workspace_stop(identifier)
@@ -2554,6 +2790,10 @@ def make_handler(manager, token, origin):
                     self.send(200, canonical(manager.recheck_view(path.removeprefix("/api/workspace-recheck/"))))
                 elif path.startswith("/api/snapshot-export-history/"):
                     self.send(200, canonical(manager.snapshot_export_history(path.removeprefix("/api/snapshot-export-history/"))))
+                elif path.startswith("/api/snapshot-workspace-rechecks/"):
+                    self.send(200, canonical(manager.snapshot_rechecks(path.removeprefix("/api/snapshot-workspace-rechecks/"))))
+                elif path.startswith("/api/snapshot-workspace-recheck/"):
+                    self.send(200, canonical(manager.snapshot_recheck_view(path.removeprefix("/api/snapshot-workspace-recheck/"))))
                 elif path == "/api/snapshot-workspaces":
                     self.send(200, canonical(manager.snapshot_workspaces()))
                 elif path.startswith("/api/snapshot-workspace/"):
@@ -2643,7 +2883,9 @@ def make_handler(manager, token, origin):
                                                                   raw, hashes[0] if hashes else None)
                     self.send(200, canonical(result))
                     return
-                if path in {"/api/snapshot-workspace-create", "/api/snapshot-workspace-stop"}:
+                if path in {"/api/snapshot-workspace-create", "/api/snapshot-workspace-stop",
+                            "/api/snapshot-workspace-recheck-preview", "/api/snapshot-workspace-recheck-start",
+                            "/api/snapshot-workspace-recheck-stop"}:
                     types = self.headers.get_all("Content-Type", [])
                     require(len(types) == 1 and types[0].split(";", 1)[0].strip().lower() == "application/json",
                             "SNAPSHOT_WORKSPACE_INPUT")
@@ -2655,7 +2897,9 @@ def make_handler(manager, token, origin):
                 if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop", "/api/workspace-recheck-preview",
                             "/api/workspace-recheck-start", "/api/workspace-recheck-stop", "/api/snapshot-export-preview",
                             "/api/snapshot-export-accept", "/api/snapshot-export-download",
-                            "/api/snapshot-workspace-create", "/api/snapshot-workspace-stop"}:
+                            "/api/snapshot-workspace-create", "/api/snapshot-workspace-stop",
+                            "/api/snapshot-workspace-recheck-preview", "/api/snapshot-workspace-recheck-start",
+                            "/api/snapshot-workspace-recheck-stop"}:
                     lengths = self.headers.get_all("Content-Length", [])
                     require(self.headers.get("Transfer-Encoding") is None and len(lengths) == 1
                             and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
@@ -2666,7 +2910,9 @@ def make_handler(manager, token, origin):
                 if path in {"/api/bundle-workspace-create", "/api/bundle-workspace-stop", "/api/workspace-recheck-preview",
                             "/api/workspace-recheck-start", "/api/workspace-recheck-stop", "/api/snapshot-export-preview",
                             "/api/snapshot-export-accept", "/api/snapshot-export-download",
-                            "/api/snapshot-workspace-create", "/api/snapshot-workspace-stop"}:
+                            "/api/snapshot-workspace-create", "/api/snapshot-workspace-stop",
+                            "/api/snapshot-workspace-recheck-preview", "/api/snapshot-workspace-recheck-start",
+                            "/api/snapshot-workspace-recheck-stop"}:
                     require(len(raw) == length, "SNAPSHOT_WORKSPACE_INPUT" if path.startswith("/api/snapshot-workspace-")
                             else "BUNDLE_WORKSPACE_INPUT")
                 request = parse(raw)
@@ -2705,6 +2951,13 @@ def make_handler(manager, token, origin):
                     raw = manager.snapshot_export_download(request)
                     self.send(200, raw, "application/zip", "outlands-reviewed-snapshot.zip")
                     return
+                elif path == "/api/snapshot-workspace-recheck-preview":
+                    result = manager.snapshot_recheck_preview(request)
+                elif path == "/api/snapshot-workspace-recheck-start":
+                    result = manager.snapshot_recheck_start(request)
+                elif path == "/api/snapshot-workspace-recheck-stop":
+                    require(type(request) is dict and set(request) == {"id"}, "SNAPSHOT_RECHECK_FIELDS")
+                    result = manager.snapshot_recheck_stop(request["id"])
                 elif path == "/api/snapshot-workspace-create":
                     result = manager.snapshot_workspace_create(request)
                 elif path == "/api/snapshot-workspace-stop":

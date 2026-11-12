@@ -5,7 +5,11 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.15 adds **Snapshot review workspace**: preview a private snapshot export
+Version 0.16 adds **Snapshot workspace recheck**: inspect manual editable-file
+changes in a verified snapshot review workspace, then explicitly run the original
+fixed Python/Java checks against a separate pinned private snapshot. Each attempt
+has its own history; original creation evidence and previous results remain
+unchanged. It makes no model request. It retains **Snapshot review workspace**: preview a private snapshot export
 against an approved selected baseline, then explicitly create a separate private
 Git worktree and run fresh configured Python/Java checks. It performs no model
 inference and does not write original project files. It retains **Snapshot Export
@@ -411,9 +415,10 @@ workers it owns. After restart, saved unfinished work is unowned and unresolved.
 No foreign or saved PID is signalled. Read-only preview/history does not clear a
 hold or authorize recovery.
 
-This workspace type has no v0.12 manual-recheck or v0.13 snapshot-re-export action
-in this milestone. Existing bundle review workspaces retain their separate tools;
-there is no automatic format conversion. `snapshot_workspace.py` is the
+Use **Snapshot workspace recheck** below for later manual editable-file changes.
+This workspace type has no snapshot re-export action in this milestone. Existing
+bundle review workspaces retain their separate tools; there is no automatic format
+conversion. `snapshot_workspace.py` is the
 controller's explicit staged-job worker, not a general archive-import CLI. Use
 the reviewed browser flow for import and creation.
 
@@ -429,6 +434,50 @@ The host and private store must remain trusted and stable: sequential rechecks
 are not a multiwriter transaction or an atomic filesystem snapshot. Keep these
 archives, generated repositories, source copies, notes and logs out of public
 source and uploads.
+
+## Recheck a snapshot review workspace
+
+Select a `VERIFIED` creation in **Snapshot workspace history**, then choose
+**Inspect current snapshot workspace**. The read-only inspection compares
+selected current bytes with the imported creation snapshot. Protected files,
+approved original baseline, task/config/archive evidence and the simple private
+Git baseline must still match. No Git command, project check, model request,
+process reconciliation or project/worktree write occurs during inspection.
+Inspection and history remain available under an unrelated hold.
+
+Review changed editable files, hashes, fixed check profiles, preview expiry and
+history pin. Within five minutes, explicitly choose **Run snapshot recheck**.
+The server checks current admission and configured Java prerequisites, repeats
+inspection, reserves receipt capacity and consumes the preview before writing a
+new private attempt in `DATA/snapshot-workspace-rechecks/ID/`. Its worker copies
+only the inspected selected bytes into a separate snapshot without Git metadata
+and runs the original task's fixed isolated Python/Java checks there.
+
+Each attempt has the distinct `outlands-snapshot-workspace-recheck-v1` format.
+Creation receipts, earlier attempts, worktree/Git and original source stay
+unchanged. Full check evidence stays private; displayed output is separately
+bounded. `VERIFIED` records successful checks for the pinned snapshot at that
+time. It does not refresh the creation receipt or guarantee correctness,
+authenticity, provider completion or authorization to adopt changes.
+
+Changed inputs, selected bytes, Git controls, history, expired/replaced previews
+and restart require another explicit inspection. The worker rechecks both its
+snapshot and live evidence around execution; drift retains available output but
+refuses verification. Failures, interruptions, partial writes, malformed records
+and unknown unfinished attempts stay retained and block further execution. No
+automatic retry, evidence cleanup, hold clearing, source adoption, format conversion
+or snapshot re-export is provided. **Stop owned snapshot recheck** signals only
+a worker owned by the current server; saved process identifiers grant no ownership.
+Closing the panel ends selected polling without stopping the worker.
+
+Git control/index validation reuses the existing direct readers for the generated
+simple worktree subset. Current raw metadata hashes are new observations;
+v0.15 did not record those raw historical hashes. The host/store must remain
+trusted and stable; sequential guards are not an atomic filesystem snapshot.
+Limits are 32 selected UTF-8 files, 32 KiB/file and 128 KiB total, 200 attempts,
+2 MiB aggregate raw receipts, 256 KiB reserved per new receipt, 32 KiB requests,
+64 KiB inspection summaries, 128 KiB previews and 256 KiB history responses.
+Keep real workspaces, selected snapshots, check output and attempts private.
 
 ## Create a private bundle review workspace
 
@@ -985,7 +1034,7 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-Final offline qualification passed 652 unit methods across 28 suites, including
+Final offline qualification passed 701 unit methods across 30 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1047,7 +1096,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.15 adds no real-model qualification. Snapshot review workspaces,
+Version 0.16 adds no real-model qualification. Snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context
