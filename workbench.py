@@ -22,6 +22,7 @@ from java_check import validate_jdk
 from project_setup import prepare
 from project_revisions import refresh_task
 from task_presets import profile as task_preset_profile, prepare as prepare_task_preset, validate_record as valid_task_preset
+from preset_comparison import compare_goals
 from run_diagnostics import summarize as summarize_diagnostics
 from run_comparison import compare_runs
 from project_readiness import summarize as summarize_readiness
@@ -1226,6 +1227,22 @@ class Manager:
             result = {"version": 1, "project_id": request["project_id"], "preset_id": value["id"], "name": value["name"],
                       "goal": value["goal"], "binding_sha256": binding, "record_sha256": row["record_sha256"],
                       "history_sha256": history}
+            require(len(canonical(result)) <= 65536, "TASK_PRESET_OUTPUT_LIMIT")
+            return result
+
+    def task_preset_preview(self, request):
+        """Compare one pinned private goal with a supplied draft without mutation."""
+        with self.lock:
+            fields = {"project_id", "preset_id", "record_sha256", "binding_sha256", "history_sha256"}
+            require(type(request) is dict and set(request) == fields | {"draft_goal"}, "TASK_PRESET_INPUT")
+            loaded = self.task_preset_load({key: request[key] for key in fields})
+            comparison = compare_goals(request["draft_goal"], loaded["goal"])
+            require(self._task_preset_project(request["project_id"])[1] == loaded["binding_sha256"],
+                    "TASK_PRESET_PROJECT_CHANGED")
+            require(self._task_preset_scan(request["project_id"])[1] == loaded["history_sha256"],
+                    "TASK_PRESET_HISTORY_CHANGED")
+            result = {key: value for key, value in loaded.items() if key != "goal"}
+            result["comparison"] = comparison
             require(len(canonical(result)) <= 65536, "TASK_PRESET_OUTPUT_LIMIT")
             return result
 
@@ -3575,7 +3592,8 @@ def make_handler(manager, token, origin):
                 if path.startswith("/api/task-preset-"):
                     routes = {"/api/task-preset-list": manager.task_preset_list,
                               "/api/task-preset-save": manager.task_preset_save,
-                              "/api/task-preset-load": manager.task_preset_load}
+                              "/api/task-preset-load": manager.task_preset_load,
+                              "/api/task-preset-preview": manager.task_preset_preview}
                     require(path in routes, "TASK_PRESET_INPUT")
                     types, lengths = self.headers.get_all("Content-Type", []), self.headers.get_all("Content-Length", [])
                     require(self.headers.get("Transfer-Encoding") is None and len(types) == 1

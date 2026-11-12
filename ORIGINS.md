@@ -187,3 +187,14 @@ public source. Existing archive formats, historical evidence, the original
 uncertain Java hold and UNASSIGNED licensing remain unchanged. Qualification
 status is documented separately in VALIDATION.md; this addition claims no new
 model qualification, hold recovery or general reuse license.
+
+Version 0.21 adds explicit private preset preview and draft comparison. Its pure
+helper hashes exact UTF-8 instructions and identifies shared prefix/suffix text
+by Unicode codepoint, highlighting the first through last difference. It reuses
+v0.20's pinned read-only loading and guarded preset history; no dependency,
+external diff service or model is introduced. Invented Python/Java tests and
+separate fixed-check fixtures keep comparison evidence distinct from execution.
+Preview creates no stored record and never assigns Task. Real goals, comparisons,
+hashes, configuration and runtime evidence remain private. Existing notices,
+archive formats, original Java uncertainty hold and UNASSIGNED licensing stay
+unchanged; this milestone claims no new model qualification or reuse license.
