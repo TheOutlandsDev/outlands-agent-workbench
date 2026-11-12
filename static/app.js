@@ -3,6 +3,7 @@ const token=document.querySelector('meta[name="workbench-token"]').content;
 const $=id=>document.getElementById(id);
 let configuration=null,selected=null,current=null,polling=false,busy=false,initialized=false,setupDraft=null;
 let contextRunId=null,contextSnapshot=null;
+let taskPresetBusy=false,taskPresetSequence=0,taskPresetSnapshot=null,taskPresetSelectedId="",taskPresetLoaded=null,taskPresetHistoryLocks=[];
 let comparisonOpen=false,comparisonOpening=false,comparisonBusy=false,comparisonHistoryLoading=false,comparisonSequence=0,comparisonHistorySequence=0,comparisonLeftId="",comparisonRightId="",normalRefreshInFlight=Promise.resolve(),comparisonHistoryReady=false,comparisonOpeningCancel=null,comparisonOpenSequence=0;
 let readinessOpen=false,readinessOpening=false,readinessReady=false,readinessBusy=false,readinessProjectId="",readinessSequence=0,readinessOpenSequence=0,readinessOpeningCancel=null;
 let bundleOpen=false,bundleOpening=false,bundleBusy=false,bundleRunId=null,bundlePreview=null,bundleSequence=0,bundleOpenSequence=0,bundleOpeningCancel=null;
@@ -157,11 +158,11 @@ function renderContext(v){
 function showError(error){$('alert').textContent=errors[error.message]||error.message.replaceAll('_',' ').toLowerCase();$('alert').hidden=false;}
 function clearError(){$('alert').hidden=true;}
 async function api(path,body){const options={headers:{'X-Workbench-Token':token}};if(body!==undefined){options.method='POST';options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}const r=await fetch(path,options);const value=await r.json();if(!r.ok)throw new Error(value.error||'REQUEST_REFUSED');return value;}
-function readOnlyPanelActive(){return comparisonOpen||comparisonOpening||readinessOpen||readinessOpening||bundleOpen||bundleOpening||projectCheckOpen||projectCheckOpening||snapshotProjectOpen||snapshotProjectOpening||snapshotWorkspaceOpen||snapshotWorkspaceOpening||bundleWorkspaceOpen||bundleWorkspaceOpening;}
+function readOnlyPanelActive(){return taskPresetBusy||comparisonOpen||comparisonOpening||readinessOpen||readinessOpening||bundleOpen||bundleOpening||projectCheckOpen||projectCheckOpening||snapshotProjectOpen||snapshotProjectOpening||snapshotWorkspaceOpen||snapshotWorkspaceOpening||bundleWorkspaceOpen||bundleWorkspaceOpening;}
 function stateClass(state){return state==='REVIEW_READY'?'good':['FAILED','REFUSED','UNCERTAIN','INTERRUPTED','RECOVERY_REQUIRED'].includes(state)?'bad':'';}
 function projectChanged(){const p=configuration.projects.find(p=>p.id===$('project').value);if(!p)return;const demo=$('model').querySelector('option[value="scripted-demo"]');demo.disabled=!p.scripted_available;if(demo.disabled&&$('model').value==='scripted-demo')$('model').value=configuration.models[0]||'';$('goal').value=p.goal;const files=$('scope-files');files.replaceChildren(...p.files.map(name=>node('span',name+(p.editable.includes(name)?' · editable':' · protected'),'file-chip'+(p.editable.includes(name)?' editable':''))));$('scope-note').textContent=p.checks.length+' named check'+(p.checks.length===1?'':'s')+' · Edits stay in a private copy';modelChanged();resetProjectRefresh(p);}
-function modelChanged(){$('goal').readOnly=$('model').value==='scripted-demo';if($('goal').readOnly){const p=configuration.projects.find(p=>p.id===$('project').value);if(p)$('goal').value=p.goal;}}
-function setAdmission(reason){const blocked=Boolean(reason);if(blocked&&admissionReason!==reason)invalidateProjectRefresh();admissionReason=reason||null;$('admission').hidden=!blocked;$('admission').textContent=reason?(errors[reason]||reason.replaceAll('_',' ').toLowerCase()):'';for(const id of ['start','project','model','goal'])$(id).disabled=blocked||busy||projectRefreshBusy||(id==='start'&&!$('model').value);setProjectRefreshControls();setComparisonControls();}
+function modelChanged(){$('goal').readOnly=$('model').value==='scripted-demo';if($('goal').readOnly){const p=configuration.projects.find(p=>p.id===$('project').value);if(p)$('goal').value=p.goal;}invalidateTaskPresets('Project or model changed. Refresh private presets explicitly.');setTaskPresetControls();}
+function setAdmission(reason){const blocked=Boolean(reason);if(blocked&&admissionReason!==reason)invalidateProjectRefresh();admissionReason=reason||null;$('admission').hidden=!blocked;$('admission').textContent=reason?(errors[reason]||reason.replaceAll('_',' ').toLowerCase()):'';for(const id of ['start','project','model','goal'])$(id).disabled=blocked||busy||projectRefreshBusy||taskPresetBusy||(id==='start'&&!$('model').value);setProjectRefreshControls();setComparisonControls();}
 function renderHistory(rows){$('history-count').textContent=String(rows.length);if(!rows.length){$('history').replaceChildren(node('p','Your runs will appear here.','empty-small'));return;}$('history').replaceChildren(...rows.map(row=>{const b=node('button',undefined,'history-item'+(row.id===selected?' selected':''));b.append(node('strong',row.project_name),node('small',(friendly[row.state]||row.state)+' · '+row.id.slice(0,6)));b.addEventListener('click',()=>{invalidateBundle('Run selection changed. Close this panel and preview the selected accepted run.');selected=row.id;current=null;setBundleControls();refresh();});return b;}));}
 function renderRun(v){const changed=!current||current.id!==v.id;if(bundleRunKey(current)!==bundleRunKey(v))invalidateBundle('Run, review or result changed. Preview the accepted artifact again.');current=v;$('welcome').hidden=true;$('run-panel').hidden=false;$('run-project').textContent=v.project_name.toUpperCase();$('run-title').textContent='Task '+v.id.slice(0,8);$('run-meta').textContent=v.goal;$('run-state').textContent=friendly[v.state]||v.state;$('run-state').className='state-pill '+stateClass(v.state);$('stop').disabled=!['RUNNING','STOP_REQUESTED'].includes(v.state)||v.state==='STOP_REQUESTED';$('budget-label').textContent=v.turns+' / '+v.max_turns+' model turns';$('budget-bar').max=v.max_turns;$('budget-bar').value=v.turns;$('run-mode').textContent=v.backend==='scripted-demo'?'SCRIPTED · NO INFERENCE':v.model;renderDiagnostics(v);renderContext(v);$('plan').replaceChildren(...(v.plan.length?v.plan.map(s=>node('li',s)):[node('li','Waiting for the agent’s plan.','muted')]));$('events').replaceChildren(...v.events.map(e=>{const li=node('li');li.append(node('span',e.text),node('small','#'+String(e.index).padStart(2,'0')+' · '+e.kind.replaceAll('_',' ')));return li;}));$('activity-empty').hidden=v.events.length>0;$('diff').textContent=v.patch||'The patch will appear after the task finishes.';
   $('checks').replaceChildren(...v.checks.map(c=>{const card=node('section',undefined,'check-card');const heading=node('div',undefined,'check-heading');heading.append(node('strong',c.label),node('span',c.exit_code===0?'PASS':'FAIL','state-pill '+(c.exit_code===0?'good':'bad')));card.append(heading,node('p',(c.tests_ran||0)+' tests · exit '+c.exit_code+(c.timed_out?' · timed out':''),'muted'),node('pre',c.output||'No output','code-view'));return card;}));
@@ -171,7 +172,7 @@ function renderRun(v){const changed=!current||current.id!==v.id;if(bundleRunKey(
 }
 async function refresh(){if(polling||readOnlyPanelActive())return;polling=true;let finish;normalRefreshInFlight=new Promise(resolve=>{finish=resolve;});try{const rows=await api('/api/history');if(readOnlyPanelActive())return;if(!initialized){selected=rows.length?rows[0].id:null;initialized=true;}renderHistory(rows);if(selected){const run=await api('/api/run/'+selected);if(readOnlyPanelActive())return;renderRun(run);}else{$('run-panel').hidden=true;$('welcome').hidden=false;const cfg=await api('/api/config');if(readOnlyPanelActive())return;setAdmission(cfg.admission_block);}}catch(error){showError(error);}finally{polling=false;finish();}}
 async function submitReview(verdict){if(!current)return;clearError();busy=true;invalidateBundle('Review changed. Preview the accepted artifact again.');setBundleControls();try{await api('/api/review',{id:current.id,result_sha256:current.result_sha256,patch_sha256:current.patch_sha256,verdict,note:$('review-note').value});await refresh();}catch(error){showError(error);}finally{busy=false;if(current)renderRun(current);}}
-$('task-form').addEventListener('submit',async event=>{event.preventDefault();clearError();busy=true;setAdmission(null);try{const value=await api('/api/start',{project:$('project').value,model:$('model').value,goal:$('goal').value});selected=value.id;current=null;await refresh();}catch(error){showError(error);}finally{busy=false;await refresh();}});
+$('task-form').addEventListener('submit',async event=>{event.preventDefault();if(taskPresetBusy)return;clearError();busy=true;setAdmission(null);try{const value=await api('/api/start',{project:$('project').value,model:$('model').value,goal:$('goal').value});selected=value.id;current=null;await refresh();}catch(error){showError(error);}finally{busy=false;await refresh();}});
 $('new-task').addEventListener('click',()=>{invalidateBundle();selected=null;current=null;setBundleControls();clearError();$('run-panel').hidden=true;$('welcome').hidden=false;$('goal').focus();refresh();});
 $('project').addEventListener('change',projectChanged);$('model').addEventListener('change',modelChanged);
 $('stop').addEventListener('click',async()=>{if(!current)return;clearError();try{await api('/api/stop',{id:current.id});await refresh();}catch(error){showError(error);}});
@@ -231,7 +232,7 @@ function setComparisonControls(){
   $('comparison-left').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||!$('comparison-left').options.length;
   $('comparison-right').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||!$('comparison-right').options.length;
   $('comparison-submit').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||comparisonBusy||!comparisonLeftId||!comparisonRightId||comparisonLeftId===comparisonRightId;
-  setReadinessControls();setBundleControls();setProjectCheckControls();setSnapshotProjectControls();setSnapshotWorkspaceControls();setBundleWorkspaceControls();
+  setReadinessControls();setBundleControls();setProjectCheckControls();setSnapshotProjectControls();setSnapshotWorkspaceControls();setBundleWorkspaceControls();setTaskPresetControls();
 }
 function comparisonOptions(rows,selectedId){
   const options=rows.map(run=>{const option=node('option',comparisonValue(run.project_name)+' · '+comparisonState(run.state)+' · '+run.id.slice(0,8)+' · '+comparisonValue(run.goal));option.value=run.id;return option;});
@@ -1089,8 +1090,8 @@ function setProjectRefreshControls(){
   const project=selectedProjectConfiguration();
   const blocked=Boolean(admissionReason);
   const disabled=!project||blocked||busy||projectRefreshBusy;
-  $('refresh-open').disabled=!project||projectRefreshBusy;
-  $('refresh-close').disabled=projectRefreshBusy;
+  $('refresh-open').disabled=!project||projectRefreshBusy||taskPresetBusy;
+  $('refresh-close').disabled=projectRefreshBusy||taskPresetBusy;
   $('refresh-goal').disabled=disabled;
   $('refresh-preview').disabled=disabled||!$('refresh-goal').value.trim();
   $('refresh-save').disabled=disabled||!projectRefreshDraft||projectRefreshDraft.project!==project.id||projectRefreshDraft.goal!==$('refresh-goal').value;
@@ -1388,3 +1389,119 @@ $('snapshot-search-open').addEventListener('click',async()=>{
 });
 // Context changes never reuse old source observations or a search-origin editor handoff.
 for(const [id,event] of [['snapshot-workspace-form','input'],['snapshot-workspace-form','change'],['snapshot-workspace-form','submit'],['snapshot-workspace-history-refresh','click'],['snapshot-workspace-history-select','change'],['snapshot-workspace-create','click'],['snapshot-workspace-stop','click'],['snapshot-workspace-close','click'],['snapshot-workspace-recheck-inspect','click'],['snapshot-workspace-recheck-start','click'],['snapshot-workspace-recheck-history-refresh','click'],['snapshot-workspace-recheck-history-select','change'],['snapshot-workspace-recheck-stop','click'],['snapshot-reexport-review','click'],['snapshot-reexport-accept','click'],['snapshot-reexport-history-refresh','click'],['snapshot-reexport-history-select','change'],['snapshot-reexport-download','click'],['snapshot-editor-files-refresh','click'],['snapshot-editor-file','change'],['snapshot-editor-open','click'],['snapshot-editor-save','click']])$(id).addEventListener(event,()=>{if(id==='snapshot-editor-save')workspaceSearchEditorPin=null;clearWorkspaceSearch('Workspace, execution, export or editor context changed. Search the intended workspace explicitly again.');setSnapshotWorkspaceControls();});
+
+// Presets contain private goal text only; loading never submits the task form.
+const taskPresetErrors={
+  TASK_PRESET_INPUT:'The preset request did not match the required fields.',
+  TASK_PRESET_PROJECT:'The selected approved project is unavailable.',
+  TASK_PRESET_PROJECT_CHANGED:'Project configuration changed. Reload the intended project and refresh its presets.',
+  TASK_PRESET_BINDING_CHANGED:'The approved task profile changed. Refresh presets before saving or loading.',
+  TASK_PRESET_HISTORY_CHANGED:'Preset history changed. Refresh it explicitly before another decision.',
+  TASK_PRESET_RECORD_CHANGED:'The selected preset bytes changed. Inspect the retained private record.',
+  TASK_PRESET_INCOMPATIBLE:'This preset was saved for a different task profile. Its existing record stays retained.',
+  TASK_PRESET_NAME_INVALID:'Use 1–80 Unicode characters and at most 240 UTF-8 bytes, without surrounding whitespace or control characters.',
+  TASK_PRESET_GOAL_INVALID:'Task must contain 1–2,000 Unicode characters and at most 8,000 UTF-8 bytes, without NUL or invalid Unicode.',
+  TASK_PRESET_PROFILE_INVALID:'The approved project task profile could not be validated.',
+  TASK_PRESET_RECORD_INVALID:'A private preset record needs inspection before another preset action.',
+  TASK_PRESET_STORE_UNSAFE:'The private preset store could not be read safely. Inspect its retained records.',
+  TASK_PRESET_LIMIT:'The preset store or request exceeds its bound. Existing presets stay retained.',
+  TASK_PRESET_OUTPUT_LIMIT:'The preset response exceeds its bounded display size.',
+  TASK_PRESET_DUPLICATE:'A preset with that name already exists in this project. Refresh, then choose a different name for a new preset.',
+  TASK_PRESET_NOT_FOUND:'The selected preset is unavailable. Refresh this project’s private presets.',
+  TASK_PRESET_SAVE_FAILED:'Saving did not finish cleanly. Inspect retained preset files, then refresh explicitly.',
+  TASK_PRESET_SAVE_UNCERTAIN:'The save outcome is uncertain. Inspect retained preset files before another decision.',
+  TASK_PRESET_POLL_WAIT:'The current live update did not finish within ten seconds. No preset request was sent.',
+  TASK_PRESET_RESPONSE:'The preset response did not match its bounded project and hash requirements.'
+};
+function taskPresetFailure(error){return diagnosticText(taskPresetErrors,error&&error.message)||'The private preset operation could not complete. Refresh explicitly and inspect retained private records.';}
+function taskPresetExact(value,fields){return Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===fields.length&&fields.every(field=>Object.prototype.hasOwnProperty.call(value,field)));}
+function taskPresetUnicode(text){return typeof text==='string'&&Array.from(text).every(character=>character.length!==1||character.charCodeAt(0)<0xd800||character.charCodeAt(0)>0xdfff);}
+function taskPresetName(raw){
+  if(!taskPresetUnicode(raw))return {text:'',characters:0,bytes:0,valid:false};
+  const text=raw.normalize('NFC'),characters=Array.from(text).length,bytes=new TextEncoder().encode(text).length;
+  return {text,characters,bytes,valid:characters>=1&&characters<=80&&bytes<=240&&text.trim()===text&&!/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(text)};
+}
+function taskPresetGoal(text){return taskPresetUnicode(text)&&Array.from(text).length>=1&&Array.from(text).length<=2000&&new TextEncoder().encode(text).length<=8000&&Boolean(text.trim())&&!text.includes('\0');}
+function taskPresetBounded(value){return new TextEncoder().encode(JSON.stringify(value)).length<=65536;}
+function taskPresetProject(){return selectedProjectConfiguration();}
+function taskPresetSelected(){return taskPresetSnapshot&&taskPresetSnapshot.presets.find(row=>row.id===taskPresetSelectedId)||null;}
+function validTaskPresetRow(row,binding){return taskPresetExact(row,['id','name','created','binding_sha256','record_sha256','compatible'])&&bundleWorkspaceId(row.id)&&taskPresetName(row.name).valid&&row.name===row.name.normalize('NFC')&&Number.isSafeInteger(row.created)&&row.created>=0&&bundleHash(row.binding_sha256)&&bundleHash(row.record_sha256)&&typeof row.compatible==='boolean'&&row.compatible===(row.binding_sha256===binding);}
+function validTaskPresetList(value,projectId){return taskPresetExact(value,['version','project_id','binding_sha256','history_sha256','presets','limit'])&&value.version===1&&value.project_id===projectId&&bundleHash(value.binding_sha256)&&bundleHash(value.history_sha256)&&value.limit===64&&Array.isArray(value.presets)&&value.presets.length<=64&&new Set(value.presets.map(row=>row&&row.id)).size===value.presets.length&&value.presets.every(row=>validTaskPresetRow(row,value.binding_sha256))&&taskPresetBounded(value);}
+function invalidateTaskPresets(text){
+  taskPresetSequence++;taskPresetSnapshot=null;taskPresetSelectedId='';taskPresetLoaded=null;
+  $('task-preset-select').replaceChildren(Object.assign(node('option','Refresh presets explicitly'),{value:''}));
+  $('task-preset-name').value='';$('task-preset-details').replaceChildren();$('task-preset-details').hidden=true;
+  $('task-preset-status').textContent=text||'Choose a project, then explicitly refresh its private presets.';
+}
+function renderTaskPresetOptions(){
+  const rows=taskPresetSnapshot?taskPresetSnapshot.presets:[],placeholder=node('option',rows.length?'Choose a saved private preset':'No private presets saved for this project');placeholder.value='';
+  const options=rows.map(row=>{const option=node('option',row.name+' · '+(row.compatible?'Profile matches':'Profile changed'));option.value=row.id;return option;});
+  $('task-preset-select').replaceChildren(placeholder,...options);$('task-preset-select').value=taskPresetSelectedId;
+}
+function renderTaskPresetSelection(){
+  const row=taskPresetSelected();$('task-preset-details').replaceChildren();$('task-preset-details').hidden=!row;
+  if(row)$('task-preset-details').append(diagnosticList([['Private preset',row.name],['Saved (UTC)',diagnosticStarted(row.created*1000)],['Approved task profile',row.compatible?'Matches the selected project':'Changed · loading unavailable']],'diagnostic-facts task-preset-facts'));
+}
+function setTaskPresetControls(){
+  const project=taskPresetProject(),snapshot=taskPresetSnapshot,current=Boolean(project&&snapshot&&snapshot.project_id===project.id),row=taskPresetSelected(),name=taskPresetName($('task-preset-name').value);
+  const locked=!project||busy||projectRefreshBusy||readOnlyPanelActive()||!$('setup-panel').hidden||!$('refresh-panel').hidden;
+  $('task-preset-refresh').disabled=locked;
+  $('task-preset-name').disabled=locked||!current;
+  $('task-preset-save').disabled=locked||!current||snapshot.presets.length>=64||!name.valid||!taskPresetGoal($('goal').value);
+  $('task-preset-select').disabled=locked||!current||!snapshot.presets.length;
+  $('task-preset-load').disabled=locked||!current||!row||!row.compatible||$('goal').readOnly;
+  $('task-preset-name-note').textContent=name.valid?name.characters+' / 80 Unicode characters · '+name.bytes+' / 240 UTF-8 bytes. Names are unique within a project.':'Use 1–80 Unicode characters and at most 240 UTF-8 bytes, without surrounding whitespace or control characters.';
+  $('task-preset-load-note').textContent=$('goal').readOnly?'The scripted exercise keeps its original Task. Choose an already approved local model before loading a different goal.':row&&!row.compatible?'This saved task profile differs from the selected project. Keep the existing record and save a new preset for the current profile.':admissionReason?'Loading fills the disabled Task field for review. Run remains blocked by its existing admission requirements.':'Loading fills Task only. The selected project, model, file scope, checks and budgets stay fixed.';
+}
+function taskPresetLockHistory(){taskPresetHistoryLocks=Array.from($('history').querySelectorAll('button')).map(element=>[element,element.disabled]);for(const [element] of taskPresetHistoryLocks)element.disabled=true;}
+function taskPresetUnlockHistory(){for(const [element,disabled] of taskPresetHistoryLocks)if(element.isConnected)element.disabled=disabled;taskPresetHistoryLocks=[];}
+async function taskPresetWaitForLiveUpdate(){
+  let timer;
+  try{await Promise.race([normalRefreshInFlight,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('TASK_PRESET_POLL_WAIT')),10000);})]);}
+  finally{clearTimeout(timer);}
+}
+function taskPresetBegin(text){taskPresetBusy=true;taskPresetLockHistory();setAdmission(admissionReason);$('task-preset-status').textContent=text;}
+function taskPresetFinish(){taskPresetBusy=false;taskPresetUnlockHistory();setAdmission(admissionReason);}
+$('task-preset-refresh').addEventListener('click',async()=>{
+  if($('task-preset-refresh').disabled)return;
+  const project=taskPresetProject(),projectId=project.id;invalidateTaskPresets('Waiting for the current live update before reading private presets…');const sequence=taskPresetSequence;
+  taskPresetBegin('Waiting for the current live update before reading private presets…');
+  try{
+    await taskPresetWaitForLiveUpdate();if(sequence!==taskPresetSequence||taskPresetProject()?.id!==projectId)return;
+    const value=await api('/api/task-preset-list',{project_id:projectId});
+    if(sequence!==taskPresetSequence||taskPresetProject()?.id!==projectId)return;
+    if(!validTaskPresetList(value,projectId))throw new Error('TASK_PRESET_RESPONSE');
+    taskPresetSnapshot=value;renderTaskPresetOptions();renderTaskPresetSelection();$('task-preset-status').textContent=value.presets.length+' / 64 private presets for '+project.name+'. Select one to load its goal explicitly, or name the current Task for a new preset.';
+  }catch(error){if(sequence===taskPresetSequence)invalidateTaskPresets(taskPresetFailure(error));}
+  finally{taskPresetFinish();}
+});
+$('task-preset-select').addEventListener('change',()=>{taskPresetSequence++;taskPresetSelectedId=$('task-preset-select').value;taskPresetLoaded=null;renderTaskPresetSelection();$('task-preset-status').textContent=taskPresetSelected()?'Preset selected. Choose Load selected preset into Task explicitly.':'Choose a saved private preset or name the current Task for a new one.';setTaskPresetControls();});
+$('task-preset-form').addEventListener('submit',async event=>{
+  event.preventDefault();if($('task-preset-save').disabled)return;
+  const projectId=taskPresetProject().id,snapshot=taskPresetSnapshot,rawName=$('task-preset-name').value,name=taskPresetName(rawName).text,goal=$('goal').value,sequence=++taskPresetSequence;
+  taskPresetBegin('Waiting for the current live update before saving one new private preset…');
+  try{
+    await taskPresetWaitForLiveUpdate();if(sequence!==taskPresetSequence||taskPresetProject()?.id!==projectId||snapshot!==taskPresetSnapshot||rawName!==$('task-preset-name').value||goal!==$('goal').value)return;
+    const value=await api('/api/task-preset-save',{project_id:projectId,name,goal,binding_sha256:snapshot.binding_sha256,history_sha256:snapshot.history_sha256});
+    if(sequence!==taskPresetSequence||taskPresetProject()?.id!==projectId||snapshot!==taskPresetSnapshot||rawName!==$('task-preset-name').value||goal!==$('goal').value)return;
+    if(!taskPresetExact(value,['version','project_id','preset','history_sha256'])||value.version!==1||value.project_id!==projectId||!bundleHash(value.history_sha256)||!validTaskPresetRow(value.preset,snapshot.binding_sha256)||!value.preset.compatible||value.preset.name!==name||snapshot.presets.some(row=>row.id===value.preset.id)||!taskPresetBounded(value))throw new Error('TASK_PRESET_RESPONSE');
+    invalidateTaskPresets('Private preset “'+value.preset.name+'” saved. Refresh private presets explicitly, then select and load its goal when needed.');
+  }catch(error){if(sequence===taskPresetSequence)invalidateTaskPresets(taskPresetFailure(error)+' The observed preset history was discarded; refresh explicitly before another save.');}
+  finally{taskPresetFinish();}
+});
+$('task-preset-load').addEventListener('click',async()=>{
+  if($('task-preset-load').disabled)return;
+  const projectId=taskPresetProject().id,snapshot=taskPresetSnapshot,row=taskPresetSelected(),model=$('model').value,goalBefore=$('goal').value,sequence=++taskPresetSequence;
+  taskPresetBegin('Waiting for the current live update before reading the selected private goal…');
+  try{
+    await taskPresetWaitForLiveUpdate();if(sequence!==taskPresetSequence||taskPresetProject()?.id!==projectId||snapshot!==taskPresetSnapshot||row!==taskPresetSelected()||$('goal').readOnly||$('model').value!==model||$('goal').value!==goalBefore)return;
+    const value=await api('/api/task-preset-load',{project_id:projectId,preset_id:row.id,record_sha256:row.record_sha256,binding_sha256:snapshot.binding_sha256,history_sha256:snapshot.history_sha256});
+    if(sequence!==taskPresetSequence||taskPresetProject()?.id!==projectId||snapshot!==taskPresetSnapshot||row!==taskPresetSelected()||$('goal').readOnly||$('model').value!==model||$('goal').value!==goalBefore)return;
+    if(!taskPresetExact(value,['version','project_id','preset_id','name','goal','binding_sha256','record_sha256','history_sha256'])||value.version!==1||value.project_id!==projectId||value.preset_id!==row.id||value.name!==row.name||value.binding_sha256!==snapshot.binding_sha256||value.record_sha256!==row.record_sha256||value.history_sha256!==snapshot.history_sha256||!taskPresetGoal(value.goal)||!taskPresetBounded(value))throw new Error('TASK_PRESET_RESPONSE');
+    $('goal').value=value.goal;taskPresetLoaded={id:row.id,goal:value.goal};$('task-preset-status').textContent='Loaded “'+value.name+'” into Task. Review its instructions; Run remains a separate explicit action.';
+  }catch(error){if(sequence===taskPresetSequence)invalidateTaskPresets(taskPresetFailure(error));}
+  finally{taskPresetFinish();}
+});
+for(const id of ['task-preset-name','goal'])$(id).addEventListener('input',()=>{taskPresetSequence++;taskPresetSelectedId='';taskPresetLoaded=null;$('task-preset-select').value='';renderTaskPresetSelection();if(taskPresetSnapshot)$('task-preset-status').textContent='Draft inputs changed. Save the current Task under a new name, or explicitly select and load a saved preset.';setTaskPresetControls();});
+for(const id of ['new-task','setup-open','setup-close','refresh-open','refresh-close'])$(id).addEventListener('click',()=>{invalidateTaskPresets('Task or configuration context changed. Refresh private presets explicitly.');setTaskPresetControls();});
+$('task-form').addEventListener('submit',()=>{invalidateTaskPresets('A task submission was requested separately. Refresh presets explicitly before another preset decision.');setTaskPresetControls();});

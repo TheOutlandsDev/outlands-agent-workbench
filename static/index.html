@@ -20,7 +20,7 @@
     <div class="sidebar-footer"><span class="status-dot"></span> Local workspace<small>One task at a time. Your source stays in place.</small></div>
   </aside>
   <main>
-    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.19</span></h1><p>A clear view from task to reviewed patch.</p></div><div class="header-actions"><button id="snapshot-workspace-open" class="secondary" type="button" aria-controls="snapshot-workspace-panel" aria-expanded="false" disabled>Snapshot review workspace</button><button id="snapshot-project-open" class="secondary" type="button" aria-controls="snapshot-project-panel" aria-expanded="false" disabled>Check snapshot export</button><button id="bundle-workspace-open" class="secondary" type="button" aria-controls="bundle-workspace-panel" aria-expanded="false" disabled>Bundle review workspace</button><button id="project-check-open" class="secondary" type="button" aria-controls="project-check-panel" aria-expanded="false" disabled>Check bundle against project</button><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></div></header>
+    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.20</span></h1><p>A clear view from task to reviewed patch.</p></div><div class="header-actions"><button id="snapshot-workspace-open" class="secondary" type="button" aria-controls="snapshot-workspace-panel" aria-expanded="false" disabled>Snapshot review workspace</button><button id="snapshot-project-open" class="secondary" type="button" aria-controls="snapshot-project-panel" aria-expanded="false" disabled>Check snapshot export</button><button id="bundle-workspace-open" class="secondary" type="button" aria-controls="bundle-workspace-panel" aria-expanded="false" disabled>Bundle review workspace</button><button id="project-check-open" class="secondary" type="button" aria-controls="project-check-panel" aria-expanded="false" disabled>Check bundle against project</button><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></div></header>
     <div id="alert" role="alert" hidden></div>
     <section id="comparison-panel" class="composer panel comparison-panel" aria-labelledby="comparison-title" hidden>
       <div class="panel-heading"><div><div class="eyebrow">PRIVATE SAVED EVIDENCE</div><h2 id="comparison-title">Compare runs</h2></div><button id="comparison-close" class="secondary" type="button">Close comparison</button></div>
@@ -193,6 +193,21 @@
         <div class="scope"><span class="section-label">SELECTED FILES</span><div id="scope-files"></div></div>
         <div class="composer-bottom"><p id="scope-note" class="muted">Tests are protected. Edits stay in a private copy.</p><button id="start" class="primary" type="submit">Run task <span aria-hidden="true">↗</span></button></div>
       </form>
+      <section id="task-preset-section" class="task-preset-section" aria-labelledby="task-preset-title">
+        <div class="pane-heading"><h3 id="task-preset-title">Named task presets</h3><button id="task-preset-refresh" type="button" class="secondary" disabled>Refresh private presets</button></div>
+        <p class="small muted">Save reusable instructions for the selected approved project. A preset contains a name and task goal; file scope, permissions, checks, budgets and model selection stay separate. Loading only fills Task. Run remains an explicit action.</p>
+        <p id="task-preset-status" class="muted" role="status">Choose a project, then explicitly refresh its private presets.</p>
+        <form id="task-preset-form" class="task-preset-save-row">
+          <label>New preset name<input id="task-preset-name" type="text" maxlength="160" autocomplete="off" spellcheck="false" aria-describedby="task-preset-name-note" disabled></label>
+          <button id="task-preset-save" type="submit" class="secondary" disabled>Save current Task as preset</button>
+        </form>
+        <p id="task-preset-name-note" class="small muted">1–80 Unicode characters and at most 240 UTF-8 bytes. Names are unique within a project.</p>
+        <label>Saved private task preset<select id="task-preset-select" disabled><option value="">Refresh presets explicitly</option></select></label>
+        <div id="task-preset-details" class="task-preset-details" hidden></div>
+        <div class="review-buttons"><button id="task-preset-load" type="button" class="secondary" disabled>Load selected preset into Task</button></div>
+        <p id="task-preset-load-note" class="small muted">Choose a preset whose approved task profile still matches this project. Loading does not change the selected project or model.</p>
+        <p class="small muted">Presets and task text stay in the private data directory. Existing presets are retained; this version adds new presets only.</p>
+      </section>
       <p id="admission" class="admission" hidden></p>
     </section>
     <section id="refresh-panel" class="composer panel project-refresh" aria-labelledby="refresh-title" hidden>
