@@ -181,3 +181,10 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 .saved-run-review-detail .comparison-patch{white-space:pre-wrap;overflow-wrap:anywhere}
 .saved-run-review-detail dd,#saved-run-review-status{overflow-wrap:anywhere;word-break:break-word;line-height:1.8}
 @media(max-width:680px){.saved-run-review-detail{padding:13px}.saved-run-files{grid-template-columns:1fr}.saved-run-files>li{padding:12px}.saved-run-review-detail .diagnostic-facts{grid-template-columns:1fr}}
+
+/* Saved decisions are observations, separate from live review/export controls. */
+.saved-run-decision{margin:22px 0;padding:17px;border:1px solid var(--line);border-radius:9px;background:#0d141d;min-width:0}
+.saved-run-decision>h4{margin:0 0 12px}.saved-run-decision>.state-pill{display:inline-block;margin:0 0 12px}.saved-run-decision>.small,.saved-run-decision>.muted{line-height:1.8}
+.saved-run-decision .saved-run-decision-note{max-height:280px;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;tab-size:4}
+.saved-run-decision-receipt dd,.saved-run-decision-hashes dd{overflow-wrap:anywhere;word-break:break-word}
+@media(max-width:680px){.saved-run-decision{padding:13px}.saved-run-decision .saved-run-decision-note{max-height:220px}}
