@@ -131,3 +131,14 @@ no general redistribution or reuse permission should be inferred from this
 repository's public visibility. A future license requires an explicit decision
 by the rights holder. The owner's public-release instruction for this selected
 workbench adaptation does not change the visibility or holds of other projects.
+
+Version 0.16 adds explicit manual rechecks of the distinct v0.15 snapshot
+workspace type, a separate private attempt format/store, pinned read-only
+inspection, copied selected-byte fixed checks and browser/history integration.
+It adapts the existing Workbench recheck flow and reuses neutral direct Git
+metadata readers and fixed Python/Java isolation runners. No external code or
+parser was introduced. Unit observations are invented and remain separate from
+actual offline checks; neither represents a new model run. Real worktrees,
+exports, attempts, check output and runtime records are excluded from public
+source. Current metadata pins are new observations, not historical v0.15 pins.
+Snapshot re-export remains deferred; licensing remains unassigned.
