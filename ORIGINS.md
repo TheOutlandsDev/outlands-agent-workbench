@@ -172,3 +172,18 @@ response guards and invented offline Python/Java fixtures. No external search
 index, parser, editor framework or dependency was introduced. Queries, excerpts,
 worktrees and runtime evidence stay private. Archive schemas, original Java hold,
 notices and UNASSIGNED licensing remain unchanged. No new model result is claimed.
+
+Version 0.20 adds private immutable goal-only task presets for already configured
+projects, canonical name/profile helpers, guarded bounded storage and explicit
+refresh/save/load endpoints and browser controls. It adapts the existing task
+validation, guarded file I/O, canonical hashing and stale-response boundaries;
+there is no external preset service, framework or new dependency. Invented Python
+and Java fixtures exercise the preset boundaries separately from any fixed-check
+execution or model result. Listing omits goal text; explicit loading only fills
+Task and does not alter scope, checks, permissions, budgets, project/model
+selection, source or default task definitions. Real preset names, goals, records,
+partial/uncertain files and runtime evidence remain private and excluded from
+public source. Existing archive formats, historical evidence, the original
+uncertain Java hold and UNASSIGNED licensing remain unchanged. Qualification
+status is documented separately in VALIDATION.md; this addition claims no new
+model qualification, hold recovery or general reuse license.
