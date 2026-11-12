@@ -222,3 +222,13 @@ Real histories, goals, records, diagnostics, patches and review receipts remain
 private. No framework, dependency, service, search index or stored review token
 is added. Existing notices, original Java hold and UNASSIGNED licensing remain
 unchanged; no new real-model qualification or reuse license is claimed.
+
+Version 0.24 adds a standard-library offline acceptance harness and guarded child
+entry point. It reuses the exact existing Python ScriptedDemo, original task
+definition, real Workbench history/view/review/export paths and network-isolated
+fixed checks. It introduces no general command runner, Java agent backend,
+production admission change, external dependency or real-model qualification.
+Its fresh Java fixture supplies separate actual compilation/protected-main
+evidence. All fixture data, worker claims, configuration, check output, runtime
+records and downloaded patches remain private. Existing notices, the original
+uncertain Java hold and UNASSIGNED licensing stay unchanged.
