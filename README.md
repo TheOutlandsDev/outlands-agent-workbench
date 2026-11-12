@@ -5,8 +5,11 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.19 adds **Workspace search and focused reads**: explicitly search current
-approved files in a verified private snapshot review workspace, read small
+Version 0.20 adds **Named task presets**: privately save the current Task under a
+new name for an already configured project, then explicitly refresh, select and
+load its goal into Task. Presets preserve the approved project profile and never
+start Run or select a model. It retains **Workspace search and focused reads**:
+explicitly search current approved files in a verified private snapshot review workspace, read small
 numbered ranges from source or protected tests, then open a pinned editable
 result in the existing editor. Search and read run no checks, Git commands,
 providers or model requests. It retains **Scoped workspace editor**: explicitly select an approved
@@ -230,6 +233,70 @@ enforces the plan requirement. An edit requires the current file hash and one ex
 span. Bytes outside that span are preserved, including surrounding whitespace
 and line endings. Whole-file `write_file` is refused. Tests are protected, and
 independent final checks run before a task becomes Ready for review.
+
+## Save and load private task presets
+
+Use **Named task presets** in the task composer for an already configured Python
+or Java project. Presets save reusable goal text, not a task run or a new project
+configuration. The selected source identity, paths, editable scope, check
+definitions, task format and request/time budgets form the approved task profile.
+Loading cannot change those permissions or limits, select a project/model,
+change the default goal, or start inference.
+
+1. Choose the intended project and an already approved local model. Click
+   **Refresh private presets** to observe its current profile and preset history.
+2. Enter the desired **Task** and a **New preset name**, then click
+   **Save current Task as preset**. Saving creates one immutable private record;
+   it does not overwrite a preset or run the task.
+3. Click **Refresh private presets** again. Saving discards the earlier view
+   pins; no preset is selected or loaded automatically.
+4. Choose a saved preset marked **Profile matches**, then click
+   **Load selected preset into Task**. Only this explicit load returns the saved
+   goal to Task; the list contains names and compatibility metadata, not goal text.
+5. Review Task and use **Run task** separately when admission permits it. Restart
+   with the same private config/data directory, refresh and load explicitly to
+   reuse a saved preset later.
+
+The scripted exercise keeps its original read-only Task, so loading is disabled
+until an already approved local model is selected. Its displayed Task can still
+be saved under a new name. Under an unrelated admission hold, metadata actions
+may remain available and an explicit load can fill the disabled Task for review;
+Task and Run remain disabled. Preset actions do not inspect or clear that hold.
+Normal live updates pause while a preset request is in flight, after waiting up
+to ten seconds for an earlier live update to finish. Later ordinary polling does
+not replace a loaded goal. Project/model/configuration or new-task context
+changes discard preset selections; late responses for older inputs are ignored.
+
+A reviewed source-hash or default-goal refresh can reuse the same presets: those
+values are excluded from the profile binding. Changing project/source identity,
+selected paths, edit permissions, checks, format or budgets makes older bindings
+stale. Those records remain visible as **Profile changed**, with loading disabled.
+Current config/task bytes are checked before and after preset actions. Presets
+do not read source bytes, establish source freshness or authorize Run; its normal
+guards remain separate.
+
+Names use NFC-normalized Unicode, with 1–80 code points and at most 240 UTF-8
+bytes, no surrounding whitespace, control/format characters or line separators.
+Names are unique case-insensitively across all bindings for that project. Goals
+are nonblank, contain 1–2,000 code points and at most 8,000 UTF-8 bytes, and reject
+NUL or invalid Unicode. Multiline goals are allowed; the browser keeps its normal
+textarea newline presentation and existing 2,000-code-unit input limit. There
+are at most 64 presets per project, 32 KiB per record and 2 MiB of raw records,
+with room for a full record reserved before saving. Each HTTP request is bounded
+to 32 KiB and its response to 64 KiB.
+
+Presets live under `DATA/task-presets/PROJECT_ID/ID.json`, outside public source.
+The private store uses mode 0700 directories and mode 0600 regular single-link
+files. Keep real names, goals and generated records out of Git and public
+uploads. This milestone provides no overwrite, rename, delete, import or export
+action. A failed or uncertain save consumes the UI history pins and requires an
+explicit refresh. Partial, malformed or uncertain store records are retained and
+block that project's preset actions for inspection; no automatic cleanup,
+fallback or retry is performed. Sequential pin checks and staged publication
+require a trusted, stable filesystem and do not establish a multiwriter
+transaction or crash-durability guarantee. See [validation and limits](VALIDATION.md)
+for qualification status; presets add no real-model qualification or recovery of
+the preserved uncertain Java trial.
 
 ## Inspect project readiness
 
@@ -1223,7 +1290,7 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-Final offline qualification passed 836 unit methods across 36 suites, including
+Version 0.19's recorded offline qualification passed 836 unit methods across 36 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1303,7 +1370,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.19 adds no real-model qualification. Snapshot review workspaces,
+Version 0.20 adds no real-model qualification. Named task presets, snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context
@@ -1314,7 +1381,7 @@ uncertain Java trial from version 0.3.
 
 This repository contains reviewed reusable source, invented fixtures, and public
 instructions. Private configs, host paths, run history, prompts, model responses,
-logs, credentials, project data, model weights, runtimes, and private review
+logs, credentials, project data, real preset names/goals/records, model weights, runtimes, and private review
 receipts are excluded. No open-source license has been assigned to this source;
 public visibility does not grant a general reuse license. See
 [ORIGINS.md](ORIGINS.md) for attribution and licensing status.

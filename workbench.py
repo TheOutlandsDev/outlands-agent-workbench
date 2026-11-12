@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 from java_check import validate_jdk
 from project_setup import prepare
 from project_revisions import refresh_task
+from task_presets import profile as task_preset_profile, prepare as prepare_task_preset, validate_record as valid_task_preset
 from run_diagnostics import summarize as summarize_diagnostics
 from run_comparison import compare_runs
 from project_readiness import summarize as summarize_readiness
@@ -415,7 +416,7 @@ class Manager:
                 "DATA_OUTSIDE_SOURCE",
             )
         private_dir(self.data)
-        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks", "snapshot-exports", "snapshot-workspaces", "snapshot-workspace-rechecks", "snapshot-reexports", "snapshot-workspace-edits"]:
+        for name in ["jobs", "tasks", "runs", "state", "projects", "workspaces", "revisions", "bundle-workspaces", "workspace-rechecks", "snapshot-exports", "snapshot-workspaces", "snapshot-workspace-rechecks", "snapshot-reexports", "snapshot-workspace-edits", "task-presets"]:
             private_dir(self.data / name)
         self.server_lock = os.open(
             self.data / "server.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
@@ -1024,6 +1025,209 @@ class Manager:
                                    "definition": task, "task_raw": canonical(task)}
             del self.drafts[request["draft"]]
             return {"id": name, "name": row["name"]}
+
+    def _task_preset_project(self, project_id):
+        """Check only loaded config/task bytes. Presets never read project source or admission."""
+        require(type(project_id) is str and ALIAS.fullmatch(project_id) is not None and project_id in self.projects,
+                "TASK_PRESET_PROJECT")
+        try:
+            project = self.projects[project_id]
+            require(readiness_read_file(self.config_path.parent, self.config_path.name, 262144) == self.config_raw
+                    and readiness_read_file(project["task"].parent, project["task"].name, 262144) == project["task_raw"],
+                    "TASK_PRESET_PROJECT_CHANGED")
+            return project, task_preset_profile(project)
+        except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
+            raise Refused("TASK_PRESET_PROJECT_CHANGED") from None
+
+    @staticmethod
+    def _task_preset_identity(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+    def _task_preset_fd(self, project_id, create=False):
+        fd = None
+        try:
+            root_fd = readiness_directory(self.data / "task-presets")
+            try:
+                info = os.fstat(root_fd)
+                require(info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o700, "TASK_PRESET_STORE_UNSAFE")
+                if create:
+                    try:
+                        os.mkdir(project_id, 0o700, dir_fd=root_fd)
+                    except FileExistsError:
+                        pass
+                try:
+                    fd = os.open(project_id, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=root_fd)
+                except FileNotFoundError:
+                    require(not create, "TASK_PRESET_STORE_UNSAFE")
+                    return None
+                info = os.fstat(fd)
+                require(info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o700, "TASK_PRESET_STORE_UNSAFE")
+                result, fd = fd, None
+                return result
+            finally:
+                os.close(root_fd)
+        except (OSError, ValueError):
+            raise Refused("TASK_PRESET_STORE_UNSAFE") from None
+        finally:
+            if fd is not None:
+                os.close(fd)
+
+    def _task_preset_scan(self, project_id, reserve_bytes=0, exclude_stage=None):
+        require(type(reserve_bytes) is int and 0 <= reserve_bytes <= 32768, "TASK_PRESET_LIMIT")
+        fd = self._task_preset_fd(project_id)
+        if fd is None:
+            return [], sha(canonical([]))
+        try:
+            names = []
+            with os.scandir(fd) as entries:
+                for count, entry in enumerate(entries, 1):
+                    require(count <= 65, "TASK_PRESET_LIMIT")
+                    if entry.name == exclude_stage:
+                        continue
+                    require(re.fullmatch(r"[0-9a-f]{16}\.json", entry.name) is not None, "TASK_PRESET_RECORD_INVALID")
+                    names.append(entry.name)
+                    require(len(names) <= 64, "TASK_PRESET_LIMIT")
+            rows, pins, seen, budget = [], [], set(), 2097152 - reserve_bytes
+            for name in sorted(names):
+                require(budget > 0, "TASK_PRESET_LIMIT")
+                raw = self._task_preset_read(fd, name, min(32768, budget))
+                budget -= len(raw)
+                value = parse(raw)
+                require(valid_task_preset(value) and value["id"] == name[:-5] and value["project_id"] == project_id,
+                        "TASK_PRESET_RECORD_INVALID")
+                require(value["name_key"] not in seen, "TASK_PRESET_RECORD_INVALID")
+                seen.add(value["name_key"])
+                digest = sha(raw)
+                rows.append({"record": value, "raw": raw, "record_sha256": digest})
+                pins.append({"id": value["id"], "record_sha256": digest})
+            return rows, sha(canonical(pins))
+        except Refused as error:
+            if str(error).startswith("TASK_PRESET_"):
+                raise
+            raise Refused("TASK_PRESET_RECORD_INVALID") from None
+        except (OSError, ValueError, UnicodeError, TypeError, KeyError, RecursionError):
+            raise Refused("TASK_PRESET_RECORD_INVALID") from None
+        finally:
+            os.close(fd)
+
+    @staticmethod
+    def _task_preset_row(row, binding):
+        value = row["record"]
+        return {"id": value["id"], "name": value["name"], "created": value["created"],
+                "binding_sha256": value["binding_sha256"], "record_sha256": row["record_sha256"],
+                "compatible": value["binding_sha256"] == binding}
+
+    @staticmethod
+    def _task_preset_read(fd, name, limit):
+        child = os.open(name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW, dir_fd=fd)
+        with os.fdopen(child, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_uid == os.getuid()
+                    and stat.S_IMODE(before.st_mode) == 0o600, "TASK_PRESET_STORE_UNSAFE")
+            raw = stream.read(limit + 1)
+            require(len(raw) <= limit, "TASK_PRESET_LIMIT")
+            require(Manager._task_preset_identity(before) == Manager._task_preset_identity(os.fstat(stream.fileno()))
+                    == Manager._task_preset_identity(os.stat(name, dir_fd=fd, follow_symlinks=False)),
+                    "TASK_PRESET_RECORD_CHANGED")
+            return raw
+
+    @staticmethod
+    def _task_preset_write(fd, name, raw):
+        child = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+        with os.fdopen(child, "wb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+
+    def task_preset_list(self, request):
+        with self.lock:
+            require(type(request) is dict and set(request) == {"project_id"}, "TASK_PRESET_INPUT")
+            _, binding = self._task_preset_project(request["project_id"])
+            rows, history = self._task_preset_scan(request["project_id"])
+            result = {"version": 1, "project_id": request["project_id"], "binding_sha256": binding,
+                      "history_sha256": history, "limit": 64,
+                      "presets": [self._task_preset_row(row, binding) for row in
+                                  sorted(rows, key=lambda row: (row["record"]["name_key"], row["record"]["id"]))]}
+            require(self._task_preset_project(request["project_id"])[1] == binding, "TASK_PRESET_PROJECT_CHANGED")
+            require(self._task_preset_scan(request["project_id"])[1] == history, "TASK_PRESET_HISTORY_CHANGED")
+            require(len(canonical(result)) <= 65536, "TASK_PRESET_OUTPUT_LIMIT")
+            return result
+
+    def task_preset_save(self, request):
+        with self.lock:
+            require(type(request) is dict and set(request) == {"project_id", "name", "goal", "binding_sha256", "history_sha256"},
+                    "TASK_PRESET_INPUT")
+            project, binding = self._task_preset_project(request["project_id"])
+            require(request["binding_sha256"] == binding, "TASK_PRESET_BINDING_CHANGED")
+            value = prepare_task_preset(project, request["name"], request["goal"])
+            rows, history = self._task_preset_scan(request["project_id"], reserve_bytes=32768)
+            require(request["history_sha256"] == history, "TASK_PRESET_HISTORY_CHANGED")
+            require(len(rows) < 64, "TASK_PRESET_LIMIT")
+            require(not any(row["record"]["name_key"] == value["name_key"] for row in rows), "TASK_PRESET_DUPLICATE")
+            identifier = secrets.token_hex(8)
+            record = {"version": 1, "format": "outlands-task-preset-v1", "id": identifier,
+                      "created": int(time.time()), **value}
+            require(valid_task_preset(record), "TASK_PRESET_RECORD_INVALID")
+            raw = canonical(record)
+            fd = self._task_preset_fd(project["id"], create=True)
+            stage, target, published = identifier + ".json.next", identifier + ".json", False
+            try:
+                self._task_preset_write(fd, stage, raw)
+                require(self._task_preset_project(project["id"])[1] == binding, "TASK_PRESET_PROJECT_CHANGED")
+                require(self._task_preset_scan(project["id"], exclude_stage=stage)[1] == history, "TASK_PRESET_HISTORY_CHANGED")
+                fresh_fd = self._task_preset_fd(project["id"])
+                try:
+                    a, b = os.fstat(fd), os.fstat(fresh_fd)
+                    require((a.st_dev, a.st_ino) == (b.st_dev, b.st_ino), "TASK_PRESET_STORE_UNSAFE")
+                finally:
+                    os.close(fresh_fd)
+                require(self._task_preset_read(fd, stage, 32768) == raw, "TASK_PRESET_RECORD_CHANGED")
+                # A link creates the final name only if absent. No old record can be overwritten.
+                os.link(stage, target, src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
+                published = True
+                os.unlink(stage, dir_fd=fd)
+                os.fsync(fd)
+                after, new_history = self._task_preset_scan(project["id"])
+                row = next((row for row in after if row["record"]["id"] == identifier), None)
+                require(row is not None and row["raw"] == raw, "TASK_PRESET_RECORD_CHANGED")
+                require(self._task_preset_project(project["id"])[1] == binding, "TASK_PRESET_PROJECT_CHANGED")
+                result = {"version": 1, "project_id": project["id"], "preset": self._task_preset_row(row, binding),
+                          "history_sha256": new_history}
+                require(len(canonical(result)) <= 65536, "TASK_PRESET_OUTPUT_LIMIT")
+                return result
+            except (Refused, OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
+                if published:
+                    try:
+                        self._task_preset_write(fd, identifier + ".uncertain", b"Preset save outcome needs private inspection.\n")
+                    except (Refused, OSError, ValueError):
+                        pass
+                raise Refused("TASK_PRESET_SAVE_UNCERTAIN" if published else "TASK_PRESET_SAVE_FAILED") from None
+            finally:
+                os.close(fd)
+
+    def task_preset_load(self, request):
+        with self.lock:
+            require(type(request) is dict and set(request) == {"project_id", "preset_id", "record_sha256", "binding_sha256", "history_sha256"},
+                    "TASK_PRESET_INPUT")
+            _, binding = self._task_preset_project(request["project_id"])
+            require(type(request["preset_id"]) is str and ID.fullmatch(request["preset_id"]) is not None,
+                    "TASK_PRESET_NOT_FOUND")
+            require(request["binding_sha256"] == binding, "TASK_PRESET_BINDING_CHANGED")
+            rows, history = self._task_preset_scan(request["project_id"])
+            require(request["history_sha256"] == history, "TASK_PRESET_HISTORY_CHANGED")
+            row = next((row for row in rows if row["record"]["id"] == request["preset_id"]), None)
+            require(row is not None, "TASK_PRESET_NOT_FOUND")
+            require(request["record_sha256"] == row["record_sha256"], "TASK_PRESET_RECORD_CHANGED")
+            value = row["record"]
+            require(value["binding_sha256"] == binding, "TASK_PRESET_INCOMPATIBLE")
+            require(self._task_preset_project(request["project_id"])[1] == binding, "TASK_PRESET_PROJECT_CHANGED")
+            require(self._task_preset_scan(request["project_id"])[1] == history, "TASK_PRESET_HISTORY_CHANGED")
+            result = {"version": 1, "project_id": request["project_id"], "preset_id": value["id"], "name": value["name"],
+                      "goal": value["goal"], "binding_sha256": binding, "record_sha256": row["record_sha256"],
+                      "history_sha256": history}
+            require(len(canonical(result)) <= 65536, "TASK_PRESET_OUTPUT_LIMIT")
+            return result
 
     def current_project(self, project_id):
         require(isinstance(project_id, str) and project_id in self.projects, "PROJECT_UNKNOWN")
@@ -3368,6 +3572,29 @@ def make_handler(manager, token, origin):
                 self.guard(True)
                 require(self.headers.get("Origin") == origin, "ORIGIN_REFUSED")
                 path = urlsplit(self.path).path
+                if path.startswith("/api/task-preset-"):
+                    routes = {"/api/task-preset-list": manager.task_preset_list,
+                              "/api/task-preset-save": manager.task_preset_save,
+                              "/api/task-preset-load": manager.task_preset_load}
+                    require(path in routes, "TASK_PRESET_INPUT")
+                    types, lengths = self.headers.get_all("Content-Type", []), self.headers.get_all("Content-Length", [])
+                    require(self.headers.get("Transfer-Encoding") is None and len(types) == 1
+                            and types[0].split(";", 1)[0].strip().lower() == "application/json"
+                            and len(lengths) == 1 and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
+                            "TASK_PRESET_INPUT")
+                    length = int(lengths[0])
+                    require(0 < length <= 32768, "TASK_PRESET_LIMIT")
+                    raw = self.rfile.read(length)
+                    require(len(raw) == length, "TASK_PRESET_INPUT")
+                    try:
+                        request = parse(raw)
+                    except Refused:
+                        raise Refused("TASK_PRESET_INPUT") from None
+                    result = routes[path](request)
+                    encoded = canonical(result)
+                    require(len(encoded) <= 65536, "TASK_PRESET_OUTPUT_LIMIT")
+                    self.send(200, encoded)
+                    return
                 if path.startswith("/api/snapshot-workspace-preview/"):
                     require(self.headers.get("Transfer-Encoding") is None, "SNAPSHOT_WORKSPACE_INPUT")
                     types = self.headers.get_all("Content-Type", [])

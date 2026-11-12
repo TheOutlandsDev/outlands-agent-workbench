@@ -1,88 +1,106 @@
-# Version 0.19 validation
+# Version 0.20 validation
 
-Final offline qualification on one Linux host passed **836 unit methods across
-36 suites**: the prior 792, 20 pure workspace-search methods and 24 controller/HTTP
-methods. Actual invented Python/Java search → protected/focused read → pinned
-editor handoff → explicit edit → fresh isolated recheck → reviewed private v2
-export passed, along with all prior acceptance probes. Navigation made zero
-checks, Git commands, workers or model requests. Real workspace content and
-bundles remain private.
+Final offline qualification on one Linux host passed **881 unit methods across
+38 suites**: the prior 836, 21 pure task-preset methods and 24 controller/HTTP
+methods. Actual invented Python/Java private save → list → explicit load →
+restart persistence passed. Separate explicit fixed checks passed against task
+copies carrying the loaded goals and unchanged scope, checks and budgets. All
+prior acceptance probes also passed. Preset operations made zero checks, Git
+commands, workers or model requests and started no agent run.
 
 | Area | Observed result |
 | --- | --- |
-| Approved scope | Only current selected files in verified private snapshot workspaces; no recursive discovery or scope expansion |
-| Literal search | Case-sensitive matching, deterministic path/line order, Unicode columns and current file/workspace hashes |
-| Focused reads | Inclusive numbered ranges, protected/editable labels, LF/CRLF/CR, empty files and explicit clipping/EOF |
-| Pinned handoff | Explicit editable-only open rechecks whole snapshot and file hash; no automatic preview, save or run |
-| Stale evidence | Changed file/other selected file, source/config/task/Git/creation or unresolved edit evidence refuses access |
-| Race guards | Locked before/after inspections refuse drift observed during search, read or open |
-| Read-only navigation | Guarded search/read skip admission and hold access; all three navigation routes preserve private file hashes |
-| Held state | Search/read and admission-labelled handoff remain available under unrelated synthetic hold; later save refuses |
-| HTTP | Exact fields, authentication/origin, duplicate headers, transfer encoding, short reads, JSON and route-specific caps tested |
-| Python/Java | Actual separate fixed checks pass after explicit edits; strict v2 packets match exact tested snapshots |
-| Preservation | Original project/Git and historical creation/check/review records remain unchanged; synthetic holds retained |
-| Browser | Protected reads/editor refusal, Python LF, Java CRLF and café search, pinned handoff and full private export flows observed |
-| Invalidation | Parent, workspace selection, range, save and page reload discard old source observations and dependent editor pins |
-| Download integrity | Both browser ZIP hashes/strict v2 metadata/check counts/current selected hashes match private receipts |
-| Teardown | Temporary owned server stopped, listener closed, exactly two private editable targets changed and historical bytes preserved |
+| Goal-only scope | Explicit list/save/load never changes source, config, task definition, default goal, model selection, checks, permissions or budgets |
+| Project identity | Binding covers project/source identity, task format, selected paths, editable paths, exact checks and budgets |
+| Routine refresh | Approved file-hash/default-goal refresh preserves the profile; changed scope/check/budget/source identity makes older records incompatible |
+| Names and goals | NFC names, Unicode/casefold duplicates, project isolation, exact API goal text and bounded serialized records tested |
+| Current evidence | Loaded config/task bytes, profile, full preset history and selected record hashes are pinned before/after operations |
+| Private storage | Owned 0700 directories, 0600 regular single-link files, no-follow descriptor paths and no-overwrite publication |
+| Retained failures | Partial stage, config/task drift after staging, unsafe modes and post-publication uncertainty refuse without cleanup or repair |
+| Bounds | 64-record capacity, full 63-record reserved-write budget, record/history/request/output limits tested |
+| HTTP | Three explicit POST routes enforce exact fields, session/Host/Origin, header/body framing and route caps |
+| Read-only planning | Empty list creates no project directory; list omits goals; load returns only the explicitly selected goal |
+| Python/Java | Actual separate fixed checks pass with loaded goals and all other definition fields unchanged |
+| Restart | New Manager and browser server reuse retained private records; reload never automatically lists or loads presets |
+| Browser | Explicit save/refresh/select/load works for Python and Java, with placeholder selection and duplicate refusal |
+| Scripted restriction | The scripted Task remains read-only and Load disabled even with a compatible selected preset |
+| Held state | An invented unrelated hold allows goal loading into disabled Task while Task/Run stay disabled and the hold remains retained |
+| Preservation | Browser fixture source/config/task hashes and empty jobs/runs/tasks remain unchanged; original Java hold/result hashes still match |
+| Teardown | Both temporary owned server sessions stopped and the loopback listener was verified closed |
 
 ## Evidence classes and preserved outcomes
 
-All selected projects are invented. Pure engine tests use supplied inspection
-objects and never access files, Git, checks or a provider. Controller fixtures use
-actual private Git creation with clearly invented recorded check observations.
-These are separate from the full runner's actual Bubblewrap Python unittest and
-Java compilation/protected-main checks, and from the browser's actual Python
-four-test and Java one-main results. One Java test means one executed protected
-main, not an assertion count. No model was called.
+All selected projects, names and goals are invented. Pure helpers perform no
+filesystem, Git, check, provider or runtime access. Controller tests guard those
+boundaries and test private filesystem records and HTTP framing. Actual
+Python/Java fixed checks are separate explicit acceptance steps, never a side
+effect of listing, saving or loading a preset. The new acceptance starts no
+agent run; the existing full runner independently retains its scripted-client
+workflow. One Java test means one protected main, not an assertion count.
+No model inference was requested.
 
-The first focused pure run passed 20 methods; the first focused integration run
-passed 24. The first full qualification passed 836 methods/36 suites and all
-actual acceptance probes on its new private root. Final engine/controller/UI
-bytes stayed unchanged through browser qualification and freeze. Earlier
-milestone failures, partial records, holds and successful results remain separate
-and preserved; no failed runtime request or held job was retried, erased or
-relabelled. A read-only download collector needed a task-root path normalization
-fix, then reread the same unchanged packets without repeating any application
-operation.
+Focused qualification retained earlier passing logs as coverage grew: the final
+pure run passed 21 methods and the final integration run passed 24. The first
+full qualification passed all 881 methods/38 suites and the actual acceptance
+probes. Final engine/controller/UI/input hashes stayed unchanged through browser
+qualification and freeze. All earlier milestone failures, partial records,
+holds and successes remain separately preserved; no failed runtime request or
+held job was retried, erased or relabelled.
 
-Browser testing performed exactly two explicit saves, fresh rechecks, private
-acceptances and downloads. Protected Python/Java test excerpts remained read-only;
-editable handoff showed current exact hashes and Java CRLF bytes. Parent SHA-input
-change discarded search/editor previews, range change discarded excerpt/handoff,
-workspace switch disabled old export, and save cleared old search results. Reload
-cleared cached observations and displayed 0.19. After the actual check/export
-flows, an invented unrelated hold was added and retained; search/read/open and
-preview remained available while Save stayed disabled. This was a separate
-synthetic fixture, never a change to the original uncertain Java trial.
+The browser used only fresh invented private fixtures, with agent Run, provider,
+outbound HTTP and worker execution blocked and counted. Across two server
+sessions it made exactly eight explicit lists, four save attempts (three new
+records and one duplicate refusal), and four explicit loads. There were zero
+Run attempts, provider calls, outbound HTTP calls or worker launches. The same
+name was stored independently for Python and Java. Refresh retained the draft
+and placeholder; Save required a new explicit Refresh. Project switching and
+reload discarded previous selections. Both language goals survived restart.
+The browser showed version 0.20 with no captured warnings/errors.
+
+After the restart checks, an invented unrelated hold was added and retained.
+Python Load filled only the disabled Task; existing Run admission stayed blocked.
+This fixture never opens or changes the original uncertain Java workspace.
+The three preset records and the invented hold remain private. A sandbox-limited
+process/listener verification was completed in the permitted host context;
+no application operation or runtime task was repeated for that verification.
 
 ## Bounds and trust limits
 
-32 approved UTF-8 files, 32,768 bytes/file and 131,072 total selected bytes. Query:
-1–128 UTF-8 bytes, no NUL/newline; literal case-sensitive search returns one hit
-per matching line, at most 20. Inner search results remain within 8,192 serialized
-bytes including editable labels, trimming trailing hits when necessary while
-retaining total counts and truncation. Search/read wrappers: 16,384 bytes. Search
-line excerpts: 512 UTF-8 bytes. Focused reads: 1-based inclusive ranges of at most
-80 lines, maximum line number 1,000,000 and 1,024 UTF-8 bytes per line, with actual
-returned ranges/EOF/clipping. Empty files have no invented lines. HTTP input:
-32,768 bytes for all three navigation routes; editor-open output retains the
-existing 262,144-byte full-text bound.
+Each project stores at most 64 immutable records, each at most 32,768 bytes, with
+at most 2 MiB of raw record history. Save reserves a full record before staging.
+Names are NFC-normalized, 1–80 Unicode codepoints and at most 240 UTF-8 bytes,
+without surrounding whitespace or control/format/surrogate/line-separator
+characters. Names are unique per project using NFC casefold, including old
+incompatible bindings. Goals are nonblank, 1–2,000 codepoints and at most 8,000
+UTF-8 bytes, with no NUL or invalid Unicode. API goal text is retained exactly;
+browser textareas use their normal newline presentation.
+All three preset HTTP requests are capped at 32,768 bytes and responses at
+65,536 bytes. List returns bounded names, compatibility and hash metadata, not
+saved goal text. Names and metadata still contain private project context.
 
-The controller supplies and repeats verified filesystem inspections; pure helper
-hashes are structural checks, not authorization or authenticity. Reads are
-sequential on trusted stable single-owner storage, not an atomic multiwriter
-snapshot or proof against transient changes. Search results are current byte
-observations, not checks, model qualification or adoption permission. Opening a
-result writes no files and does not bypass editor admission, review or fresh
-recheck requirements. Existing v1/v2 archive and edit/recheck schemas remain
-unchanged. Search queries, excerpts, relative paths and hashes contain private
-source context and stay outside public uploads.
+A record binds to the approved project profile, not current source correctness.
+File hash values, default goal and model settings are excluded from that binding;
+current loaded config/task raw bytes must nevertheless still match. Preset
+planning deliberately does not read source bytes or qualify Run freshness.
+Existing Run admission, checks and review requirements remain separate.
 
-The original uncertain Java trial remains unqualified, with cause and provider
-completion unknown. Its exact hold/result hashes are unchanged. No model request,
-recovery, eviction, service change, original-project adoption or license assignment
-occurred. Earlier evidence remains in [version 0.18 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/4d431fbc13454eb418818906ef410025c122e533/VALIDATION.md).
+Save stages a new exclusive file, verifies the stage and current pins, publishes
+with a no-overwrite hardlink, then reads back the result. Partial stages and
+uncertain markers block further preset actions for that project without altering
+Run admission. They are retained for private owner inspection: there is no
+retry, overwrite, delete, import or export interface. A hardware/filesystem error
+that prevents writing the uncertainty marker requires private inspection; no
+transactional multiwriter or crash-durability proof is claimed. All guards assume
+trusted stable single-owner storage. Hashes are integrity observations, not
+ownership, authenticity or authorization proofs.
+
+Existing workspace, archive, edit and recheck formats remain unchanged. Real
+presets, goals, source, runtime configuration, bundles and evidence remain
+excluded from public uploads. The original uncertain Java trial remains
+unqualified, with cause and provider completion unknown. Its exact hold/result
+hashes are unchanged. No model request, recovery, eviction, service change,
+original-project adoption or license assignment occurred.
+Earlier evidence remains in [version 0.19 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/451ed9054737a6d7957305fda94595ce3bffa680/VALIDATION.md).
 Qualification used Python 3.10.12, Git 2.34.1 and Temurin JDK 21.0.13+9 targeting
 Java 17 on Linux. Local passes are not GitHub CI passes. Licensing remains
 **UNASSIGNED**; see [origins](ORIGINS.md).

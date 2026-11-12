@@ -121,3 +121,19 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 .snapshot-search-section .code-view{max-height:440px;white-space:pre-wrap;overflow-wrap:anywhere}.snapshot-search-section select{width:100%;max-width:100%;font-family:var(--mono,monospace)}
 #snapshot-search-status,#snapshot-search-query-note,#snapshot-search-open-note{overflow-wrap:anywhere;line-height:1.8}
 @media(max-width:680px){.snapshot-search-section{padding:14px}.snapshot-search-ranges{display:block}.snapshot-search-ranges label{display:block;margin-bottom:12px}.snapshot-search-section .composer-bottom{display:block}.snapshot-search-section .composer-bottom button{margin-top:12px}.snapshot-search-section .project-check-facts{grid-template-columns:1fr}}
+
+/* Named private instructions never submit or widen the task configuration. */
+.task-preset-section{margin-top:24px;padding-top:22px;border-top:1px solid var(--line)}
+.task-preset-section>.pane-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.task-preset-section h3{margin:0;font-size:13px}
+.task-preset-section>.muted{line-height:1.8}
+.task-preset-section button{max-width:100%;white-space:normal}
+.task-preset-section input,.task-preset-section select{width:100%;min-width:0;box-sizing:border-box}
+.task-preset-save-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:14px;margin-top:16px}
+.task-preset-save-row label{min-width:0}
+.task-preset-save-row button{margin-bottom:1px}
+.task-preset-details{padding:15px;margin:16px 0;border:1px solid var(--line);border-radius:8px;background:rgba(105,137,185,.04)}
+.task-preset-facts{grid-template-columns:repeat(3,minmax(0,1fr));gap:15px 18px;margin:0}
+.task-preset-facts dd{overflow-wrap:anywhere;word-break:break-word}
+#task-preset-status,#task-preset-name-note,#task-preset-load-note{overflow-wrap:anywhere;line-height:1.8}
+@media(max-width:680px){.task-preset-section{margin-top:22px;padding-top:20px}.task-preset-section>.pane-heading{align-items:flex-start}.task-preset-section>.pane-heading button{font-size:10px;text-align:left}.task-preset-save-row{grid-template-columns:1fr;gap:12px}.task-preset-save-row button{justify-self:start}.task-preset-facts{grid-template-columns:1fr;gap:13px}.task-preset-details{padding:13px}}
