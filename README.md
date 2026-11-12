@@ -5,7 +5,13 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.23 adds **Saved Run Review**: explicitly inspect one search result's
+Version 0.24 adds an **End-to-End Offline Acceptance** harness: create a fresh
+private fixture, run the existing exact scripted Python demo through normal live
+history, review its actual checks and export a patch, then inspect the same
+retained evidence after restart without another attempt. Java compilation and
+checks use a separate invented fixture. This harness performs no real-model
+inference and leaves the production engine, task admission and browser controls
+unchanged. It retains **Saved Run Review**: explicitly inspect one search result's
 saved task scope, check specifications and recorded results, historical request
 diagnostics and bounded patch. Review reads private saved evidence with current
 metadata/history pins and a second evidence check. It performs no live worker
@@ -1425,14 +1431,81 @@ each time, and preserve the state directory and failed or uncertain results.
 The Java client passes an argument list without a shell and forwards the Python
 engine's exit status. It does not implement a second agent engine or browser UI.
 
-## Run acceptance checks
+## Run one offline browser workflow
+
+The offline harness creates an entirely new private acceptance workspace. It
+accepts only its own pinned fixture; it cannot adopt an existing project or
+normal Workbench data directory. Initialize a new absolute path outside source:
 
 ```sh
-python3 -B qa_agent.py --jdk-home /absolute/jdk \
-  --work-dir /absolute/new-private-acceptance
+python3 -B offline_workflow.py init --work-dir /absolute/new-private-workflow
+python3 -B offline_workflow.py serve --work-dir /absolute/new-private-workflow --port 0
 ```
 
-Final v0.23 offline qualification passed 1,004 unit methods across 44 suites, including
+Open the printed loopback URL. Keep **Arithmetic demo**, **Scripted exercise · no
+inference** and its original Task. Click **Run task** once. Follow the normal
+history and plan, inspect baseline, agent and independent final checks, and
+review the addition-only diff. Explicitly accept the current result/patch, then
+download the reviewed patch. Nothing is applied to the original project.
+
+The harness allows one scripted attempt per initialized root. It retains its
+claim after a refused spawn, failure or interruption; it offers no reset or
+automatic retry. Finish the child before stopping the server. Restart the same
+serve command, reload the new session in the browser and select the same run to
+verify retained history and review. Restart does not start another worker.
+Keep the server in the foreground. Ctrl+C stops its owned child and listener;
+interrupted evidence stays retained and does not establish successful acceptance.
+This restricted QA server allows only the required Run, history, review, export
+and saved-review routes. Other visible controls, including project setup,
+refresh, workspaces, presets and Compare, refuse here.
+
+Inspect the actual saved result and, optionally, the downloaded patch:
+
+Keep the original browser download receipt. Stage its exact bytes as an
+owner-0600 regular single-link file in an owner-0700 private folder outside the
+fixture, with no symlink path components. The inspector checks these storage
+requirements as well as the patch bytes and hashes.
+
+```sh
+python3 -B offline_workflow.py inspect --work-dir /absolute/new-private-workflow \
+  --download /absolute/private-downloaded-patch.diff --require-accepted
+```
+
+Java checks are an independent explicit action on separate invented selected
+files, using an already installed JDK:
+
+```sh
+python3 -B offline_workflow.py java-check --work-dir /absolute/new-private-workflow \
+  --jdk-home /absolute/jdk
+```
+
+Java results are compile/protected-main evidence, not a Java agent or model run.
+The Java check is also once-only per initialized root. A failed, partial or
+JDK-refused attempt stays retained; there is no reset or automatic retry.
+The Python worker uses the unchanged deterministic ScriptedDemo under additional
+child-side provider/HTTP/socket guards. Those Python-level guards are not an
+operating-system-wide network audit. Normal history and run updates stay active;
+the harness does not substitute an empty feed. Session tokens are never printed.
+Keep fixture configuration, runtime records, source copies, logs, claims,
+diagnostics, check output, review/export receipts and downloaded patches private.
+See [VALIDATION.md](VALIDATION.md) for the qualified scope and retained outcomes.
+
+## Run acceptance checks
+
+Use a shell with umask 022 for the complete suite: an existing negative
+permission test deliberately creates a 0755 directory, which a more restrictive
+mask changes. The subshell keeps this setting local to the command. Place the
+new acceptance directory under an owner-only private parent.
+
+```sh
+(
+  umask 022
+  python3 -B qa_agent.py --jdk-home /absolute/jdk \
+    --work-dir /absolute/new-private-acceptance
+)
+```
+
+Final v0.24 offline qualification passed 1,042 unit methods across 46 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1544,7 +1617,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.23 adds no real-model qualification. Saved-run reviews, preset previews, named task presets, snapshot review workspaces,
+Version 0.24 adds no real-model qualification. The offline harness, saved-run reviews, preset previews, named task presets, snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context
