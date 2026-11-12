@@ -142,3 +142,14 @@ actual offline checks; neither represents a new model run. Real worktrees,
 exports, attempts, check output and runtime records are excluded from public
 source. Current metadata pins are new observations, not historical v0.15 pins.
 Snapshot re-export remains deferred; licensing remains unassigned.
+
+Version 0.17 adds read-only re-export of exact verified v0.16 snapshots, a
+strict explicit version 2 archive/evidence schema, separate private review
+acceptances, browser/history integration and invented offline Python/Java
+roundtrip fixtures. It adapts the prior deterministic ZIP/diff/check readers;
+version 1 archive bytes and behavior remain intact. Existing verifier, selected
+project comparator and snapshot importer consume version 2 through the common
+verified fields, without fabricated legacy records. No external archive/parser
+implementation or new third-party dependency was added. Real exports, source
+copies, worktrees, notes, check output and histories stay outside public source.
+Recorded observations are not new model results; no license is assigned.
