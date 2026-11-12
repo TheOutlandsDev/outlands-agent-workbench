@@ -35,6 +35,7 @@ def acceptance(jdk, work):
             for name, run_id in ids.items():
                 request = selected_request(manager, run_id)
                 value = manager.run_history_review(request)
+                assert value["version"] == 2 and "decision" in value
                 assert {key: value[key] for key in request} == request
                 assert len(canonical(value)) <= 65536
                 assert "state" not in value["diagnostics"] and "hold" not in value["diagnostics"]

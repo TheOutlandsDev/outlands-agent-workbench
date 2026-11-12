@@ -5,7 +5,13 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.24 adds an **End-to-End Offline Acceptance** harness: create a fresh
+Version 0.25 adds **Saved Review Decisions** to the existing explicit saved-run
+review. Inspect the observed human verdict, private note, recorded time and exact
+artifact pins. Accepted, Rejected, Stale, Unreviewed and Unknown remain saved
+observations; this panel grants no export or execution permission. Result
+freshness follows the original review writer's canonical JSON hash, shown
+separately from raw file evidence. It retains the **End-to-End Offline Acceptance**
+harness: create a fresh
 private fixture, run the existing exact scripted Python demo through normal live
 history, review its actual checks and export a patch, then inspect the same
 retained evidence after restart without another attempt. Java compilation and
@@ -1287,6 +1293,28 @@ These are saved observations, not current project correctness or live worker
 status. A recorded response is not proof that a task succeeded or that an
 unsettled provider request finished. No private source file is opened.
 
+The HTTP saved-review response is version 2, with the existing summary and
+diagnostics plus a decision object. The explicit three-pin request is unchanged;
+search, metadata-open, Compare and stored receipt formats are unchanged.
+
+The saved review decision card uses the existing review receipts:
+
+- **Unreviewed**: a safe present run has a complete empty receipt catalog.
+- **Accepted** or **Rejected**: the saved verdict binds to the currently observed
+  canonical result and complete patch hashes.
+- **Stale**: a valid saved verdict names different current artifact pins.
+- **Unknown**: receipts/catalog/artifacts are missing, invalid, inconsistent or
+  limited; an earlier acceptance is not used as a fallback.
+
+The card preserves a valid highest observed receipt's note, time and hashes when
+available. Under a partial catalog it is an observed receipt, not a claim about
+the globally latest decision. The result-content hash follows
+sha(canonical(parsed result)), matching the existing writer; the existing raw
+result-file fingerprint remains separate. Whitespace-only JSON formatting can
+change that raw fingerprint without making the recorded decision stale. Valid
+note text is rendered literally. A saved acceptance does not establish author
+authenticity, live correctness, source adoption or export eligibility.
+
 Missing or malformed optional records remain Unknown with finite notes. Failed,
 uncertain, running and legacy observations remain as saved; review does not
 repair records, retry a run or inspect or clear a hold. Historical diagnostics
@@ -1306,7 +1334,12 @@ disabled. Review writes no index, token, cache, job or history record.
 Each evidence inspection reads task/result files up to 32,768 bytes each and
 patch bytes up to 65,536, with at most 8,192 UTF-8 bytes displayed. It admits at
 most 256 event names while processing at most 1,024 directory entries, with one
-lookahead for truncation. Events are limited to 262,144 bytes each and a 2-MiB
+lookahead for truncation. The same pass independently catalogs up to 100
+canonical review receipts; an event limit cannot silently hide later receipts.
+Each receipt is at most 32,768 bytes, with a separate 256-KiB aggregate logical
+read budget. Invalid names, gaps and partial catalogs are explicit. Admitted
+unread receipts still undergo safety/identity checks after budget exhaustion.
+Events are limited to 262,144 bytes each and a 2-MiB
 aggregate read budget including refusal-byte reservations. Oversized records
 produce limit notes; only a bounded prefix and file identity are pinned, never
 an unbounded full-file hash. Admitted events skipped after the byte budget is
@@ -1318,7 +1351,7 @@ request. The response is at most 65,536 bytes and refuses if its complete
 sanitized content cannot fit. Sequential pins assume trusted stable single-owner
 storage and are not an atomic multiwriter snapshot.
 
-Real saved tasks, names, goals, hashes, diagnostics, results and patches contain
+Real saved tasks, names, goals, hashes, diagnostics, results, review notes and patches contain
 private project context and stay outside public source uploads.
 
 ## Compare saved runs
@@ -1505,7 +1538,7 @@ new acceptance directory under an owner-only private parent.
 )
 ```
 
-Final v0.24 offline qualification passed 1,042 unit methods across 46 suites, including
+Final v0.25 offline qualification passed 1,079 unit methods across 48 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1617,7 +1650,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.24 adds no real-model qualification. The offline harness, saved-run reviews, preset previews, named task presets, snapshot review workspaces,
+Version 0.25 adds no real-model qualification. The offline harness, saved-run reviews, preset previews, named task presets, snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context

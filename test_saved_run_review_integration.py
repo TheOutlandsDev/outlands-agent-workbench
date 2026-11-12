@@ -105,7 +105,9 @@ class SavedRunReviewIntegrationTests(unittest.TestCase):
             for name in ["python_ok", "python_failed", "java_ok", "java_failed"]:
                 request = selected_request(manager, ids[name])
                 value = manager.run_history_review(request)
-                self.assertEqual(set(value), {"version", "id", "record_sha256", "history_sha256", "evidence_sha256", "summary", "diagnostics"})
+                self.assertEqual(set(value), {"version", "id", "record_sha256", "history_sha256", "evidence_sha256", "summary", "diagnostics", "decision"})
+                self.assertEqual(value["version"], 2)
+                self.assertEqual(value["decision"]["state"], "UNREVIEWED")
                 self.assertEqual({key: value[key] for key in request}, request)
                 self.assertRegex(value["evidence_sha256"], r"^[0-9a-f]{64}$")
                 side = value["summary"]

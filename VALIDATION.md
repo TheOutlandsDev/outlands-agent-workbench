@@ -1,132 +1,167 @@
-# Version 0.24 validation
+# Version 0.25 validation
 
-Offline qualification on one Linux host passed **1,042 unit methods across
-46 suites**: the prior 1,004 methods, 20 offline-workflow helper methods and
-18 controller/HTTP methods. All prior acceptance probes passed. The new
-persistent acceptance ran the exact existing Python ScriptedDemo through real
-normal history, actual checks, explicit accepted review and patch export, then
-reopened the same terminal evidence without another worker. A separate browser
-fixture completed that flow and an exact downloaded-patch check. Separate Java
-compilation/protected-main checks passed in each fixture. No real model was
-called or qualified.
+Final offline qualification on one Linux host passed **1,079 unit methods across
+48 suites**: the prior 1,042 methods, 20 pure decision methods and 17 new
+controller/HTTP methods. All prior acceptance probes passed. The new acceptance
+covered invented Python/Java histories, separate actual fixed checks, and the
+existing real accepted receipt from the earlier completed scripted workflow.
+Reviewing that receipt started no new agent or check. All **113 qualified
+executable/static/example input hashes** stayed unchanged through qualification
+and browser testing. Final isolated frontend qualification passed **255 checks**.
 
 | Area | Observed result |
 | --- | --- |
-| Python run | One scripted worker per fresh fixture; normal history observed Running then Ready for review |
-| Plan and edits | Three known plan steps, six turns and only the addition correction in the private candidate |
-| Actual checks | Four baseline tests with three failures/exit 1; four agent and independent-final tests pass/exit 0 |
-| Original inputs | Source, protected tests, configuration and task retain exact bytes and private modes |
-| Review/export | Unreviewed and stale-pin exports refuse in tests; explicit accepted review unlocks the exact patch |
-| Browser download | One 112-byte download matches the saved diff and SHA-256; exact downloaded bytes, not a regenerated patch, were inspected |
-| Restart | Same plan, checks, diff, accepted hashes and export availability; runtime bytes/modes unchanged and zero new starts or launches |
-| Saved review | One explicit post-restart ID search and saved-evidence review show the same task scope, checks, result and patch |
-| Java | Separate actual compile and one protected-main check; no Java agent run or inference |
-| Guards | Recorded parent provider/outbound and child provider/network attempts are zero; Python-level coverage only |
-| Denied routes | One denied route in each browser session; paths are not recorded and remain unidentified |
-| Console | Zero captured warnings/errors before restart and zero after restart |
-| Teardown | Both owned browser servers exited successfully; direct loopback probes verified the listener closed after each |
+| Five states | Complete absent receipt, matching accepted/rejected verdict, stale pins and unknown evidence remain distinct |
+| Result binding | Uses the existing writer's canonical parsed-result hash; raw result file evidence stays separate |
+| Formatting | Whitespace-only result formatting remains Accepted while the raw file fingerprint changes |
+| Receipt validity | Exact original schema, selected ID, hashes, verdict, integer time, Unicode note and source_applied=false required |
+| No fallback | Invalid latest or incomplete evidence never substitutes an older acceptance; invalid earlier evidence is conservatively Unknown |
+| Catalogs | Event and review catalogs are collected independently in one bounded directory pass |
+| Safety | Anchored owner-only, no-follow, regular single-link reads; admitted unread receipts retain zero-byte safety/identity checks |
+| Freshness | Existing evidence and metadata-history double inspection covers receipt add/edit/delete/rename and directory drift |
+| UI | Strict version-2 envelope and nested decision validation; text nodes; existing explicit request and stale/busy/context guards preserved |
+| Authority | Saved decisions change no writer, export gate, Task/model/project value or comparison slot |
+| Actual receipt | Completed scripted Python acceptance is inspected through the new guarded saved-only route without rerun |
+| Separate checks | Actual copied-source checks pass four Python tests and one Java protected main |
+| Browser restart | Saved note, time, verdict and artifact pins persist; cached cards clear on reload |
+| Held review | A separate invented hold keeps Task/Run/export disabled while saved review remains available |
+| Teardown | Four owned browser servers exit successfully; direct probes verify both loopback listeners closed |
 
-## Evidence classes and retained findings
+## Evidence classes and retained qualification
 
-All qualification projects, tasks, histories, notes and sources are invented.
-The 20 helper and 18 integration methods use isolated stores, fabricated unit
-receipts or mocked workers/checks to exercise negative paths; these methods are
-not actual execution evidence. The new persistent acceptance and browser fixture
-each run their first real scripted Python worker with actual network-isolated
-checks. Java uses separate fixed-check fixtures and is never inserted as a Java
-agent job in the Python history. One Java test means one protected main, not an
-assertion count.
+All qualification names, projects, tasks, histories, notes and sources are
+invented. The new 20-method pure suite uses bounded synthetic descriptors and
+receipt values; it performs no I/O or execution. The first controller run passed
+16 new methods and all 21 prior saved-review methods. A final dependency test was
+added, and all 38 focused methods passed: 17 new plus 21 prior regressions.
+These fixtures use seeded outcomes or fake checks, including the completed-
+workflow dependency unit test; they are not actual agent execution evidence.
 
-Prequalification review corrected the plan-event schema, strict request-body
-replay, receipt/type/identity pins, settled parent-receipt publication, child-side
-network guards, signal handling, safe shutdown and shared finite refusals for
-malformed evidence. Findings were resolved before actual workflow execution.
-Three focused helper runs passed 20 methods each; initial integration coverage
-passed 15 methods and its expanded run passed 18. Logs remain private.
+The first frontend collector failed before invoking the validator because its
+context builder accessed a deliberately deleted summary. The original script
+and log remain retained. Correcting that collector required no application
+source change. The corrected run passed 226 checks; final conservative null-
+receipt/empty-catalog validation and static checks passed 228. The final
+255-check run added compatibility with 20 actual pure-helper outputs and 12
+guarded controller responses, with no source change after the 228-check stage.
+These are isolated schema/render/request/clear/stale/busy checks, not browsers,
+real providers or executed saved outcomes.
 
-The first complete runner stopped in an existing permission test because the
-private wrapper's umask 077 converted its deliberately 0755 directory to 0700.
-The expected private-state refusal therefore did not occur. This failed run is
-retained; it reached no new offline-workflow fixture, claim, worker or separate
-Java-check attempt. The corrected wrapper used umask 022 with the same final
-109 executable/static/example input hashes. Its complete 1,042-method run and
-actual acceptance passed. No failed or uncertain actual worker was retried.
+Independent source review and root scope checks found no remaining blocker
+before the first complete runner. Only the saved-evidence inspection and saved-
+review controller methods changed in Manager, plus the new helper import.
+The original review writer, export gates, runtime methods, agent engine and
+version-1 pure saved-run reducer remain unchanged. Prior integration/QA
+expectations were adjusted only for the intentional version-2 controller
+envelope and added decision field.
 
-One browser closure collector incorrectly expected zero denied requests. Saved
-counters instead record one denial per session. The restricted handler does not
-log route paths, so these denials cannot be attributed from retained evidence.
-The collector assertion was corrected and retained without repeating any
-application action, Run, review, export or check. No application source changed.
+The complete runner passed on its first attempt under the documented umask 022.
+It ran actual scripted workflows and isolated checks in separate earlier
+acceptance stages, then the new saved-only stage required the already completed
+accepted Python receipt. Missing dependency refuses without creating a fixture,
+starting a worker or rerunning checks. Guarded review returned Accepted for the
+existing result/patch pins and preserved that entire fixture. Separate copied
+Python/Java fixed checks passed independently of seeded decision records.
+One Java test means one protected main, not an assertion count. No real model
+was called or qualified.
 
 ## Browser observations
 
-The browser used the public harness CLI and a different fresh persistent fixture.
-The normal history/view feed stayed active and was never stubbed empty. One
-explicit Run displayed Running, then Ready for review with the known three-step
-plan, six turns, real baseline/agent/final output and addition-only diff. The
-interface explicitly accepted the current result/patch hashes and downloaded
-the reviewed patch once. Its original download receipt was retained; exact bytes
-were copied into a new owner-only private file for inspection. The inspector
-verified the accepted review, saved patch and unchanged original inputs.
+Two browser evidence classes were kept separate.
 
-The first session recorded one start, worker launch, accepted review and export.
-After terminal completion, the ordinary history/comparison panel paused UI
-polling for shutdown. The same fixture was served again and the browser reloaded
-for a new session. The same run automatically reopened with its plan/activity;
-Checks, Diff and Review restored the saved evidence and enabled export. No
-second Run, acceptance or download was requested. One explicit ID search and
-saved-evidence review then showed the original scope, check specifications,
-baseline/final counts, result fingerprint, historical diagnostics and patch.
-Missing serialized request sizes stayed Unknown.
+The first used the public offline-workflow CLI with the completed actual
+scripted fixture from this qualification. Normal history/view remained real;
+no empty-feed substitution was used. Across two server sessions, two explicit
+ID searches and saved-evidence reviews showed the existing Accepted receipt,
+private note, time and canonical/current/recorded hashes. Reload cleared the
+cached decision; a fresh explicit review restored identical card text. There
+were zero starts, new worker launches, human review-writer requests or exports.
+Task/model/project values, scripted read-only Task and comparison slots remained
+unchanged. All 64 workspace path entries, the separate Java fixture and the
+fixture/worker/terminal pins retained exact bytes/modes. Both console captures
+contained zero warnings/errors.
 
-The two sessions recorded 72/25 normal-history and 64/25 live-view requests.
-The restart recorded zero starts or worker launches, one metadata search and one
-saved-evidence review. Parent provider/outbound attempts and the guarded child's
-provider/network attempts were zero. One denied route per session remains
-unidentified. Both console captures contained zero warnings/errors. Runtime
-file/directory modes and file bytes, original inputs, Java fixture, terminal
-pins and worker receipts matched before and after restart. Session/shutdown
-receipts are separate additive evidence. Fixture records, logs, screenshots and
-downloads stay private.
+The second used 12 invented Python/Java histories under a guarded private
+fixture. Its normal live feed was deliberately empty to isolate saved-only
+inspection from runtime reconciliation; metadata search and saved-review routes
+were real. This phase does not itself qualify live history or real saved
+outcomes. Browser cases covered all five states across both languages, invalid
+latest/no fallback, Java formatting-only Accepted with different raw/canonical
+hashes, literal combining/astral Unicode, NUL, CRLF and markup in notes, and an
+out-of-browser-range valid epoch preserved as its exact recorded number.
 
-## Harness boundaries and limits
+Six initial case reviews preserved the unsent draft, selected project/model,
+comparison slots and disabled export. An additive invented metadata record
+intentionally invalidated a selected history pin. One stale review refused,
+cleared old evidence and required a new explicit search; it was not automatically
+retried. A fresh search/review restored the unchanged Accepted card. A separate
+invented hold was added for restart. After reload, saved review of the Java
+Rejected receipt remained available with identical note/time/hashes, while
+Task/Run/export stayed disabled.
 
-This standard-library QA harness leaves the production engine, controller,
-admission logic, browser JavaScript and CSS unchanged; the HTML version badge is
-updated. It admits only the exact existing Python demo, original goal and
-scripted backend under a newly initialized owner-only root outside source.
-Configuration, task and original source hashes are pinned. Unsafe links, modes,
-ownership, multiple links, altered inputs, foreign records and malformed
-evidence refuse. Bounded reads and terminal inventories do not constitute an
-atomic multiwriter snapshot or a crash-durability guarantee.
+This seeded phase made nine explicit searches and nine saved-review requests:
+eight successful reads and one intentional stale-pin refusal. All guarded
+execution, live-view, process, provider/outbound, worker, Git and check attempts
+were zero. Both console captures contained zero warnings/errors. All original
+132 files and 33 directories kept exact bytes/modes; only the declared invented
+metadata record and unrelated hold were added, and both remained retained.
+Each phase's server session/shutdown receipts are separate additive evidence.
+All private fixtures, observations, screenshots and logs remain excluded from
+public source.
 
-The start claim is persistent and once-only, including refused spawns, failures
-and interruptions. Restart cannot adopt unfinished work or begin another
-attempt. The guarded worker accepts only the exact existing engine argv and
-installs provider/HTTP/socket/DNS guards inside its Python process before
-execution. These are Python-level interception receipts, **not an
-operating-system-wide packet audit** or proof about unrelated processes. Actual
-fixed checks run in the existing network-isolated Bubblewrap boundary. Shutdown
-stops only owned children, retains interrupted evidence and never proves
-acceptance by itself.
+## Bounds, protocol and trust limits
 
-The loopback server preserves normal session/Host/Origin gates and adds uniform
-bounded JSON framing. Only required run/history/review/export/saved-review routes
-are admitted. Other unchanged visible Workbench controls refuse on this QA
-server. The read-only inspector requires completed actual scripted evidence and,
-when requested, a current accepted review and exact private downloaded bytes.
-It performs no worker reconciliation or repair. The separate Java check is also
-once-only; failed, partial or JDK-refused attempts stay retained without reset.
+The saved-review request retains the existing selected run ID and exact
+metadata/history pins. The response envelope is version 2: existing summary and
+historical diagnostics plus one version-1 decision object. Search/open/Compare
+schemas and existing stored seven-field review receipts are unchanged. Older
+exact-version clients need the updated UI; no stored-data migration, new index,
+writer, review token or export authority is introduced.
 
+Each inspection processes at most 1,024 selected-run directory entries plus one
+lookahead. It independently admits at most 256 event names and 100 canonical
+review receipts. Event limits cannot silently hide later review names. Reviews
+must form a complete canonical contiguous catalog to support a known nonempty
+decision. Malformed names, gaps, missing/invalid/limited content and partial
+catalogs are explicit Unknown. Unreviewed only observes a safe present complete
+empty receipt catalog, independently of result readiness.
+
+Review reads allow 32,768 bytes per record plus a refusal byte, with a separate
+262,144-byte logical aggregate budget. Existing event reads retain their 2-MiB
+aggregate budget. Admitted unread receipts still undergo owner/mode/type/link
+and identity checks with no content read after exhaustion; unsafe stores refuse.
+Full or bounded-prefix hashes, identities, catalog names and missing/invalid/
+limited markers participate in the saved-evidence digest. An oversized prefix
+is not a complete-file hash. Both evidence and bounded metadata history are
+inspected twice; these sequential observations assume trusted stable single-
+owner storage, not an atomic multiwriter snapshot or crash-durability guarantee.
+
+The highest canonical filename ordinal controls the observed receipt, not the
+largest wall-clock timestamp. Any invalid admitted receipt conservatively keeps
+the decision Unknown. A valid highest observed receipt may remain visible under
+Unknown; a partial catalog does not establish the globally latest decision.
+Current artifacts must be completely usable and internally consistent before
+matching pins mean Accepted/Rejected or mismatched pins mean Stale. Result
+binding follows sha(canonical(parsed result)), matching the original writer;
+the raw result-file hash remains separate evidence.
+
+Notes preserve valid Unicode/control text without normalization or clipping,
+up to 2,000 code points and 8,000 UTF-8 bytes. Invalid Unicode or receipt schema
+remains Unknown. The complete response still refuses above 65,536 canonical
+bytes rather than silently dropping the full valid saved goal or note.
+Raw prompts, responses, check output, exception text, absolute source paths and
+private extra fields remain excluded from the owner response.
+
+Saved acceptance establishes neither author authenticity, live source
+correctness, adoption nor permission to export. Python-level browser/worker
+interception receipts are not an operating-system-wide packet audit.
 The original uncertain Java model trial remains held and unqualified, with cause
-and provider completion unknown. Only its exact hold/result preservation hashes
-were compared; no held Manager/runtime reader, inference, recovery, eviction or
-cleanup was invoked. Real histories, tasks, goals, names, configuration,
-diagnostics, patches, bundles, check output and runtime receipts remain excluded
-from public source. Licensing stays **UNASSIGNED**.
+and provider completion unknown. Only its exact two preservation hashes were
+compared by root; no held Manager/runtime reader, recovery, retry or eviction was
+invoked. Real data, histories, notes, configuration, patches, bundles, logs,
+claims and runtime receipts stay private. Licensing remains **UNASSIGNED**.
 
 Qualification used Python 3.10.12, Git 2.34.1 and Temurin JDK 21.0.13+9 targeting
-Java 17 on Linux. Local passes are not GitHub CI passes. Earlier feature-specific
-evidence, including the unchanged browser code's prior isolated frontend checks,
-remains in [version 0.23 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/bf9c68c3bfe79565f3513bd30c6138a21e4579a6/VALIDATION.md).
+Java 17 on Linux. Local passes are not GitHub CI passes. Earlier evidence remains
+in [version 0.24 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/d09ccca9431dbd2ef5aa4db4a1d52a06629e1701/VALIDATION.md).
 See [origins](ORIGINS.md) for provenance and licensing limits.

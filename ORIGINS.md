@@ -232,3 +232,12 @@ Its fresh Java fixture supplies separate actual compilation/protected-main
 evidence. All fixture data, worker claims, configuration, check output, runtime
 records and downloaded patches remain private. Existing notices, the original
 uncertain Java hold and UNASSIGNED licensing stay unchanged.
+
+Version 0.25 adds a pure standard-library saved-review decision classifier and
+extends the existing bounded saved-evidence reader and explicit browser view.
+It reads the existing human review receipt format, preserves the original
+writer and export gates, and distinguishes canonical result-content hashes from
+raw file fingerprints. It adds no execution, provider, review writer, external
+dependency or license. Private notes and histories remain private; incomplete
+or corrupt evidence stays Unknown. Existing notices, original uncertain Java
+hold and UNASSIGNED licensing remain unchanged.
