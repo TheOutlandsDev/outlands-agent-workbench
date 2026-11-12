@@ -98,3 +98,16 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 #snapshot-reexport-status,#snapshot-reexport-note-status,#snapshot-reexport-history-status{overflow-wrap:anywhere;line-height:1.8}
 #snapshot-reexport-acceptance{margin-top:20px}
 @media(max-width:680px){.snapshot-reexport-summary,.snapshot-reexport-accept-card{padding:14px}.snapshot-reexport-section .pane-heading{align-items:flex-start}.snapshot-reexport-section .pane-heading button,.snapshot-reexport-section .review-buttons button{max-width:100%;white-space:normal}.snapshot-reexport-section .project-check-facts{grid-template-columns:1fr}}
+
+/* Exact-span edits are scoped to verified private snapshot workspaces. */
+.snapshot-editor-section{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:12px;background:rgba(105,137,185,.04)}
+.snapshot-editor-section .pane-heading{flex-wrap:wrap;align-items:flex-start}
+.snapshot-editor-section button{max-width:100%;white-space:normal}
+.snapshot-editor-file-row{display:flex;align-items:flex-end;gap:14px;margin:16px 0}.snapshot-editor-file-row label{flex:1;min-width:0}
+.snapshot-editor-code{font-family:var(--mono,monospace);font-size:12px;tab-size:4;white-space:pre;overflow:auto;resize:vertical;line-height:1.65;min-width:0;width:100%;box-sizing:border-box}
+#snapshot-editor-content{max-height:480px;background:#0b1119;color:var(--text);cursor:text}
+.snapshot-editor-inputs{align-items:start;margin:18px 0}.snapshot-editor-inputs>div{min-width:0}.snapshot-editor-inputs select{margin-top:5px}
+.snapshot-editor-inputs .small{line-height:1.8}#snapshot-editor-status,#snapshot-editor-admission,#snapshot-editor-old-note{overflow-wrap:anywhere;line-height:1.8}
+#snapshot-editor-preview{padding:16px;margin-top:18px;border:1px solid var(--line);border-radius:8px;background:rgba(207,161,83,.045)}
+#snapshot-editor-preview .code-view{max-height:440px;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:680px){.snapshot-editor-section{padding:14px}.snapshot-editor-file-row{display:block}.snapshot-editor-file-row button{margin-top:12px}.snapshot-editor-section .pane-heading button{font-size:10px;text-align:left}.snapshot-editor-inputs{grid-template-columns:1fr}}
