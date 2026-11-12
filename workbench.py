@@ -25,6 +25,7 @@ from task_presets import profile as task_preset_profile, prepare as prepare_task
 from preset_comparison import compare_goals
 from run_diagnostics import summarize as summarize_diagnostics
 from run_comparison import compare_runs
+from run_history import search_history, review_record
 from project_readiness import summarize as summarize_readiness
 from patch_bundle import MAX_ARCHIVE, build_bundle, verify_bundle
 from bundle_project_check import check_project
@@ -824,6 +825,94 @@ class Manager:
                 notes.append("RECORD_LIMIT")
             result = {"runs": rows[:100], "limit": 100, "truncated": truncated, "notes": notes}
             require(len(canonical(result)) <= 131072, "COMPARE_OUTPUT_LIMIT")
+            return result
+
+    def _run_history_inspection(self):
+        """Read a bounded, pinned set of saved job metadata without reconciliation."""
+        root_fd = jobs_fd = None
+        try:
+            root_fd = readiness_directory(self.data)
+            root_info = os.fstat(root_fd)
+            require(root_info.st_uid == os.getuid() and stat.S_IMODE(root_info.st_mode) == 0o700,
+                    "HISTORY_SEARCH_STORE_UNSAFE")
+            jobs_fd = os.open("jobs", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=root_fd)
+            jobs_info = os.fstat(jobs_fd)
+            require(jobs_info.st_uid == os.getuid() and stat.S_IMODE(jobs_info.st_mode) == 0o700,
+                    "HISTORY_SEARCH_STORE_UNSAFE")
+            names, truncated = [], False
+            with os.scandir(jobs_fd) as entries:
+                for index, entry in enumerate(entries):
+                    if index >= 1024:
+                        truncated = True
+                        break
+                    if re.fullmatch(r"[0-9a-f]{16}[.]json", entry.name) is not None:
+                        if len(names) == 200:
+                            truncated = True
+                            break
+                        names.append(entry.name)
+            rows, hashes, remaining = [], {}, 2097152
+            for name in sorted(names):
+                require(remaining > 1, "HISTORY_SEARCH_LIMIT")
+                raw = self._task_preset_read(jobs_fd, name, min(32768, remaining - 1))
+                remaining -= len(raw)
+                try:
+                    metadata = parse(raw)
+                except Refused:
+                    raise Refused("HISTORY_SEARCH_RECORD_INVALID") from None
+                require(type(metadata) is dict, "HISTORY_SEARCH_RECORD_INVALID")
+                digest = sha(raw)
+                hashes[name] = digest
+                rows.append({"id": name[:-5], "metadata": metadata, "record_sha256": digest})
+            for path, before in [(self.data, root_info), (self.data / "jobs", jobs_info)]:
+                current_fd = readiness_directory(path)
+                try:
+                    after = os.fstat(current_fd)
+                    require((after.st_dev, after.st_ino) == (before.st_dev, before.st_ino)
+                            and after.st_uid == os.getuid() and stat.S_IMODE(after.st_mode) == 0o700,
+                            "HISTORY_SEARCH_STORE_UNSAFE")
+                finally:
+                    os.close(current_fd)
+            return rows, sha(canonical({"files": hashes, "catalog_truncated": truncated})), truncated
+        except Refused as error:
+            code = str(error)
+            if code.startswith("HISTORY_SEARCH_"):
+                raise
+            mapped = {"TASK_PRESET_LIMIT": "LIMIT", "TASK_PRESET_RECORD_CHANGED": "RECORD_CHANGED",
+                      "TASK_PRESET_STORE_UNSAFE": "STORE_UNSAFE"}.get(code, "STORE_UNSAFE")
+            raise Refused("HISTORY_SEARCH_" + mapped) from None
+        except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+            raise Refused("HISTORY_SEARCH_STORE_UNSAFE") from None
+        finally:
+            if jobs_fd is not None:
+                os.close(jobs_fd)
+            if root_fd is not None:
+                os.close(root_fd)
+
+    def run_history_search(self, request):
+        with self.lock:
+            require(type(request) is dict and set(request) == {"query", "project", "state"}, "HISTORY_SEARCH_INPUT")
+            records, pin, truncated = self._run_history_inspection()
+            result = search_history(records, request, pin, catalog_truncated=truncated)
+            require(self._run_history_inspection()[1] == pin, "HISTORY_SEARCH_HISTORY_CHANGED")
+            require(len(canonical(result)) <= 65536, "HISTORY_SEARCH_OUTPUT_LIMIT")
+            return result
+
+    def run_history_open(self, request):
+        with self.lock:
+            require(type(request) is dict and set(request) == {"id", "record_sha256", "history_sha256"},
+                    "HISTORY_SEARCH_INPUT")
+            require(type(request["id"]) is str and ID.fullmatch(request["id"]) is not None
+                    and type(request["record_sha256"]) is str and SHA256.fullmatch(request["record_sha256"]) is not None
+                    and type(request["history_sha256"]) is str and SHA256.fullmatch(request["history_sha256"]) is not None,
+                    "HISTORY_SEARCH_INPUT")
+            records, pin, _ = self._run_history_inspection()
+            require(request["history_sha256"] == pin, "HISTORY_SEARCH_HISTORY_CHANGED")
+            record = next((row for row in records if row["id"] == request["id"]), None)
+            require(record is not None, "HISTORY_SEARCH_NOT_FOUND")
+            require(record["record_sha256"] == request["record_sha256"], "HISTORY_SEARCH_RECORD_CHANGED")
+            result = review_record(record, pin)
+            require(self._run_history_inspection()[1] == pin, "HISTORY_SEARCH_HISTORY_CHANGED")
+            require(len(canonical(result)) <= 65536, "HISTORY_SEARCH_OUTPUT_LIMIT")
             return result
 
     def comparison_bundle(self, run_id):
@@ -3589,6 +3678,28 @@ def make_handler(manager, token, origin):
                 self.guard(True)
                 require(self.headers.get("Origin") == origin, "ORIGIN_REFUSED")
                 path = urlsplit(self.path).path
+                if path.startswith("/api/run-history-"):
+                    routes = {"/api/run-history-search": manager.run_history_search,
+                              "/api/run-history-open": manager.run_history_open}
+                    require(path in routes, "HISTORY_SEARCH_INPUT")
+                    types, lengths = self.headers.get_all("Content-Type", []), self.headers.get_all("Content-Length", [])
+                    require(self.headers.get("Transfer-Encoding") is None and len(types) == 1
+                            and types[0].split(";", 1)[0].strip().lower() == "application/json"
+                            and len(lengths) == 1 and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
+                            "HISTORY_SEARCH_INPUT")
+                    length = int(lengths[0])
+                    require(0 < length <= 32768, "HISTORY_SEARCH_LIMIT")
+                    raw = self.rfile.read(length)
+                    require(len(raw) == length, "HISTORY_SEARCH_INPUT")
+                    try:
+                        request = parse(raw)
+                    except Refused:
+                        raise Refused("HISTORY_SEARCH_INPUT") from None
+                    result = routes[path](request)
+                    encoded = canonical(result)
+                    require(len(encoded) <= 65536, "HISTORY_SEARCH_OUTPUT_LIMIT")
+                    self.send(200, encoded)
+                    return
                 if path.startswith("/api/task-preset-"):
                     routes = {"/api/task-preset-list": manager.task_preset_list,
                               "/api/task-preset-save": manager.task_preset_save,

@@ -198,3 +198,15 @@ Preview creates no stored record and never assigns Task. Real goals, comparisons
 hashes, configuration and runtime evidence remain private. Existing notices,
 archive formats, original Java uncertainty hold and UNASSIGNED licensing stay
 unchanged; this milestone claims no new model qualification or reuse license.
+
+Version 0.22 adds bounded saved-job metadata search, project/outcome filters and
+pinned selected metadata review, with explicit handoff into existing comparison
+slots. It reuses guarded private file reads, canonical hashes, saved-comparison
+controls and invented Python/Java history fixtures. No search index, database,
+external service, framework or dependency is added. Search matches complete valid
+saved goal fields before bounded label clipping. New methods do not reconcile
+workers, read project source or change saved evidence. Recorded outcomes in the
+fixtures are synthetic observations, separate from actual independent fixed
+checks. Real histories, queries, goals, metadata and comparisons remain private.
+Existing notices, archive schemas, original uncertain Java hold and UNASSIGNED
+licensing stay unchanged; no live model qualification or reuse license is claimed.
