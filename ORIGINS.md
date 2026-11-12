@@ -241,3 +241,17 @@ raw file fingerprints. It adds no execution, provider, review writer, external
 dependency or license. Private notes and histories remain private; incomplete
 or corrupt evidence stays Unknown. Existing notices, original uncertain Java
 hold and UNASSIGNED licensing remain unchanged.
+
+
+## Version 0.26: saved review history
+
+This milestone adds a bounded pure history reducer, pinned read-only controller
+routes and an explicit local history list/detail interface. It reuses the
+existing review receipt format and v0.25 safety/identity inspector; the original
+current-decision reader, writer, execution controls and export gates remain
+unchanged. Historical notes remain private, are rendered as text and never
+promote an earlier acceptance to the current decision. No new dependency,
+real-model qualification or license is introduced. Existing notices, unresolved
+rights and the original uncertain Java hold remain unchanged. Licensing stays
+UNASSIGNED. Bounded naming-only provenance checks are separate from technical
+testing and do not establish originality, ownership or redistribution rights.

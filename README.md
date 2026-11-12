@@ -5,7 +5,11 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.25 adds **Saved Review Decisions** to the existing explicit saved-run
+Version 0.26 adds **Saved Review History**: explicitly list bounded observed
+review receipts for one selected run, then inspect an earlier verdict, private
+note, recorded time and artifact hashes without replacing its current decision.
+Damaged or partial history remains visible as uncertain; historical inspection
+starts no task and grants no export authority. It retains **Saved Review Decisions** to the existing explicit saved-run
 review. Inspect the observed human verdict, private note, recorded time and exact
 artifact pins. Accepted, Rejected, Stale, Unreviewed and Unknown remain saved
 observations; this panel grants no export or execution permission. Result
@@ -1354,6 +1358,45 @@ storage and are not an atomic multiwriter snapshot.
 Real saved tasks, names, goals, hashes, diagnostics, results, review notes and patches contain
 private project context and stay outside public source uploads.
 
+## Inspect earlier saved reviews
+
+After explicitly reviewing one saved run, choose **List saved review history**.
+Select one observed receipt, then choose **Inspect selected historical review**.
+The current decision card stays separate and unchanged. Reading an earlier
+acceptance never replaces the highest observed decision or enables export.
+
+Entries are ordered by canonical receipt filename ordinal, not wall-clock time.
+The list contains at most 100 observed receipt descriptors; notes are returned
+only for the explicitly selected entry. Missing, malformed and read-limited
+entries retain fixed status labels without echoing corrupt contents. Missing,
+partial or invalid catalogs are flagged; the list does not claim globally
+complete or latest history. A valid observed note is displayed literally in full,
+including Unicode and control characters, without treating markup as HTML.
+
+Each usable entry separately reports whether its recorded artifact hashes match
+the currently observed canonical result and patch, differ from them, or cannot
+be compared. This relation is historical evidence, not a human verdict, current
+source check, authenticity proof, adoption approval or export eligibility.
+The canonical result hash follows the existing writer and ignores JSON
+formatting; the raw result-file fingerprint remains separate evidence.
+
+List and detail are explicit read-only requests bound to the saved run ID,
+metadata, metadata-history and saved-evidence hashes. Detail additionally binds
+the selected canonical receipt name. The server performs the existing bounded
+safe inspection and rechecks evidence and metadata history before returning.
+No source, current hold, provider or process is inspected; no new review,
+index, cache, token, check, worker or export is created. An unrelated hold may
+leave these reads available while Task and Run remain blocked.
+
+Changing search/filter/selection or saved-review context, closing navigation,
+a refusal or restart discards old history and detail. A new explicit saved review
+and list are required after stale evidence; there is no automatic retry or
+fallback. Requests are limited to 32,768 bytes and complete canonical responses
+to 65,536 bytes. Existing per-inspection catalog, file, logical byte-budget,
+owner-only no-follow and double-check limits remain as described above.
+These sequential observations require a trusted stable single-owner store.
+Keep real verdicts, notes, receipt names, times and artifact hashes private.
+
 ## Compare saved runs
 
 Choose **Compare runs**, select two different saved-run IDs, then press
@@ -1538,7 +1581,7 @@ new acceptance directory under an owner-only private parent.
 )
 ```
 
-Final v0.25 offline qualification passed 1,079 unit methods across 48 suites, including
+Final v0.26 offline qualification passed 1,117 unit methods across 50 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1638,6 +1681,17 @@ stubbed empty in that browser fixture; qualification does not establish live
 worker reconciliation or real-model completion. VALIDATION.md records all limits
 and retained collector corrections.
 
+Version 0.26 adds 21 pure history methods and 17 controller/HTTP methods.
+Its final isolated frontend passes 624 checks: 255 inherited and 369 history
+checks, including actual pure-helper and guarded controller DTOs. New acceptance
+lists and inspects 16 invented Python/Java histories, preserves the current
+decision and private bytes through restart, reads the earlier actual accepted
+scripted receipt without another worker/check, and runs separate selected-copy
+Python/Java checks. Browser checks use an intentionally empty normal feed;
+VALIDATION.md records that limit, the retained socket-denied sandbox attempt,
+corrected frontend collector, native completion and two blocked unclassified
+browser routes. These local checks are not a GitHub CI or real-model claim.
+
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
@@ -1650,7 +1704,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.25 adds no real-model qualification. The offline harness, saved-run reviews, preset previews, named task presets, snapshot review workspaces,
+Version 0.26 adds no real-model qualification. The offline harness, saved-run reviews, preset previews, named task presets, snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context
