@@ -77,3 +77,14 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 #snapshot-workspace-preview-status,#snapshot-workspace-history-status,#snapshot-workspace-admission{overflow-wrap:anywhere;line-height:1.8}
 #snapshot-workspace-receipt>.muted{line-height:1.8}
 @media(max-width:680px){.snapshot-workspace-panel .composer-bottom{flex-wrap:wrap}.snapshot-workspace-panel .composer-bottom button{max-width:100%;white-space:normal}.snapshot-workspace-panel .project-check-facts{grid-template-columns:1fr}.snapshot-workspace-panel .bundle-workspace-history>.pane-heading button{max-width:100%;white-space:normal;text-align:left}.snapshot-workspace-panel .bundle-workspace-hashes dd{font-size:9px}}
+
+/* Rechecks remain separate from snapshot workspace creation receipts. */
+.snapshot-workspace-recheck-section .pane-heading{flex-wrap:wrap;align-items:flex-start}
+.snapshot-workspace-recheck-section .pane-heading button,.snapshot-workspace-recheck-section .review-buttons button{max-width:100%;white-space:normal}
+.snapshot-workspace-recheck-preview-summary{padding:18px;background:rgba(105,137,185,.055);border:1px solid var(--line);border-radius:12px;margin:18px 0}
+.snapshot-workspace-recheck-preview-summary h4{margin:0 0 12px}
+.snapshot-workspace-recheck-specs{display:grid;gap:12px}
+.snapshot-workspace-recheck-specs .code-view{max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+#snapshot-workspace-recheck-status,#snapshot-workspace-recheck-admission,#snapshot-workspace-recheck-history-status{overflow-wrap:anywhere;line-height:1.8}
+#snapshot-workspace-recheck-receipt{margin-top:20px}
+@media(max-width:680px){.snapshot-workspace-recheck-preview-summary{padding:14px}.snapshot-workspace-recheck-section .pane-heading button{font-size:10px;text-align:left}.snapshot-workspace-recheck-section .project-check-facts{grid-template-columns:1fr}}
