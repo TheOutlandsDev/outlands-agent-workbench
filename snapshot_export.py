@@ -20,6 +20,7 @@ from workspace_recheck import REQUEST_FIELDS, _history_receipt, _inventory, insp
 
 
 FORMAT = "outlands-reviewed-snapshot-export-v1"
+FORMAT_V2 = "outlands-reviewed-snapshot-export-v2"
 MAX_ARCHIVE, MAX_PATCH, MAX_JSON, MAX_FULL = 2097152, 1048576, 262144, 2097152
 MAX_FILE, MAX_TOTAL, MAX_SAFE = 32768, 131072, 9007199254740991
 MEMBERS = ("changes.diff", "verification.json", "README.txt", "SHA256SUMS")
@@ -31,6 +32,7 @@ CODES = frozenset("SNAPSHOT_EXPORT_" + suffix for suffix in (
     "PROTECTED_CHANGED", "NO_CHANGES", "PATCH_INVALID", "CHECKS_INVALID", "ARCHIVE_INVALID", "ARCHIVE_CHANGED"))
 HASH_FIELDS = {"receipt_sha256", "request_sha256", "creation_sha256", "snapshot_sha256", "task_sha256",
                "config_sha256", "bundle_sha256", "checks_sha256", "initial_receipt_sha256", "patch_sha256"}
+HASH_FIELDS_V2 = (HASH_FIELDS - {"bundle_sha256"}) | {"import_archive_sha256"}
 CORE = ("exit_code", "tests_ran", "timed_out", "output_limited", "infrastructure_error")
 INITIAL_FIELDS = {"version", "format", "id", "workspace_id", "status", "created", "source_applied",
                   "workspace_modified", "creation_sha256", "preview_sha256", "history_sha256"}
@@ -45,6 +47,26 @@ README = (
     "The patch compares the approved selected baseline with the exact saved snapshot\n"
     "of a VERIFIED workspace recheck. It includes imported bundle changes and any\n"
     "selected editable manual changes present in that checked snapshot.\n"
+    "Verification contains recorded passing check observations, not check output,\n"
+    "a new check execution, a model run, or a provider-completion claim. Original\n"
+    "records are represented by hashes only and are not included or authenticated.\n\n"
+    "Explicit local review acceptance is stored separately and binds the exact\n"
+    "archive SHA256; this packet contains no human-acceptance assertion. Embedded\n"
+    "checksums provide unsigned integrity, not authenticity. Compare an independently\n"
+    "trusted whole-archive SHA256 when available. No source correctness or Git\n"
+    "adoption is established. Inspect scope and baseline hashes before manual use.\n"
+    "The verifier never extracts, applies, executes, contacts a provider, changes\n"
+    "source/workspaces, reconciles state, or changes holds.\n"
+).encode("ascii")
+README_V2 = (
+    "OUTLANDS reviewed snapshot re-export, packet version 2\n\n"
+    "PRIVATE SOURCE CONTENT: this patch, relative file names and configured check\n"
+    "specifications can contain private project information. Keep this packet private.\n\n"
+    "The patch compares the approved selected original baseline with the exact saved\n"
+    "snapshot of a VERIFIED snapshot-workspace recheck. It includes imported snapshot\n"
+    "changes and selected editable manual changes present in that checked snapshot.\n"
+    "The import_archive_sha256 pin identifies the upstream imported snapshot packet;\n"
+    "it is not the SHA256 of this new packet and does not identify an agent bundle.\n"
     "Verification contains recorded passing check observations, not check output,\n"
     "a new check execution, a model run, or a provider-completion claim. Original\n"
     "records are represented by hashes only and are not included or authenticated.\n\n"
@@ -143,7 +165,7 @@ def _members(raw):
                  and central[8] == central[9] and central[10:15] == (len(encoded), 0, 0, 0, 0)
                  and central[15] == PERMISSIONS and central[16] == next_local, "ARCHIVE_INVALID")
         size, checksum = central[9], central[7]
-        limit = MAX_PATCH if name == "changes.diff" else MAX_JSON if name == "verification.json" else len(README) if name == "README.txt" else 512
+        limit = MAX_PATCH if name == "changes.diff" else MAX_JSON if name == "verification.json" else max(len(README), len(README_V2)) if name == "README.txt" else 512
         _require(size <= limit, "LIMIT")
         _require(raw[cursor + 46:cursor + 46 + len(encoded)] == encoded
                  and next_local + 30 + len(encoded) + size <= directory_start, "ARCHIVE_INVALID")
@@ -207,11 +229,17 @@ def _patch_structure(raw, files):
 def _verification(value, patch):
     _schema(value, {"version", "format", "evidence", "hashes", "profile", "files", "checks",
                     "source_applied", "workspace_modified", "not_checked", "notes"})
-    _require(type(value["version"]) is int and value["version"] == 1 and value["format"] == FORMAT
-             and value["evidence"] == "RECORDED_PASSING_WORKSPACE_RECHECK" and value["source_applied"] is False
+    _require(type(value["version"]) is int, "ARCHIVE_INVALID")
+    if value["version"] == 1:
+        packet_format, evidence, hash_fields = FORMAT, "RECORDED_PASSING_WORKSPACE_RECHECK", HASH_FIELDS
+    elif value["version"] == 2:
+        packet_format, evidence, hash_fields = FORMAT_V2, "RECORDED_PASSING_SNAPSHOT_WORKSPACE_RECHECK", HASH_FIELDS_V2
+    else:
+        _require(False, "ARCHIVE_INVALID")
+    _require(value["format"] == packet_format and value["evidence"] == evidence and value["source_applied"] is False
              and value["workspace_modified"] is False and value["not_checked"] == NOT_CHECKED and value["notes"] == NOTES, "ARCHIVE_INVALID")
     hashes, profile, files, checks = value["hashes"], value["profile"], value["files"], value["checks"]
-    _schema(hashes, HASH_FIELDS)
+    _schema(hashes, hash_fields)
     _require(all(_hash(digest) for digest in hashes.values()) and hashes["patch_sha256"] == sha(patch), "ARCHIVE_INVALID")
     _schema(profile, {"format", "max_turns", "request_seconds"})
     _require(type(files) is list and 1 <= len(files) <= 32 and type(checks) is list and 1 <= len(checks) <= 4, "ARCHIVE_INVALID")
@@ -251,11 +279,12 @@ def verify_export(raw, expected_sha256=None):
         payloads = _members(raw)
         digest = sha(raw)
         _require(expected_sha256 is None or digest == expected_sha256, "ARCHIVE_CHANGED")
-        _require(payloads["README.txt"] == README and payloads["SHA256SUMS"] == _checksums(payloads), "ARCHIVE_INVALID")
+        _require(payloads["SHA256SUMS"] == _checksums(payloads), "ARCHIVE_INVALID")
         verification = _json(payloads["verification.json"], suffix="ARCHIVE_INVALID")
         _verification(verification, payloads["changes.diff"])
+        _require(payloads["README.txt"] == (README if verification["version"] == 1 else README_V2), "ARCHIVE_INVALID")
         _require(canonical(verification) == payloads["verification.json"] and _archive(payloads) == raw, "ARCHIVE_INVALID")
-        summary = {"version": 1, "format": FORMAT, "archive_sha256": digest, "archive_bytes": len(raw),
+        summary = {"version": verification["version"], "format": verification["format"], "archive_sha256": digest, "archive_bytes": len(raw),
             "patch_sha256": sha(payloads["changes.diff"]), "patch_bytes": len(payloads["changes.diff"]),
             "verification_sha256": sha(payloads["verification.json"]), "verification_bytes": len(payloads["verification.json"]),
             "member_count": 4, "members": [{"path": name, "bytes": len(payloads[name]), "sha256": sha(payloads[name])} for name in MEMBERS],

@@ -5,7 +5,11 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.16 adds **Snapshot workspace recheck**: inspect manual editable-file
+Version 0.17 adds **Reviewed snapshot re-export**: explicitly review the complete
+original-baseline-to-tested-snapshot patch from a verified snapshot-workspace
+recheck, save a separate private acceptance, then download a pinned version 2
+bundle. Export executes no checks, Git command or model request. It retains
+**Snapshot workspace recheck**: inspect manual editable-file
 changes in a verified snapshot review workspace, then explicitly run the original
 fixed Python/Java checks against a separate pinned private snapshot. Each attempt
 has its own history; original creation evidence and previous results remain
@@ -416,9 +420,9 @@ No foreign or saved PID is signalled. Read-only preview/history does not clear a
 hold or authorize recovery.
 
 Use **Snapshot workspace recheck** below for later manual editable-file changes.
-This workspace type has no snapshot re-export action in this milestone. Existing
-bundle review workspaces retain their separate tools; there is no automatic format
-conversion. `snapshot_workspace.py` is the
+Use **Reviewed snapshot re-export** for an explicitly selected verified recheck.
+Existing bundle review workspaces retain their separate tools; there is no
+automatic conversion of old records. `snapshot_workspace.py` is the
 controller's explicit staged-job worker, not a general archive-import CLI. Use
 the reviewed browser flow for import and creation.
 
@@ -466,7 +470,8 @@ snapshot and live evidence around execution; drift retains available output but
 refuses verification. Failures, interruptions, partial writes, malformed records
 and unknown unfinished attempts stay retained and block further execution. No
 automatic retry, evidence cleanup, hold clearing, source adoption, format conversion
-or snapshot re-export is provided. **Stop owned snapshot recheck** signals only
+is provided. Snapshot re-export requires the separate explicit review described
+below. **Stop owned snapshot recheck** signals only
 a worker owned by the current server; saved process identifiers grant no ownership.
 Closing the panel ends selected polling without stopping the worker.
 
@@ -478,6 +483,72 @@ Limits are 32 selected UTF-8 files, 32 KiB/file and 128 KiB total, 200 attempts,
 2 MiB aggregate raw receipts, 256 KiB reserved per new receipt, 32 KiB requests,
 64 KiB inspection summaries, 128 KiB previews and 256 KiB history responses.
 Keep real workspaces, selected snapshots, check output and attempts private.
+
+## Review and re-export a snapshot workspace
+
+In **Snapshot review workspace**, select a verified creation and explicitly
+refresh its recheck history. Select a `VERIFIED` recheck, then choose **Review
+snapshot re-export**. The server reads its exact saved tested snapshot and full
+check evidence, validates original creation/archive/task/config/source and current
+Git/worktree pins, and prepares a version 2 packet in memory. It runs no Git
+command, check, worker, provider request or process reconciliation and does not
+read or change a hold. Preview remains available under an unrelated hold.
+
+Review the complete original-approved-baseline-to-tested-snapshot patch and the
+selected baseline/tested hashes, permissions, fixed check profiles and recorded
+passing observations. This patch includes earlier imported changes and later
+manual editable changes present in the tested snapshot. The browser clips the
+preview at 240 lines/8,192 UTF-8 bytes and marks omissions; the bundle contains
+the full patch. Recorded checks are historical, not a new execution or a model
+result. Changed current evidence requires a new inspection and passing recheck;
+export does not resample later untested edits.
+
+Optionally add a private note, then explicitly choose **Accept reviewed snapshot
+re-export** within five minutes. Acceptance stores only `receipt.json` and
+`review.json` in the separate private `DATA/snapshot-reexports/ID/` history, using
+`outlands-snapshot-reexport-acceptance-v1`. Notes allow at most 1,000 Unicode
+code points and 2,000 UTF-8 bytes, with no NUL or invalid Unicode. Notes remain
+private and are excluded from the archive. No human-approval assertion is
+embedded in the packet. Existing creation, recheck and legacy export records
+remain unchanged.
+
+Choose **Download private re-export bundle** separately after acceptance. It
+reconstructs and rechecks the exact accepted packet, attempt receipt, tested
+bytes, original project/Git pins and history tips before returning the bytes.
+A later acceptance or recheck invalidates older history-bound downloads. Damaged,
+failed, PREPARING or partial acceptance evidence blocks new re-export acceptance
+and download; there is no fallback to an older approval, repair, cleanup or
+automatic retry. **Refresh re-export history** explicitly reloads saved approvals
+after restart without inventing a new preview or accepting anything automatically.
+
+The four members remain `changes.diff`, `verification.json`, `README.txt` and
+`SHA256SUMS`. Version 2 explicitly identifies recorded snapshot-workspace recheck
+evidence and uses `import_archive_sha256` for the earlier imported packet. The
+new packet's own digest stays separate. No legacy `bundle_sha256` record is
+fabricated. Original record hashes identify omitted evidence, not authenticity.
+Prompts/responses, full check output, raw source copies, host paths, IDs, review
+notes and times are excluded; the patch, relative names and check specifications
+still contain private source information. Keep the unencrypted bundle private
+and preserve a separately trusted whole-archive digest when available.
+
+The current offline verifier, project checker and snapshot-workspace importer
+explicitly support both v1 and v2 packets through strict separate schemas. V1
+bytes and meaning remain unchanged. Older Workbench versions accept only v1;
+use this version's tools for v2. Verify either format without project access:
+
+```sh
+python3 -B snapshot_export.py --archive /absolute/private-snapshot.zip \
+  --expected-sha256 SHA256_FROM_TRUSTED_CHANNEL
+```
+
+Verification never extracts, applies or executes. Unsigned checksums and recorded
+passing checks do not establish source correctness, authenticity, provider
+completion or adoption permission. Re-export is bounded to 200 acceptances,
+2 MiB aggregate raw receipts, 32 KiB reserved per new receipt, 128 KiB saved
+reviews, 256 KiB history JSON, 2 MiB archive and 1 MiB patch. Selected-byte,
+preview and private filesystem limits remain unchanged. These are sequential
+trusted-store guards, not an atomic multiwriter transaction. Real bundles,
+worktrees and acceptance history remain outside public GitHub source.
 
 ## Create a private bundle review workspace
 
@@ -673,7 +744,7 @@ compare a whole-archive digest obtained independently when available.
 ## Check a snapshot export against a project
 
 Choose **Check snapshot export**, select an already configured project and a
-private v0.13 snapshot-export ZIP, and optionally supply a whole-archive SHA-256
+private v1 or v2 snapshot-export ZIP, and optionally supply a whole-archive SHA-256
 from a trusted channel. Press **Check snapshot against project** explicitly.
 Choosing a file alone sends nothing. The loopback server keeps the archive in
 memory and writes no run, report, acceptance, source or workspace files.
@@ -1034,7 +1105,7 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-Final offline qualification passed 701 unit methods across 30 suites, including
+Final offline qualification passed 744 unit methods across 32 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1096,7 +1167,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.16 adds no real-model qualification. Snapshot review workspaces,
+Version 0.17 adds no real-model qualification. Snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context
