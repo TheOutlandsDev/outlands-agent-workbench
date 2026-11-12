@@ -20,7 +20,7 @@
     <div class="sidebar-footer"><span class="status-dot"></span> Local workspace<small>One task at a time. Your source stays in place.</small></div>
   </aside>
   <main>
-    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.20</span></h1><p>A clear view from task to reviewed patch.</p></div><div class="header-actions"><button id="snapshot-workspace-open" class="secondary" type="button" aria-controls="snapshot-workspace-panel" aria-expanded="false" disabled>Snapshot review workspace</button><button id="snapshot-project-open" class="secondary" type="button" aria-controls="snapshot-project-panel" aria-expanded="false" disabled>Check snapshot export</button><button id="bundle-workspace-open" class="secondary" type="button" aria-controls="bundle-workspace-panel" aria-expanded="false" disabled>Bundle review workspace</button><button id="project-check-open" class="secondary" type="button" aria-controls="project-check-panel" aria-expanded="false" disabled>Check bundle against project</button><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></div></header>
+    <header class="page-header"><div><div class="eyebrow">WORKSPACE / CODING AGENT</div><h1>Agent Workbench<span class="version">0.21</span></h1><p>A clear view from task to reviewed patch.</p></div><div class="header-actions"><button id="snapshot-workspace-open" class="secondary" type="button" aria-controls="snapshot-workspace-panel" aria-expanded="false" disabled>Snapshot review workspace</button><button id="snapshot-project-open" class="secondary" type="button" aria-controls="snapshot-project-panel" aria-expanded="false" disabled>Check snapshot export</button><button id="bundle-workspace-open" class="secondary" type="button" aria-controls="bundle-workspace-panel" aria-expanded="false" disabled>Bundle review workspace</button><button id="project-check-open" class="secondary" type="button" aria-controls="project-check-panel" aria-expanded="false" disabled>Check bundle against project</button><span class="local-badge"><span class="status-dot"></span> LOOPBACK ONLY</span></div></header>
     <div id="alert" role="alert" hidden></div>
     <section id="comparison-panel" class="composer panel comparison-panel" aria-labelledby="comparison-title" hidden>
       <div class="panel-heading"><div><div class="eyebrow">PRIVATE SAVED EVIDENCE</div><h2 id="comparison-title">Compare runs</h2></div><button id="comparison-close" class="secondary" type="button">Close comparison</button></div>
@@ -204,7 +204,18 @@
         <p id="task-preset-name-note" class="small muted">1–80 Unicode characters and at most 240 UTF-8 bytes. Names are unique within a project.</p>
         <label>Saved private task preset<select id="task-preset-select" disabled><option value="">Refresh presets explicitly</option></select></label>
         <div id="task-preset-details" class="task-preset-details" hidden></div>
-        <div class="review-buttons"><button id="task-preset-load" type="button" class="secondary" disabled>Load selected preset into Task</button></div>
+        <div class="review-buttons task-preset-actions"><button id="task-preset-preview" type="button" class="secondary" aria-controls="task-preset-comparison" aria-expanded="false" disabled>Preview and compare selected preset</button><button id="task-preset-load" type="button" class="secondary" disabled>Load selected preset into Task</button></div>
+        <p id="task-preset-preview-note" class="small muted">Preview compares the saved goal with the current Task draft without changing Task. Loading remains a separate explicit action.</p>
+        <section id="task-preset-comparison" class="task-preset-comparison" aria-labelledby="task-preset-comparison-title" hidden>
+          <div class="pane-heading"><h4 id="task-preset-comparison-title">Preset preview and comparison</h4><button id="task-preset-preview-close" type="button" class="secondary">Close preset comparison</button></div>
+          <p id="task-preset-comparison-status" class="muted" role="status"></p>
+          <p class="small muted">The highlight spans the first through last difference in Unicode code points. It may include unchanged text between differences; it is not a minimal edit diff. Both complete goals are read only. Preview does not change Task or start Run.</p>
+          <div class="task-preset-comparison-columns">
+            <section><h5>Current Task draft</h5><pre id="task-preset-draft-text" class="code-view task-preset-goal" tabindex="0" aria-label="Current Task draft, read only"></pre><p id="task-preset-draft-note" class="small muted"></p></section>
+            <section><h5>Saved preset goal</h5><pre id="task-preset-saved-text" class="code-view task-preset-goal" tabindex="0" aria-label="Saved preset goal, read only"></pre><p id="task-preset-saved-note" class="small muted"></p></section>
+          </div>
+          <div id="task-preset-comparison-hashes"></div>
+        </section>
         <p id="task-preset-load-note" class="small muted">Choose a preset whose approved task profile still matches this project. Loading does not change the selected project or model.</p>
         <p class="small muted">Presets and task text stay in the private data directory. Existing presets are retained; this version adds new presets only.</p>
       </section>

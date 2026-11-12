@@ -137,3 +137,17 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 .task-preset-facts dd{overflow-wrap:anywhere;word-break:break-word}
 #task-preset-status,#task-preset-name-note,#task-preset-load-note{overflow-wrap:anywhere;line-height:1.8}
 @media(max-width:680px){.task-preset-section{margin-top:22px;padding-top:20px}.task-preset-section>.pane-heading{align-items:flex-start}.task-preset-section>.pane-heading button{font-size:10px;text-align:left}.task-preset-save-row{grid-template-columns:1fr;gap:12px}.task-preset-save-row button{justify-self:start}.task-preset-facts{grid-template-columns:1fr;gap:13px}.task-preset-details{padding:13px}}
+
+/* Preview text is separate from Task and the explicit loading action. */
+.task-preset-actions{flex-wrap:wrap;gap:12px}
+.task-preset-comparison{margin:20px 0;padding:18px;border:1px solid var(--line);border-radius:10px;background:rgba(105,137,185,.045)}
+.task-preset-comparison>.pane-heading{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.task-preset-comparison h4{margin:0;font-size:13px}.task-preset-comparison h5{margin:0 0 10px;font-size:12px}
+.task-preset-comparison>.muted{line-height:1.8}.task-preset-comparison>.small{line-height:1.8}
+.task-preset-comparison-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px}
+.task-preset-comparison-columns>section{min-width:0}
+.task-preset-comparison .task-preset-goal{min-height:90px;max-height:400px;white-space:pre-wrap;overflow-wrap:anywhere;tab-size:4;overflow:auto}
+.task-preset-comparison .task-preset-goal:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+.task-preset-change{background:#594320;color:#ffe2ac;border-bottom:1px solid #d6a45e;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+#task-preset-comparison-status,#task-preset-preview-note,#task-preset-draft-note,#task-preset-saved-note{overflow-wrap:anywhere;line-height:1.8}
+@media(max-width:680px){.task-preset-comparison{padding:13px}.task-preset-comparison-columns{grid-template-columns:1fr}.task-preset-comparison>.pane-heading button{font-size:10px;text-align:left}.task-preset-actions{align-items:flex-start;flex-direction:column}.task-preset-comparison .task-preset-goal{max-height:300px}}

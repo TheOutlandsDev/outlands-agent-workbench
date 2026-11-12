@@ -3,7 +3,7 @@ const token=document.querySelector('meta[name="workbench-token"]').content;
 const $=id=>document.getElementById(id);
 let configuration=null,selected=null,current=null,polling=false,busy=false,initialized=false,setupDraft=null;
 let contextRunId=null,contextSnapshot=null;
-let taskPresetBusy=false,taskPresetSequence=0,taskPresetSnapshot=null,taskPresetSelectedId="",taskPresetLoaded=null,taskPresetHistoryLocks=[];
+let taskPresetBusy=false,taskPresetSequence=0,taskPresetSnapshot=null,taskPresetSelectedId="",taskPresetLoaded=null,taskPresetHistoryLocks=[],taskPresetPreview=null;
 let comparisonOpen=false,comparisonOpening=false,comparisonBusy=false,comparisonHistoryLoading=false,comparisonSequence=0,comparisonHistorySequence=0,comparisonLeftId="",comparisonRightId="",normalRefreshInFlight=Promise.resolve(),comparisonHistoryReady=false,comparisonOpeningCancel=null,comparisonOpenSequence=0;
 let readinessOpen=false,readinessOpening=false,readinessReady=false,readinessBusy=false,readinessProjectId="",readinessSequence=0,readinessOpenSequence=0,readinessOpeningCancel=null;
 let bundleOpen=false,bundleOpening=false,bundleBusy=false,bundleRunId=null,bundlePreview=null,bundleSequence=0,bundleOpenSequence=0,bundleOpeningCancel=null;
@@ -1401,6 +1401,7 @@ const taskPresetErrors={
   TASK_PRESET_INCOMPATIBLE:'This preset was saved for a different task profile. Its existing record stays retained.',
   TASK_PRESET_NAME_INVALID:'Use 1–80 Unicode characters and at most 240 UTF-8 bytes, without surrounding whitespace or control characters.',
   TASK_PRESET_GOAL_INVALID:'Task must contain 1–2,000 Unicode characters and at most 8,000 UTF-8 bytes, without NUL or invalid Unicode.',
+  TASK_PRESET_DRAFT_INVALID:'The comparison draft may be empty, with at most 2,000 Unicode characters and 8,000 UTF-8 bytes, without NUL or invalid Unicode.',
   TASK_PRESET_PROFILE_INVALID:'The approved project task profile could not be validated.',
   TASK_PRESET_RECORD_INVALID:'A private preset record needs inspection before another preset action.',
   TASK_PRESET_STORE_UNSAFE:'The private preset store could not be read safely. Inspect its retained records.',
@@ -1422,6 +1423,7 @@ function taskPresetName(raw){
   return {text,characters,bytes,valid:characters>=1&&characters<=80&&bytes<=240&&text.trim()===text&&!/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(text)};
 }
 function taskPresetGoal(text){return taskPresetUnicode(text)&&Array.from(text).length>=1&&Array.from(text).length<=2000&&new TextEncoder().encode(text).length<=8000&&Boolean(text.trim())&&!text.includes('\0');}
+function taskPresetDraft(text){return taskPresetUnicode(text)&&Array.from(text).length<=2000&&new TextEncoder().encode(text).length<=8000&&!text.includes('\0');}
 function taskPresetBounded(value){return new TextEncoder().encode(JSON.stringify(value)).length<=65536;}
 function taskPresetProject(){return selectedProjectConfiguration();}
 function taskPresetSelected(){return taskPresetSnapshot&&taskPresetSnapshot.presets.find(row=>row.id===taskPresetSelectedId)||null;}
@@ -1429,6 +1431,7 @@ function validTaskPresetRow(row,binding){return taskPresetExact(row,['id','name'
 function validTaskPresetList(value,projectId){return taskPresetExact(value,['version','project_id','binding_sha256','history_sha256','presets','limit'])&&value.version===1&&value.project_id===projectId&&bundleHash(value.binding_sha256)&&bundleHash(value.history_sha256)&&value.limit===64&&Array.isArray(value.presets)&&value.presets.length<=64&&new Set(value.presets.map(row=>row&&row.id)).size===value.presets.length&&value.presets.every(row=>validTaskPresetRow(row,value.binding_sha256))&&taskPresetBounded(value);}
 function invalidateTaskPresets(text){
   taskPresetSequence++;taskPresetSnapshot=null;taskPresetSelectedId='';taskPresetLoaded=null;
+  clearTaskPresetPreview();
   $('task-preset-select').replaceChildren(Object.assign(node('option','Refresh presets explicitly'),{value:''}));
   $('task-preset-name').value='';$('task-preset-details').replaceChildren();$('task-preset-details').hidden=true;
   $('task-preset-status').textContent=text||'Choose a project, then explicitly refresh its private presets.';
@@ -1449,7 +1452,10 @@ function setTaskPresetControls(){
   $('task-preset-name').disabled=locked||!current;
   $('task-preset-save').disabled=locked||!current||snapshot.presets.length>=64||!name.valid||!taskPresetGoal($('goal').value);
   $('task-preset-select').disabled=locked||!current||!snapshot.presets.length;
+  $('task-preset-preview').disabled=locked||!current||!row||!row.compatible||!taskPresetDraft($('goal').value);
+  $('task-preset-preview-close').disabled=taskPresetBusy;
   $('task-preset-load').disabled=locked||!current||!row||!row.compatible||$('goal').readOnly;
+  $('task-preset-preview-note').textContent=row&&!row.compatible?'This preset has a changed task profile. Preview and loading are unavailable; its saved record remains retained.':!taskPresetDraft($('goal').value)?'The draft may be empty, but must stay within 2,000 Unicode characters and 8,000 UTF-8 bytes, without NUL or invalid Unicode.':'Preview compares the saved goal with the current Task draft without changing Task. Read-only or admission-disabled Task fields can still be previewed.';
   $('task-preset-name-note').textContent=name.valid?name.characters+' / 80 Unicode characters · '+name.bytes+' / 240 UTF-8 bytes. Names are unique within a project.':'Use 1–80 Unicode characters and at most 240 UTF-8 bytes, without surrounding whitespace or control characters.';
   $('task-preset-load-note').textContent=$('goal').readOnly?'The scripted exercise keeps its original Task. Choose an already approved local model before loading a different goal.':row&&!row.compatible?'This saved task profile differs from the selected project. Keep the existing record and save a new preset for the current profile.':admissionReason?'Loading fills the disabled Task field for review. Run remains blocked by its existing admission requirements.':'Loading fills Task only. The selected project, model, file scope, checks and budgets stay fixed.';
 }
@@ -1475,9 +1481,10 @@ $('task-preset-refresh').addEventListener('click',async()=>{
   }catch(error){if(sequence===taskPresetSequence)invalidateTaskPresets(taskPresetFailure(error));}
   finally{taskPresetFinish();}
 });
-$('task-preset-select').addEventListener('change',()=>{taskPresetSequence++;taskPresetSelectedId=$('task-preset-select').value;taskPresetLoaded=null;renderTaskPresetSelection();$('task-preset-status').textContent=taskPresetSelected()?'Preset selected. Choose Load selected preset into Task explicitly.':'Choose a saved private preset or name the current Task for a new one.';setTaskPresetControls();});
+$('task-preset-select').addEventListener('change',()=>{taskPresetSequence++;taskPresetSelectedId=$('task-preset-select').value;taskPresetLoaded=null;clearTaskPresetPreview();renderTaskPresetSelection();$('task-preset-status').textContent=taskPresetSelected()?'Preset selected. Preview and compare it, or load its goal into Task, using separate explicit actions.':'Choose a saved private preset or name the current Task for a new one.';setTaskPresetControls();});
 $('task-preset-form').addEventListener('submit',async event=>{
   event.preventDefault();if($('task-preset-save').disabled)return;
+  clearTaskPresetPreview();
   const projectId=taskPresetProject().id,snapshot=taskPresetSnapshot,rawName=$('task-preset-name').value,name=taskPresetName(rawName).text,goal=$('goal').value,sequence=++taskPresetSequence;
   taskPresetBegin('Waiting for the current live update before saving one new private preset…');
   try{
@@ -1491,6 +1498,7 @@ $('task-preset-form').addEventListener('submit',async event=>{
 });
 $('task-preset-load').addEventListener('click',async()=>{
   if($('task-preset-load').disabled)return;
+  clearTaskPresetPreview();
   const projectId=taskPresetProject().id,snapshot=taskPresetSnapshot,row=taskPresetSelected(),model=$('model').value,goalBefore=$('goal').value,sequence=++taskPresetSequence;
   taskPresetBegin('Waiting for the current live update before reading the selected private goal…');
   try{
@@ -1502,6 +1510,63 @@ $('task-preset-load').addEventListener('click',async()=>{
   }catch(error){if(sequence===taskPresetSequence)invalidateTaskPresets(taskPresetFailure(error));}
   finally{taskPresetFinish();}
 });
-for(const id of ['task-preset-name','goal'])$(id).addEventListener('input',()=>{taskPresetSequence++;taskPresetSelectedId='';taskPresetLoaded=null;$('task-preset-select').value='';renderTaskPresetSelection();if(taskPresetSnapshot)$('task-preset-status').textContent='Draft inputs changed. Save the current Task under a new name, or explicitly select and load a saved preset.';setTaskPresetControls();});
+for(const id of ['task-preset-name','goal'])$(id).addEventListener('input',()=>{taskPresetSequence++;taskPresetSelectedId='';taskPresetLoaded=null;clearTaskPresetPreview();$('task-preset-select').value='';renderTaskPresetSelection();if(taskPresetSnapshot)$('task-preset-status').textContent='Draft inputs changed. Save the current Task under a new name, or explicitly select a saved preset to preview or load.';setTaskPresetControls();});
 for(const id of ['new-task','setup-open','setup-close','refresh-open','refresh-close'])$(id).addEventListener('click',()=>{invalidateTaskPresets('Task or configuration context changed. Refresh private presets explicitly.');setTaskPresetControls();});
 $('task-form').addEventListener('submit',()=>{invalidateTaskPresets('A task submission was requested separately. Refresh presets explicitly before another preset decision.');setTaskPresetControls();});
+
+function clearTaskPresetPreview(){
+  taskPresetPreview=null;$('task-preset-comparison').hidden=true;$('task-preset-preview').setAttribute('aria-expanded','false');
+  for(const id of ['task-preset-draft-text','task-preset-saved-text','task-preset-comparison-hashes'])$(id).replaceChildren();
+  for(const id of ['task-preset-comparison-status','task-preset-draft-note','task-preset-saved-note'])$(id).textContent='';
+}
+async function taskPresetTextHash(text){
+  if(!globalThis.crypto||!globalThis.crypto.subtle)throw new Error('TASK_PRESET_RESPONSE');
+  const bytes=await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(bytes),value=>value.toString(16).padStart(2,'0')).join('');
+}
+async function validTaskPresetComparison(value,draft){
+  if(!taskPresetExact(value,['version','format','draft_goal','saved_goal','draft_sha256','saved_sha256','identical','prefix_chars','suffix_chars'])||value.version!==1||value.format!=='outlands-task-preset-comparison-v1'||value.draft_goal!==draft||!taskPresetDraft(value.draft_goal)||!taskPresetGoal(value.saved_goal)||!bundleHash(value.draft_sha256)||!bundleHash(value.saved_sha256)||typeof value.identical!=='boolean'||!Number.isSafeInteger(value.prefix_chars)||value.prefix_chars<0||!Number.isSafeInteger(value.suffix_chars)||value.suffix_chars<0||!taskPresetBounded(value))return false;
+  const left=Array.from(value.draft_goal),right=Array.from(value.saved_goal),identical=value.draft_goal===value.saved_goal;
+  let prefix=0,suffix=0;
+  while(prefix<left.length&&prefix<right.length&&left[prefix]===right[prefix])prefix++;
+  if(!identical)while(suffix<left.length-prefix&&suffix<right.length-prefix&&left[left.length-1-suffix]===right[right.length-1-suffix])suffix++;
+  if(value.identical!==identical||value.prefix_chars!==prefix||value.suffix_chars!==suffix)return false;
+  const [draftHash,savedHash]=await Promise.all([taskPresetTextHash(value.draft_goal),taskPresetTextHash(value.saved_goal)]);
+  return value.draft_sha256===draftHash&&value.saved_sha256===savedHash;
+}
+function taskPresetPreviewCurrent(context){
+  return context.sequence===taskPresetSequence&&taskPresetProject()===context.project&&taskPresetProject()?.id===context.projectId&&taskPresetSnapshot===context.snapshot&&taskPresetSelected()===context.row&&$('task-preset-select').value===context.row.id&&$('model').value===context.model&&$('goal').value===context.draft&&$('task-preset-name').value===context.name&&context.snapshot.binding_sha256===context.binding&&context.snapshot.history_sha256===context.history&&context.row.binding_sha256===context.binding&&context.row.record_sha256===context.record&&context.row.compatible===true;
+}
+function renderTaskPresetGoal(element,text,comparison){
+  const characters=Array.from(text),end=characters.length-comparison.suffix_chars;
+  const pieces=[document.createTextNode(characters.slice(0,comparison.prefix_chars).join(''))];
+  if(!comparison.identical&&end>comparison.prefix_chars)pieces.push(node('mark',characters.slice(comparison.prefix_chars,end).join(''),'task-preset-change'));
+  pieces.push(document.createTextNode(characters.slice(end).join('')));element.replaceChildren(...pieces);
+}
+function renderTaskPresetPreview(value){
+  const comparison=value.comparison,draftChars=Array.from(comparison.draft_goal).length,savedChars=Array.from(comparison.saved_goal).length;
+  const changed=length=>comparison.identical?0:length-comparison.prefix_chars-comparison.suffix_chars;
+  renderTaskPresetGoal($('task-preset-draft-text'),comparison.draft_goal,comparison);renderTaskPresetGoal($('task-preset-saved-text'),comparison.saved_goal,comparison);
+  $('task-preset-draft-note').textContent=(draftChars===0?'Empty draft. ':draftChars+' Unicode code points. ')+(comparison.identical?'No differences.':changed(draftChars)+' code points in this side’s changed span.');
+  $('task-preset-saved-note').textContent=savedChars+' Unicode code points. '+(comparison.identical?'No differences.':changed(savedChars)+' code points in this side’s changed span.');
+  $('task-preset-comparison-status').textContent='Private preset “'+value.name+'” · '+(comparison.identical?'The complete goals are identical.':'The complete goals differ.')+' Task has not changed.';
+  $('task-preset-comparison-hashes').replaceChildren(diagnosticList([['Current draft UTF-8 SHA-256',comparison.draft_sha256],['Saved goal UTF-8 SHA-256',comparison.saved_sha256]],'context-file-facts bundle-workspace-hashes'));
+  $('task-preset-comparison').hidden=false;$('task-preset-preview').setAttribute('aria-expanded','true');
+}
+$('task-preset-preview').addEventListener('click',async()=>{
+  if($('task-preset-preview').disabled)return;clearTaskPresetPreview();
+  const project=taskPresetProject(),snapshot=taskPresetSnapshot,row=taskPresetSelected();
+  const context={project,projectId:project.id,snapshot,row,model:$('model').value,draft:$('goal').value,name:$('task-preset-name').value,binding:snapshot.binding_sha256,history:snapshot.history_sha256,record:row.record_sha256,sequence:++taskPresetSequence};
+  taskPresetBegin('Waiting for the current live update before comparing the selected private goal…');
+  try{
+    await taskPresetWaitForLiveUpdate();if(!taskPresetPreviewCurrent(context))return;
+    const value=await api('/api/task-preset-preview',{project_id:context.projectId,preset_id:row.id,record_sha256:context.record,binding_sha256:context.binding,history_sha256:context.history,draft_goal:context.draft});
+    if(!taskPresetPreviewCurrent(context))return;
+    if(!taskPresetExact(value,['version','project_id','preset_id','name','binding_sha256','record_sha256','history_sha256','comparison'])||value.version!==1||value.project_id!==context.projectId||value.preset_id!==row.id||value.name!==row.name||value.binding_sha256!==context.binding||value.record_sha256!==context.record||value.history_sha256!==context.history||!taskPresetBounded(value)||!await validTaskPresetComparison(value.comparison,context.draft))throw new Error('TASK_PRESET_RESPONSE');
+    if(!taskPresetPreviewCurrent(context))return;
+    taskPresetPreview=value;renderTaskPresetPreview(value);$('task-preset-status').textContent='Previewed the saved goal beside the current Task draft. Task is unchanged; Load and Run remain separate explicit actions.';
+  }catch(error){if(context.sequence===taskPresetSequence)invalidateTaskPresets(taskPresetFailure(error));}
+  finally{taskPresetFinish();}
+});
+$('task-preset-preview-close').addEventListener('click',()=>{if($('task-preset-preview-close').disabled)return;clearTaskPresetPreview();$('task-preset-status').textContent='Preset comparison closed. The selected preset and current Task are unchanged.';setTaskPresetControls();});
+for(const id of ['comparison-open','readiness-open','bundle-preview-open','project-check-open','snapshot-project-open','snapshot-workspace-open','bundle-workspace-open'])$(id).addEventListener('click',()=>{taskPresetSequence++;clearTaskPresetPreview();setTaskPresetControls();});
