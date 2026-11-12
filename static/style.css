@@ -168,3 +168,16 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 .run-history-detail dd{overflow-wrap:anywhere;word-break:break-word}
 #run-history-summary{margin:18px 0}#run-history-status,#run-history-query-note{overflow-wrap:anywhere;line-height:1.8}
 @media(max-width:680px){.run-history-open{display:inline-block;margin:10px 0 0;padding:6px 10px}.run-history-section{padding:13px}.run-history-counts,.run-history-facts{grid-template-columns:1fr}.run-history-detail{padding:13px}.run-history-actions{align-items:flex-start;flex-direction:column}.run-history-section .form-grid{grid-template-columns:1fr}}
+
+/* A single saved review never reuses the live diagnostics surface. */
+.saved-run-review-detail{margin-top:20px;padding:18px;border:1px solid var(--line);border-radius:10px;background:rgba(105,137,185,.045);min-width:0}
+.saved-run-review-detail>h3{margin:0 0 12px}.saved-run-review-detail>.muted,.saved-run-review-detail>.small,.saved-run-diagnostics>.muted{line-height:1.8}
+.saved-run-review-detail>.comparison-run{margin-top:22px}
+.saved-run-scope,.saved-run-diagnostics{margin-top:23px;padding-top:20px;border-top:1px solid var(--line)}
+.saved-run-files{list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0;margin:15px 0 0}
+.saved-run-files>li{padding:14px;border:1px solid var(--line);border-radius:7px;min-width:0;background:#0d141d}
+.saved-run-files h5{font-family:var(--mono,monospace);overflow-wrap:anywhere}
+.saved-run-review-detail .comparison-goal,.saved-run-review-detail .comparison-patch{max-height:400px}
+.saved-run-review-detail .comparison-patch{white-space:pre-wrap;overflow-wrap:anywhere}
+.saved-run-review-detail dd,#saved-run-review-status{overflow-wrap:anywhere;word-break:break-word;line-height:1.8}
+@media(max-width:680px){.saved-run-review-detail{padding:13px}.saved-run-files{grid-template-columns:1fr}.saved-run-files>li{padding:12px}.saved-run-review-detail .diagnostic-facts{grid-template-columns:1fr}}
