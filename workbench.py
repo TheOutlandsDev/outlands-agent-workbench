@@ -27,6 +27,7 @@ from run_diagnostics import summarize as summarize_diagnostics
 from run_comparison import compare_runs
 from run_history import search_history, review_record
 from saved_run_review import review_saved_run
+from saved_review_decisions import summarize_review_decision
 from project_readiness import summarize as summarize_readiness
 from patch_bundle import MAX_ARCHIVE, build_bundle, verify_bundle
 from bundle_project_check import check_project
@@ -996,11 +997,13 @@ class Manager:
             result, result_hash, _ = record(run_fd, "result.json", "result", 32768)
             patch, patch_hash, _ = record(run_fd, "changes.diff", "patch", 65536, patch=True)
             names, invalid_names, truncated = [], [], False
+            review_names, invalid_review_names, review_partial = [], [], False
+            enumeration_partial = False
             if run_fd is not None:
                 with os.scandir(run_fd) as entries:
                     for index, entry in enumerate(entries):
                         if index >= 1024:
-                            truncated = True
+                            enumeration_partial = truncated = review_partial = True
                             break
                         if entry.name.startswith("event-"):
                             if re.fullmatch(r"event-[0-9]{3,6}[.]json", entry.name) is None:
@@ -1009,8 +1012,18 @@ class Manager:
                             else:
                                 if len(names) == 256:
                                     truncated = True
-                                    break
-                                names.append(entry.name)
+                                else:
+                                    names.append(entry.name)
+                        if entry.name.startswith("review-"):
+                            if re.fullmatch(r"review-0[0-9]{2}[.]json", entry.name) is None:
+                                invalid_review_names.append(entry.name)
+                            elif entry.name in review_names:
+                                invalid_review_names.append(entry.name)
+                                review_partial = True
+                            elif len(review_names) == 100:
+                                review_partial = True
+                            else:
+                                review_names.append(entry.name)
             else:
                 note("RECORD_MISSING")
             if not names:
@@ -1035,6 +1048,51 @@ class Manager:
                     note("EVENT_LIMIT")
                 if value is not None:
                     events.append(value)
+            review_names.sort()
+            review_invalid = (bool(invalid_review_names) or review_names !=
+                              ["review-%03d.json" % number for number in range(len(review_names))])
+            reviews, review_remaining, review_budget_exhausted = [], 262144, False
+            for name in review_names:
+                if review_remaining <= 1:
+                    review_budget_exhausted = True
+                    _, identity, _ = self._saved_run_review_file(run_fd, name, 0)
+                    files["reviews/" + name] = {"identity": identity, "status": "NOT_READ" if identity is not None else "MISSING",
+                                                "sha256": None}
+                    reviews.append({"name": name, "sha256": None, "value": None,
+                                    "status": "LIMITED" if identity is not None else "MISSING"})
+                    continue
+                raw, identity, limited = self._saved_run_review_file(run_fd, name, min(32768, review_remaining - 1))
+                review_remaining -= len(raw) if raw is not None else 0
+                observation = {"identity": identity, "status": "MISSING", "sha256": None}
+                files["reviews/" + name] = observation
+                value, digest, status = None, None, "MISSING"
+                if raw is not None:
+                    observed_hash = sha(raw)
+                    observation.update(status="LIMIT" if limited else "PRESENT", sha256=observed_hash)
+                    if limited:
+                        status = "LIMITED"
+                    else:
+                        digest = observed_hash
+                        try:
+                            value = parse(raw)
+                            if type(value) is not dict:
+                                raise Refused("INVALID_JSON")
+                            status = "OK"
+                        except (Refused, UnicodeError, ValueError, TypeError, RecursionError):
+                            observation["status"] = "INVALID"
+                            value, status = None, "INVALID"
+                reviews.append({"name": name, "sha256": digest, "value": value, "status": status})
+                if review_remaining <= 1:
+                    review_budget_exhausted = True
+            result_content_hash = sha(canonical(result)) if type(result) is dict else None
+            declared_patch = result.get("patch_sha256") if type(result) is dict else None
+            if type(declared_patch) is not str or SHA256.fullmatch(declared_patch) is None:
+                declared_patch = None
+            decision_evidence = {"present": run_fd is not None, "catalog_partial": review_partial,
+                "catalog_invalid": review_invalid, "records": reviews,
+                "current": {"result_sha256": result_content_hash,
+                            "patch_sha256": patch_hash if type(patch) is str else None,
+                            "result_patch_sha256": declared_patch}}
             # Repin directory names and descriptors. Missing run directories are
             # observations too: appearance before this check is evidence drift.
             checks = [(self.data, "data"), (self.data / "tasks", "tasks"),
@@ -1055,10 +1113,15 @@ class Manager:
                     os.close(fd)
             manifest = {"id": run_id, "directories": directories, "files": files,
                         "event_names": sorted(names), "invalid_event_names": sorted(invalid_names),
-                        "events_truncated": truncated, "event_budget_exhausted": budget_exhausted}
+                        "events_truncated": truncated, "event_budget_exhausted": budget_exhausted,
+                        "enumeration_partial": enumeration_partial, "review_names": review_names,
+                        "invalid_review_names": sorted(invalid_review_names), "review_catalog_partial": review_partial,
+                        "review_catalog_invalid": review_invalid, "review_budget_exhausted": review_budget_exhausted,
+                        "run_present": run_fd is not None}
             bundle = {"id": run_id, "metadata": metadata, "task": task, "task_sha256": task_hash,
                       "result": result, "result_sha256": result_hash, "events": events,
-                      "patch": patch, "patch_sha256": patch_hash, "notes": sorted(notes)}
+                      "patch": patch, "patch_sha256": patch_hash, "notes": sorted(notes),
+                      "review_decision_evidence": decision_evidence}
             return bundle, sha(canonical(manifest))
         except Refused as error:
             if str(error).startswith("SAVED_REVIEW_"):
@@ -1090,6 +1153,8 @@ class Manager:
                         "SAVED_REVIEW_RECORD_INVALID")
                 bundle, evidence = self._saved_run_review_inspection(request["id"], record["metadata"])
                 result = review_saved_run(bundle, record["record_sha256"], history, evidence)
+                result["decision"] = summarize_review_decision(request["id"], bundle["review_decision_evidence"])
+                result["version"] = 2
                 require(self._saved_run_review_inspection(request["id"], record["metadata"])[1] == evidence,
                         "SAVED_REVIEW_EVIDENCE_CHANGED")
                 require(self._run_history_inspection()[1] == history, "SAVED_REVIEW_HISTORY_CHANGED")
