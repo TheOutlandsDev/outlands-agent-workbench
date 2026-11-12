@@ -5,6 +5,7 @@ let configuration=null,selected=null,current=null,polling=false,busy=false,initi
 let contextRunId=null,contextSnapshot=null;
 let taskPresetBusy=false,taskPresetSequence=0,taskPresetSnapshot=null,taskPresetSelectedId="",taskPresetLoaded=null,taskPresetHistoryLocks=[],taskPresetPreview=null;
 let comparisonOpen=false,comparisonOpening=false,comparisonBusy=false,comparisonHistoryLoading=false,comparisonSequence=0,comparisonHistorySequence=0,comparisonLeftId="",comparisonRightId="",normalRefreshInFlight=Promise.resolve(),comparisonHistoryReady=false,comparisonOpeningCancel=null,comparisonOpenSequence=0;
+let runHistoryReady=false,runHistoryBusy=false,runHistorySequence=0,runHistoryResult=null,runHistorySelectedId='',runHistoryReview=null,runHistoryNavigationLocks=[];
 let readinessOpen=false,readinessOpening=false,readinessReady=false,readinessBusy=false,readinessProjectId="",readinessSequence=0,readinessOpenSequence=0,readinessOpeningCancel=null;
 let bundleOpen=false,bundleOpening=false,bundleBusy=false,bundleRunId=null,bundlePreview=null,bundleSequence=0,bundleOpenSequence=0,bundleOpeningCancel=null;
 let projectCheckOpen=false,projectCheckOpening=false,projectCheckReady=false,projectCheckBusy=false,projectCheckProjectId="",projectCheckSequence=0,projectCheckOpenSequence=0,projectCheckOpeningCancel=null;
@@ -158,11 +159,11 @@ function renderContext(v){
 function showError(error){$('alert').textContent=errors[error.message]||error.message.replaceAll('_',' ').toLowerCase();$('alert').hidden=false;}
 function clearError(){$('alert').hidden=true;}
 async function api(path,body){const options={headers:{'X-Workbench-Token':token}};if(body!==undefined){options.method='POST';options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}const r=await fetch(path,options);const value=await r.json();if(!r.ok)throw new Error(value.error||'REQUEST_REFUSED');return value;}
-function readOnlyPanelActive(){return taskPresetBusy||comparisonOpen||comparisonOpening||readinessOpen||readinessOpening||bundleOpen||bundleOpening||projectCheckOpen||projectCheckOpening||snapshotProjectOpen||snapshotProjectOpening||snapshotWorkspaceOpen||snapshotWorkspaceOpening||bundleWorkspaceOpen||bundleWorkspaceOpening;}
+function readOnlyPanelActive(){return runHistoryBusy||taskPresetBusy||comparisonOpen||comparisonOpening||readinessOpen||readinessOpening||bundleOpen||bundleOpening||projectCheckOpen||projectCheckOpening||snapshotProjectOpen||snapshotProjectOpening||snapshotWorkspaceOpen||snapshotWorkspaceOpening||bundleWorkspaceOpen||bundleWorkspaceOpening;}
 function stateClass(state){return state==='REVIEW_READY'?'good':['FAILED','REFUSED','UNCERTAIN','INTERRUPTED','RECOVERY_REQUIRED'].includes(state)?'bad':'';}
 function projectChanged(){const p=configuration.projects.find(p=>p.id===$('project').value);if(!p)return;const demo=$('model').querySelector('option[value="scripted-demo"]');demo.disabled=!p.scripted_available;if(demo.disabled&&$('model').value==='scripted-demo')$('model').value=configuration.models[0]||'';$('goal').value=p.goal;const files=$('scope-files');files.replaceChildren(...p.files.map(name=>node('span',name+(p.editable.includes(name)?' · editable':' · protected'),'file-chip'+(p.editable.includes(name)?' editable':''))));$('scope-note').textContent=p.checks.length+' named check'+(p.checks.length===1?'':'s')+' · Edits stay in a private copy';modelChanged();resetProjectRefresh(p);}
 function modelChanged(){$('goal').readOnly=$('model').value==='scripted-demo';if($('goal').readOnly){const p=configuration.projects.find(p=>p.id===$('project').value);if(p)$('goal').value=p.goal;}invalidateTaskPresets('Project or model changed. Refresh private presets explicitly.');setTaskPresetControls();}
-function setAdmission(reason){const blocked=Boolean(reason);if(blocked&&admissionReason!==reason)invalidateProjectRefresh();admissionReason=reason||null;$('admission').hidden=!blocked;$('admission').textContent=reason?(errors[reason]||reason.replaceAll('_',' ').toLowerCase()):'';for(const id of ['start','project','model','goal'])$(id).disabled=blocked||busy||projectRefreshBusy||taskPresetBusy||(id==='start'&&!$('model').value);setProjectRefreshControls();setComparisonControls();}
+function setAdmission(reason){const blocked=Boolean(reason);if(blocked&&admissionReason!==reason)invalidateProjectRefresh();admissionReason=reason||null;$('admission').hidden=!blocked;$('admission').textContent=reason?(errors[reason]||reason.replaceAll('_',' ').toLowerCase()):'';for(const id of ['start','project','model','goal'])$(id).disabled=blocked||busy||projectRefreshBusy||taskPresetBusy||runHistoryBusy||(id==='start'&&!$('model').value);setProjectRefreshControls();setComparisonControls();}
 function renderHistory(rows){$('history-count').textContent=String(rows.length);if(!rows.length){$('history').replaceChildren(node('p','Your runs will appear here.','empty-small'));return;}$('history').replaceChildren(...rows.map(row=>{const b=node('button',undefined,'history-item'+(row.id===selected?' selected':''));b.append(node('strong',row.project_name),node('small',(friendly[row.state]||row.state)+' · '+row.id.slice(0,6)));b.addEventListener('click',()=>{invalidateBundle('Run selection changed. Close this panel and preview the selected accepted run.');selected=row.id;current=null;setBundleControls();refresh();});return b;}));}
 function renderRun(v){const changed=!current||current.id!==v.id;if(bundleRunKey(current)!==bundleRunKey(v))invalidateBundle('Run, review or result changed. Preview the accepted artifact again.');current=v;$('welcome').hidden=true;$('run-panel').hidden=false;$('run-project').textContent=v.project_name.toUpperCase();$('run-title').textContent='Task '+v.id.slice(0,8);$('run-meta').textContent=v.goal;$('run-state').textContent=friendly[v.state]||v.state;$('run-state').className='state-pill '+stateClass(v.state);$('stop').disabled=!['RUNNING','STOP_REQUESTED'].includes(v.state)||v.state==='STOP_REQUESTED';$('budget-label').textContent=v.turns+' / '+v.max_turns+' model turns';$('budget-bar').max=v.max_turns;$('budget-bar').value=v.turns;$('run-mode').textContent=v.backend==='scripted-demo'?'SCRIPTED · NO INFERENCE':v.model;renderDiagnostics(v);renderContext(v);$('plan').replaceChildren(...(v.plan.length?v.plan.map(s=>node('li',s)):[node('li','Waiting for the agent’s plan.','muted')]));$('events').replaceChildren(...v.events.map(e=>{const li=node('li');li.append(node('span',e.text),node('small','#'+String(e.index).padStart(2,'0')+' · '+e.kind.replaceAll('_',' ')));return li;}));$('activity-empty').hidden=v.events.length>0;$('diff').textContent=v.patch||'The patch will appear after the task finishes.';
   $('checks').replaceChildren(...v.checks.map(c=>{const card=node('section',undefined,'check-card');const heading=node('div',undefined,'check-heading');heading.append(node('strong',c.label),node('span',c.exit_code===0?'PASS':'FAIL','state-pill '+(c.exit_code===0?'good':'bad')));card.append(heading,node('p',(c.tests_ran||0)+' tests · exit '+c.exit_code+(c.timed_out?' · timed out':''),'muted'),node('pre',c.output||'No output','code-view'));return card;}));
@@ -172,7 +173,7 @@ function renderRun(v){const changed=!current||current.id!==v.id;if(bundleRunKey(
 }
 async function refresh(){if(polling||readOnlyPanelActive())return;polling=true;let finish;normalRefreshInFlight=new Promise(resolve=>{finish=resolve;});try{const rows=await api('/api/history');if(readOnlyPanelActive())return;if(!initialized){selected=rows.length?rows[0].id:null;initialized=true;}renderHistory(rows);if(selected){const run=await api('/api/run/'+selected);if(readOnlyPanelActive())return;renderRun(run);}else{$('run-panel').hidden=true;$('welcome').hidden=false;const cfg=await api('/api/config');if(readOnlyPanelActive())return;setAdmission(cfg.admission_block);}}catch(error){showError(error);}finally{polling=false;finish();}}
 async function submitReview(verdict){if(!current)return;clearError();busy=true;invalidateBundle('Review changed. Preview the accepted artifact again.');setBundleControls();try{await api('/api/review',{id:current.id,result_sha256:current.result_sha256,patch_sha256:current.patch_sha256,verdict,note:$('review-note').value});await refresh();}catch(error){showError(error);}finally{busy=false;if(current)renderRun(current);}}
-$('task-form').addEventListener('submit',async event=>{event.preventDefault();if(taskPresetBusy)return;clearError();busy=true;setAdmission(null);try{const value=await api('/api/start',{project:$('project').value,model:$('model').value,goal:$('goal').value});selected=value.id;current=null;await refresh();}catch(error){showError(error);}finally{busy=false;await refresh();}});
+$('task-form').addEventListener('submit',async event=>{event.preventDefault();if(taskPresetBusy||runHistoryBusy)return;clearError();busy=true;setAdmission(null);try{const value=await api('/api/start',{project:$('project').value,model:$('model').value,goal:$('goal').value});selected=value.id;current=null;await refresh();}catch(error){showError(error);}finally{busy=false;await refresh();}});
 $('new-task').addEventListener('click',()=>{invalidateBundle();selected=null;current=null;setBundleControls();clearError();$('run-panel').hidden=true;$('welcome').hidden=false;$('goal').focus();refresh();});
 $('project').addEventListener('change',projectChanged);$('model').addEventListener('change',modelChanged);
 $('stop').addEventListener('click',async()=>{if(!current)return;clearError();try{await api('/api/stop',{id:current.id});await refresh();}catch(error){showError(error);}});
@@ -226,21 +227,25 @@ function comparisonDetails(title,children){const details=node('details',undefine
 function invalidateComparison(text){comparisonSequence++;comparisonBusy=false;$('comparison-result').hidden=true;$('comparison-result').replaceChildren();$('comparison-status').textContent=text||'Choose two different saved runs, then compare.';}
 function setComparisonControls(){
   $('comparison-open').disabled=!configuration||readOnlyPanelActive()||busy||projectRefreshBusy;
+  $('run-history-open').disabled=!configuration||readOnlyPanelActive()||busy||projectRefreshBusy;
+  $('comparison-close').disabled=runHistoryBusy;
   $('comparison-open').textContent=comparisonOpening?'Opening comparison…':'Compare runs';
   $('new-task').disabled=readOnlyPanelActive();
   $('setup-open').disabled=readOnlyPanelActive();
-  $('comparison-left').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||!$('comparison-left').options.length;
-  $('comparison-right').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||!$('comparison-right').options.length;
-  $('comparison-submit').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||comparisonBusy||!comparisonLeftId||!comparisonRightId||comparisonLeftId===comparisonRightId;
-  setReadinessControls();setBundleControls();setProjectCheckControls();setSnapshotProjectControls();setSnapshotWorkspaceControls();setBundleWorkspaceControls();setTaskPresetControls();
+  $('comparison-left').disabled=!comparisonOpen||comparisonHistoryLoading||runHistoryBusy||!comparisonHistoryReady||!$('comparison-left').options.length;
+  $('comparison-right').disabled=!comparisonOpen||comparisonHistoryLoading||runHistoryBusy||!comparisonHistoryReady||!$('comparison-right').options.length;
+  $('comparison-submit').disabled=!comparisonOpen||comparisonHistoryLoading||!comparisonHistoryReady||comparisonBusy||runHistoryBusy||!comparisonLeftId||!comparisonRightId||comparisonLeftId===comparisonRightId;
+  setReadinessControls();setBundleControls();setProjectCheckControls();setSnapshotProjectControls();setSnapshotWorkspaceControls();setBundleWorkspaceControls();setTaskPresetControls();setRunHistoryControls();
 }
 function comparisonOptions(rows,selectedId){
   const options=rows.map(run=>{const option=node('option',comparisonValue(run.project_name)+' · '+comparisonState(run.state)+' · '+run.id.slice(0,8)+' · '+comparisonValue(run.goal));option.value=run.id;return option;});
   if(selectedId&&!rows.some(run=>run.id===selectedId)){const option=node('option','Previously selected saved run · '+selectedId);option.value=selectedId;options.unshift(option);}
+  if(rows.length&&!selectedId)options.unshift(Object.assign(node('option','Choose a saved run explicitly'),{value:''}));
   if(!options.length){const option=node('option','No saved runs available');option.value='';options.push(option);}
   return options;
 }
-async function loadComparisonHistory(){
+async function loadComparisonHistory(allowDefaults=true){
+  invalidateRunHistory('Comparison history was refreshed. Search saved metadata explicitly.');
   const sequence=++comparisonHistorySequence;
   comparisonHistoryLoading=true;comparisonHistoryReady=false;$('comparison-history-status').textContent='Loading saved run history…';$('comparison-history-notes').replaceChildren();setComparisonControls();
   try{
@@ -248,8 +253,8 @@ async function loadComparisonHistory(){
     if(!comparisonOpen||sequence!==comparisonHistorySequence)return;
     comparisonHistoryReady=true;
     const runs=Array.isArray(history.runs)?history.runs.filter(run=>run&&typeof run.id==='string'&&/^[a-f0-9]{16}$/.test(run.id)):[];
-    if(!comparisonLeftId)comparisonLeftId=runs.some(run=>run.id===selected)?selected:(runs[0]&&runs[0].id)||'';
-    if(!comparisonRightId)comparisonRightId=(runs.find(run=>run.id!==comparisonLeftId)||{}).id||'';
+    if(allowDefaults&&!comparisonLeftId)comparisonLeftId=runs.some(run=>run.id===selected)?selected:(runs[0]&&runs[0].id)||'';
+    if(allowDefaults&&!comparisonRightId)comparisonRightId=(runs.find(run=>run.id!==comparisonLeftId)||{}).id||'';
     $('comparison-left').replaceChildren(...comparisonOptions(runs,comparisonLeftId));$('comparison-left').value=comparisonLeftId;
     $('comparison-right').replaceChildren(...comparisonOptions(runs,comparisonRightId));$('comparison-right').value=comparisonRightId;
     $('comparison-history-status').textContent=comparisonInteger(runs.length)+' saved runs listed · return limit '+comparisonInteger(history.limit)+'.';
@@ -321,10 +326,10 @@ function renderComparison(value){
   children.push(comparisonDetails('Saved patch-text difference',[...patchChildren]));
   container.replaceChildren(...children);container.hidden=false;
 }
-$('comparison-open').addEventListener('click',async()=>{
+async function openComparisonPanel(focusHistory=false){
   if(readOnlyPanelActive()||busy||projectRefreshBusy)return;
   const sequence=++comparisonOpenSequence;
-  comparisonOpening=true;comparisonHistoryReady=false;invalidateComparison('Waiting for the current live update to finish…');$('comparison-history-status').textContent='Saved history has not been requested yet.';$('comparison-history-notes').replaceChildren();$('comparison-panel').hidden=false;$('normal-workspace').hidden=true;$('comparison-open').setAttribute('aria-expanded','true');setComparisonControls();$('comparison-close').focus();
+  runHistoryReady=false;invalidateRunHistory('Waiting for the existing live update. Search will remain an explicit action.');comparisonOpening=true;comparisonHistoryReady=false;invalidateComparison('Waiting for the current live update to finish…');$('comparison-history-status').textContent='Saved history has not been requested yet.';$('comparison-history-notes').replaceChildren();$('comparison-panel').hidden=false;$('normal-workspace').hidden=true;$('comparison-open').setAttribute('aria-expanded','true');$('run-history-open').setAttribute('aria-expanded','true');setComparisonControls();$('comparison-close').focus();
   const readiness=await new Promise(resolve=>{
     let settled=false;
     const finish=value=>{if(settled)return;settled=true;clearTimeout(timer);if(comparisonOpeningCancel===cancel)comparisonOpeningCancel=null;resolve(value);};
@@ -335,17 +340,22 @@ $('comparison-open').addEventListener('click',async()=>{
   if(sequence!==comparisonOpenSequence||!comparisonOpening)return;
   comparisonOpening=false;comparisonOpen=true;setComparisonControls();
   if(readiness!=='ready'){$('comparison-history-status').textContent='The earlier live update did not finish within 10 seconds.';$('comparison-status').textContent='Saved comparison is unavailable. Close this panel to return to the run view.';return;}
+  runHistoryReady=true;
   $('comparison-status').textContent='Choose two different saved runs, then compare.';
-  await loadComparisonHistory();if(comparisonOpen&&sequence===comparisonOpenSequence&&!$('comparison-left').disabled)$('comparison-left').focus();
-});
+  await loadComparisonHistory(!focusHistory);if(comparisonOpen&&sequence===comparisonOpenSequence){if(focusHistory&&!$('run-history-query').disabled)$('run-history-query').focus();else if(!$('comparison-left').disabled)$('comparison-left').focus();}
+}
+$('comparison-open').addEventListener('click',()=>openComparisonPanel());
+$('run-history-open').addEventListener('click',()=>openComparisonPanel(true));
 $('comparison-close').addEventListener('click',()=>{
-  comparisonOpenSequence++;if(comparisonOpeningCancel)comparisonOpeningCancel();comparisonOpen=false;comparisonOpening=false;comparisonHistorySequence++;comparisonHistoryLoading=false;comparisonHistoryReady=false;invalidateComparison();$('comparison-panel').hidden=true;$('normal-workspace').hidden=false;$('comparison-open').setAttribute('aria-expanded','false');setComparisonControls();$('comparison-open').focus();refresh();
+  if(runHistoryBusy)return;
+  runHistoryReady=false;invalidateRunHistory('Comparison closed. Reopen and search explicitly.');comparisonOpenSequence++;if(comparisonOpeningCancel)comparisonOpeningCancel();comparisonOpen=false;comparisonOpening=false;comparisonHistorySequence++;comparisonHistoryLoading=false;comparisonHistoryReady=false;invalidateComparison();$('comparison-panel').hidden=true;$('normal-workspace').hidden=false;$('comparison-open').setAttribute('aria-expanded','false');$('run-history-open').setAttribute('aria-expanded','false');setComparisonControls();$('comparison-open').focus();refresh();
 });
 for(const side of ['left','right'])$('comparison-'+side).addEventListener('change',()=>{
-  comparisonLeftId=$('comparison-left').value;comparisonRightId=$('comparison-right').value;invalidateComparison('Selection changed. Compare to show the selected saved evidence.');setComparisonControls();
+  comparisonLeftId=$('comparison-left').value;comparisonRightId=$('comparison-right').value;clearRunHistorySelection('Comparison selection changed. Reselect a search result before another metadata review or handoff.');invalidateComparison('Selection changed. Compare to show the selected saved evidence.');setComparisonControls();
 });
 $('comparison-form').addEventListener('submit',async event=>{
-  event.preventDefault();if(!comparisonOpen||comparisonBusy||comparisonHistoryLoading||!comparisonHistoryReady||!comparisonLeftId||!comparisonRightId||comparisonLeftId===comparisonRightId)return;
+  event.preventDefault();if(!comparisonOpen||comparisonBusy||runHistoryBusy||comparisonHistoryLoading||!comparisonHistoryReady||!comparisonLeftId||!comparisonRightId||comparisonLeftId===comparisonRightId)return;
+  clearRunHistorySelection('Comparison was requested separately. Reselect a search result before another metadata review or handoff.');
   invalidateComparison('Reading saved comparison evidence…');const sequence=comparisonSequence,leftId=comparisonLeftId,rightId=comparisonRightId;comparisonBusy=true;setComparisonControls();
   try{
     const value=await api('/api/compare/'+encodeURIComponent(leftId)+'/'+encodeURIComponent(rightId));
@@ -1569,4 +1579,92 @@ $('task-preset-preview').addEventListener('click',async()=>{
   finally{taskPresetFinish();}
 });
 $('task-preset-preview-close').addEventListener('click',()=>{if($('task-preset-preview-close').disabled)return;clearTaskPresetPreview();$('task-preset-status').textContent='Preset comparison closed. The selected preset and current Task are unchanged.';setTaskPresetControls();});
-for(const id of ['comparison-open','readiness-open','bundle-preview-open','project-check-open','snapshot-project-open','snapshot-workspace-open','bundle-workspace-open'])$(id).addEventListener('click',()=>{taskPresetSequence++;clearTaskPresetPreview();setTaskPresetControls();});
+for(const id of ['comparison-open','run-history-open','readiness-open','bundle-preview-open','project-check-open','snapshot-project-open','snapshot-workspace-open','bundle-workspace-open'])$(id).addEventListener('click',()=>{taskPresetSequence++;clearTaskPresetPreview();setTaskPresetControls();});
+
+const runHistoryStates=['REVIEW_READY','RUNNING','STOP_REQUESTED','RECOVERY_REQUIRED','FAILED','REFUSED','UNCERTAIN','INTERRUPTED'];
+const runHistoryNotes={RECORD_INVALID:'Some recognized saved metadata is missing or invalid; its values remain Unknown.',LABEL_TRUNCATED:'Some labels or goal excerpts are clipped. Review one selected metadata record explicitly for its complete saved goal.',CATALOG_TRUNCATED:'The inspected catalog is partial and is not necessarily the globally newest history.',RESULT_TRUNCATED:'Some matching inspected records were omitted from this bounded response.'};
+const runHistoryErrors={HISTORY_SEARCH_INPUT:'The history request did not match the required fields.',HISTORY_SEARCH_QUERY:'Use a literal query of at most 128 UTF-8 bytes, without newline, NUL or invalid Unicode.',HISTORY_SEARCH_FILTER:'Choose a valid saved project and outcome filter.',HISTORY_SEARCH_RECORD_INVALID:'Saved metadata needs inspection; no values were reconstructed.',HISTORY_SEARCH_LIMIT:'Saved metadata exceeds the bounded inspection limits.',HISTORY_SEARCH_OUTPUT_LIMIT:'The saved metadata response exceeds its display limit.',HISTORY_SEARCH_STORE_UNSAFE:'The private saved metadata store could not be inspected safely.',HISTORY_SEARCH_HISTORY_CHANGED:'Saved metadata history changed. Search explicitly again before reviewing or using a result.',HISTORY_SEARCH_RECORD_CHANGED:'The selected metadata bytes changed. Search explicitly again.',HISTORY_SEARCH_NOT_FOUND:'The selected saved metadata is unavailable. Search explicitly again.',HISTORY_SEARCH_RESPONSE:'The saved metadata response did not match its exact bounded fields and pins.'};
+function runHistoryFailure(error){return diagnosticText(runHistoryErrors,error&&error.message)||'Saved metadata could not be inspected. Search explicitly again and inspect retained private records.';}
+function runHistoryAlias(value){if(typeof value!=='string')return false;const match=/^[a-z][a-z0-9_-]{0,31}/.exec(value);return Boolean(match&&match[0]===value);}
+function runHistoryId(value){return typeof value==='string'&&value.length===16&&/^[0-9a-f]{16}$/.test(value);}
+function runHistoryHash(value){return typeof value==='string'&&value.length===64&&/^[0-9a-f]{64}$/.test(value);}
+function runHistoryText(value,bytes){return taskPresetUnicode(value)&&!value.includes('\0')&&new TextEncoder().encode(value).length<=bytes;}
+function runHistoryQuery(){const value=$('run-history-query').value,bytes=new TextEncoder().encode(value).length;return {value,bytes,valid:runHistoryText(value,128)&&!/[\r\n]/.test(value)};}
+function runHistoryFilters(){return {query:$('run-history-query').value,project:$('run-history-project').value,state:$('run-history-state').value};}
+function runHistoryFiltersValid(value){return Boolean(value&&runHistoryText(value.query,128)&&!/[\r\n]/.test(value.query)&&(value.project===''||value.project==='UNKNOWN'||runHistoryAlias(value.project))&&(value.state===''||value.state==='UNKNOWN'||runHistoryStates.includes(value.state)));}
+function runHistoryCodes(codes){return Array.isArray(codes)&&codes.length<=4&&codes.every(code=>typeof code==='string'&&Object.prototype.hasOwnProperty.call(runHistoryNotes,code))&&codes.join('\0')===[...new Set(codes)].sort().join('\0');}
+function runHistoryTimestamp(value){return value===null||Number.isSafeInteger(value)&&value>=0;}
+function runHistorySelected(){return runHistoryResult&&runHistoryResult.runs.find(row=>row.id===runHistorySelectedId)||null;}
+function clearRunHistorySelection(text){runHistorySequence++;runHistorySelectedId='';runHistoryReview=null;$('run-history-select').value='';$('run-history-detail').replaceChildren();$('run-history-detail').hidden=true;if(text)$('run-history-status').textContent=text;}
+function invalidateRunHistory(text){clearRunHistorySelection();runHistoryResult=null;$('run-history-select').replaceChildren(Object.assign(node('option','Search saved runs explicitly'),{value:''}));$('run-history-summary').replaceChildren();$('run-history-summary').hidden=true;$('run-history-status').textContent=text||'Set filters, then search explicitly. No request was sent.';}
+function runHistoryLocked(){return !comparisonOpen||comparisonOpening||!runHistoryReady||runHistoryBusy||comparisonBusy||comparisonHistoryLoading||busy||projectRefreshBusy||readinessOpen||readinessOpening||bundleOpen||bundleOpening||projectCheckOpen||projectCheckOpening||snapshotProjectOpen||snapshotProjectOpening||snapshotWorkspaceOpen||snapshotWorkspaceOpening||bundleWorkspaceOpen||bundleWorkspaceOpening;}
+function setRunHistoryControls(){
+  const locked=runHistoryLocked(),query=runHistoryQuery(),row=runHistorySelected();
+  for(const id of ['run-history-query','run-history-project','run-history-state','run-history-clear'])$(id).disabled=locked;
+  $('run-history-search').disabled=locked||!runHistoryFiltersValid(runHistoryFilters());
+  $('run-history-select').disabled=locked||!runHistoryResult||!runHistoryResult.runs.length;
+  $('run-history-review').disabled=locked||!row;
+  for(const side of ['left','right'])$('run-history-'+side).disabled=locked||!row||!comparisonHistoryReady;
+  $('run-history-query-note').textContent=query.bytes+' / 128 UTF-8 bytes · empty matches all inspected records · literal, case-sensitive, no newline or NUL.'+(query.valid?'':' Query is invalid.');
+}
+function validRunHistoryRow(row,request,projects){
+  if(!runHistoryFiltersValid(request)||!taskPresetExact(row,['id','project','project_name','goal_excerpt','goal_truncated','state','created','record_sha256','match_fields'])||!runHistoryId(row.id)||!(row.project===null||runHistoryAlias(row.project))||!(row.project_name===null||runHistoryText(row.project_name,160))||!(row.goal_excerpt===null||runHistoryText(row.goal_excerpt,160))||typeof row.goal_truncated!=='boolean'||row.goal_excerpt===null&&row.goal_truncated||!(row.state===null||runHistoryStates.includes(row.state))||!runHistoryTimestamp(row.created)||!runHistoryHash(row.record_sha256)||!Array.isArray(row.match_fields)||!row.match_fields.every(field=>field==='id'||field==='goal')||row.match_fields.length>2||row.match_fields.join('\0')!==['id','goal'].filter(field=>row.match_fields.includes(field)).join('\0'))return false;
+  if(!projects.includes(row.project===null?'UNKNOWN':row.project)||request.project&&row.project!==(request.project==='UNKNOWN'?null:request.project)||request.state&&row.state!==(request.state==='UNKNOWN'?null:request.state))return false;
+  if(request.query==='')return row.match_fields.length===0;
+  return row.match_fields.length>0&&(!row.match_fields.includes('id')||row.id.includes(request.query))&&(!row.match_fields.includes('goal')||typeof row.goal_excerpt==='string'&&row.goal_excerpt.includes(request.query));
+}
+function validRunHistoryResult(value,request){
+  if(!runHistoryFiltersValid(request)||!taskPresetExact(value,['version','query','project','state','history_sha256','runs','projects','inspected','matched','returned','catalog_truncated','result_truncated','limit','notes'])||value.version!==1||value.query!==request.query||value.project!==request.project||value.state!==request.state||!runHistoryHash(value.history_sha256)||!Array.isArray(value.runs)||value.runs.length>100||!Array.isArray(value.projects)||value.projects.length>201||value.projects.some(project=>project!=='UNKNOWN'&&!runHistoryAlias(project))||value.projects.join('\0')!==[...new Set(value.projects)].sort((left,right)=>left===right?0:left==='UNKNOWN'?1:right==='UNKNOWN'?-1:left<right?-1:1).join('\0')||!Number.isSafeInteger(value.inspected)||value.inspected<0||value.inspected>200||!Number.isSafeInteger(value.matched)||value.matched<0||value.matched>value.inspected||value.returned!==value.runs.length||value.returned>value.matched||typeof value.catalog_truncated!=='boolean'||typeof value.result_truncated!=='boolean'||value.result_truncated!==(value.returned<value.matched)||value.limit!==100||!runHistoryCodes(value.notes)||value.notes.includes('CATALOG_TRUNCATED')!==value.catalog_truncated||value.notes.includes('RESULT_TRUNCATED')!==value.result_truncated||!taskPresetBounded(value)||new Set(value.runs.map(row=>row&&row.id)).size!==value.runs.length||!value.runs.every(row=>validRunHistoryRow(row,request,value.projects)))return false;
+  return value.runs.every((row,index)=>{if(!index)return true;const previous=value.runs[index-1];if(previous.created===null)return row.created===null&&previous.id>row.id;if(row.created===null)return true;return previous.created>row.created||previous.created===row.created&&previous.id>row.id;});
+}
+function runHistoryNoteList(codes){return codes.length?comparisonNoteList(codes,runHistoryNotes):null;}
+function renderRunHistoryResult(value){
+  const selectedProject=$('run-history-project').value,projects=[...value.projects];if(selectedProject&&!projects.includes(selectedProject))projects.push(selectedProject);
+  projects.sort((left,right)=>left===right?0:left==='UNKNOWN'?1:right==='UNKNOWN'?-1:left<right?-1:1);
+  $('run-history-project').replaceChildren(Object.assign(node('option','All projects'),{value:''}),...projects.map(project=>Object.assign(node('option',project==='UNKNOWN'?'Unknown saved project':project),{value:project})));$('run-history-project').value=selectedProject;
+  const children=[diagnosticList([['Saved metadata inspected',String(value.inspected)],['Matches in inspected set',String(value.matched)],['Matches returned',String(value.returned)]],'diagnostic-facts run-history-counts')];
+  if(value.catalog_truncated)children.push(node('p','Catalog is partial. Other saved records may be omitted, and this inspected set is not necessarily globally newest.','context-warning'));
+  if(value.result_truncated)children.push(node('p',String(value.matched-value.returned)+' matching inspected records were omitted from this bounded result. Narrow the filters to inspect another set.','context-warning'));
+  const notes=runHistoryNoteList(value.notes);if(notes)children.push(notes);$('run-history-summary').replaceChildren(...children);$('run-history-summary').hidden=false;
+  const placeholder=node('option',value.runs.length?'Choose a matching saved run explicitly':'No matches in the inspected metadata');placeholder.value='';
+  $('run-history-select').replaceChildren(placeholder,...value.runs.map(row=>{const label=row.id+' · '+(row.project===null?'Unknown project':row.project)+' · Saved: '+comparisonState(row.state)+' · '+(row.goal_excerpt===null?'Goal unavailable':row.goal_excerpt===''?'Empty saved goal':row.goal_excerpt)+(row.goal_truncated?' · goal excerpt clipped':'');return Object.assign(node('option',label),{value:row.id});}));
+  $('run-history-status').textContent=value.runs.length?'Search complete. Select a result, then explicitly review its metadata or use one comparison slot.':'No matches in the inspected set. Change filters or clear them, then search explicitly.';
+}
+function runHistoryContext(){return {sequence:runHistorySequence,openSequence:comparisonOpenSequence,...runHistoryFilters()};}
+function runHistoryContextCurrent(context){const filters=runHistoryFilters();return comparisonOpen&&!comparisonOpening&&runHistoryReady&&context.sequence===runHistorySequence&&context.openSequence===comparisonOpenSequence&&context.query===filters.query&&context.project===filters.project&&context.state===filters.state;}
+function runHistoryOpenPins(context){return Boolean(context&&context.row&&context.result&&runHistoryId(context.row.id)&&runHistoryHash(context.record)&&runHistoryHash(context.history)&&context.result.history_sha256===context.history&&context.row.record_sha256===context.record&&(context.row.project===null||runHistoryAlias(context.row.project)));}
+function runHistorySelectionCurrent(context){return runHistoryOpenPins(context)&&runHistoryContextCurrent(context)&&context.result===runHistoryResult&&context.row===runHistorySelected()&&$('run-history-select').value===context.row.id;}
+function runHistoryBegin(text){runHistoryBusy=true;runHistoryNavigationLocks=Array.from($('history').querySelectorAll('button')).map(element=>[element,element.disabled]);for(const [element] of runHistoryNavigationLocks)element.disabled=true;setAdmission(admissionReason);$('run-history-status').textContent=text;}
+function runHistoryFinish(){runHistoryBusy=false;for(const [element,disabled] of runHistoryNavigationLocks)if(element.isConnected)element.disabled=disabled;runHistoryNavigationLocks=[];setAdmission(admissionReason);}
+function validRunHistoryReview(value,context){
+  const row=context.row;
+  return runHistoryOpenPins(context)&&taskPresetExact(value,['version','id','project','project_name','goal','state','created','record_sha256','history_sha256','notes'])&&value.version===1&&runHistoryId(value.id)&&runHistoryHash(value.record_sha256)&&runHistoryHash(value.history_sha256)&&(value.project===null||runHistoryAlias(value.project))&&value.id===row.id&&value.record_sha256===context.record&&value.history_sha256===context.history&&value.project===row.project&&value.state===row.state&&value.created===row.created&&(value.project_name===null||runHistoryText(value.project_name,320))&&(value.goal===null||taskPresetDraft(value.goal))&&(row.goal_truncated||value.goal===row.goal_excerpt)&&(!row.match_fields.includes('goal')||typeof value.goal==='string'&&value.goal.includes(context.query))&&runHistoryCodes(value.notes)&&taskPresetBounded(value);
+}
+function renderRunHistoryReview(value){
+  const children=[node('h4','Pinned saved metadata · '+value.id),node('p','These are saved observations. This review does not inspect current process state, provider completion, checks, results or patch contents.','muted'),diagnosticList([['Saved project ID',comparisonValue(value.project)],['Saved project name',comparisonValue(value.project_name)],['Saved outcome',comparisonState(value.state)],['Saved creation (UTC)',comparisonTime(value.created)]],'diagnostic-facts run-history-facts'),node('h5','Complete saved task goal')];
+  children.push(value.goal===null?node('p','Unknown · no valid saved goal is available.','muted'):node('pre',value.goal,'code-view run-history-goal'));if(value.goal==='')children.push(node('p','The saved goal is empty.','small muted'));
+  children.push(diagnosticList([['Selected metadata SHA-256',value.record_sha256],['Observed metadata history SHA-256',value.history_sha256]],'context-file-facts bundle-workspace-hashes'));const notes=runHistoryNoteList(value.notes);if(notes)children.push(notes);$('run-history-detail').replaceChildren(...children);$('run-history-detail').hidden=false;
+}
+$('run-history-form').addEventListener('submit',async event=>{
+  event.preventDefault();if($('run-history-search').disabled||runHistoryLocked())return;const request=runHistoryFilters();invalidateRunHistory('Reading bounded saved metadata…');const context=runHistoryContext();runHistoryBegin('Reading bounded saved metadata…');
+  try{const value=await api('/api/run-history-search',request);if(!runHistoryContextCurrent(context))return;if(!validRunHistoryResult(value,request))throw new Error('HISTORY_SEARCH_RESPONSE');runHistoryResult=value;renderRunHistoryResult(value);}
+  catch(error){if(runHistoryContextCurrent(context))invalidateRunHistory(runHistoryFailure(error));}
+  finally{runHistoryFinish();}
+});
+for(const [id,event] of [['run-history-query','input'],['run-history-project','change'],['run-history-state','change']])$(id).addEventListener(event,()=>{invalidateRunHistory('History filters changed. Search explicitly; no request was sent.');setRunHistoryControls();});
+$('run-history-clear').addEventListener('click',()=>{if($('run-history-clear').disabled)return;$('run-history-query').value='';$('run-history-project').replaceChildren(Object.assign(node('option','All projects'),{value:''}));$('run-history-state').value='';invalidateRunHistory('History filters cleared locally. Search explicitly; no request was sent.');setRunHistoryControls();$('run-history-query').focus();});
+$('run-history-select').addEventListener('change',()=>{runHistorySequence++;runHistorySelectedId=$('run-history-select').value;runHistoryReview=null;$('run-history-detail').replaceChildren();$('run-history-detail').hidden=true;$('run-history-status').textContent=runHistorySelected()?'Saved result selected. Review its metadata or choose one comparison slot explicitly.':'Choose a matching saved run explicitly.';setRunHistoryControls();});
+async function useRunHistorySelection(side=null){
+  const button=side?$('run-history-'+side):$('run-history-review');if(button.disabled||runHistoryLocked())return;
+  const row=runHistorySelected(),result=runHistoryResult;runHistorySequence++;const context={...runHistoryContext(),row,result,history:result.history_sha256,record:row.record_sha256};if(!runHistoryOpenPins(context)){invalidateRunHistory(runHistoryErrors.HISTORY_SEARCH_RESPONSE);setRunHistoryControls();return;}runHistoryReview=null;$('run-history-detail').replaceChildren();$('run-history-detail').hidden=true;runHistoryBegin(side?'Rechecking saved metadata before using the '+(side==='left'?'Left':'Right')+' comparison slot…':'Reading the explicitly selected pinned saved metadata…');
+  try{
+    const value=await api('/api/run-history-open',{id:row.id,record_sha256:context.record,history_sha256:context.history});if(!runHistorySelectionCurrent(context))return;if(!validRunHistoryReview(value,context))throw new Error('HISTORY_SEARCH_RESPONSE');
+    if(side){const target=$('comparison-'+side);if(!Array.from(target.options).some(option=>option.value===row.id))target.append(Object.assign(node('option',row.id+' · '+comparisonValue(row.project)+' · Saved: '+comparisonState(row.state)+' · '+comparisonValue(row.goal_excerpt)),{value:row.id}));target.value=row.id;if(side==='left')comparisonLeftId=row.id;else comparisonRightId=row.id;invalidateComparison('Search result assigned to '+(side==='left'?'Left':'Right')+' only. Choose two different runs and Compare saved runs explicitly.');clearRunHistorySelection('Saved metadata pins rechecked. Assigned '+row.id+' to '+(side==='left'?'Left':'Right')+' only; no comparison was requested.');}
+    else{runHistoryReview=value;renderRunHistoryReview(value);$('run-history-status').textContent='Showing the selected complete saved metadata. Task, model, live view and comparison slots are unchanged.';}
+  }catch(error){if(runHistorySelectionCurrent(context))invalidateRunHistory(runHistoryFailure(error));}
+  finally{runHistoryFinish();}
+}
+$('run-history-review').addEventListener('click',()=>useRunHistorySelection());
+for(const side of ['left','right'])$('run-history-'+side).addEventListener('click',()=>useRunHistorySelection(side));
+$('history').addEventListener('click',event=>{if(!event.target.closest('button'))return;if(runHistoryBusy){event.preventDefault();event.stopImmediatePropagation();return;}if(comparisonOpen||comparisonOpening){invalidateRunHistory('Live-view selection changed. Search saved metadata explicitly again.');setRunHistoryControls();}},true);
+for(const [id,event] of [['project','change'],['model','change'],['new-task','click'],['setup-open','click'],['setup-close','click'],['refresh-open','click'],['refresh-close','click'],['task-form','submit']])$(id).addEventListener(event,()=>{invalidateRunHistory('Task or navigation context changed. Search saved metadata explicitly again.');setRunHistoryControls();});
