@@ -88,3 +88,13 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 #snapshot-workspace-recheck-status,#snapshot-workspace-recheck-admission,#snapshot-workspace-recheck-history-status{overflow-wrap:anywhere;line-height:1.8}
 #snapshot-workspace-recheck-receipt{margin-top:20px}
 @media(max-width:680px){.snapshot-workspace-recheck-preview-summary{padding:14px}.snapshot-workspace-recheck-section .pane-heading button{font-size:10px;text-align:left}.snapshot-workspace-recheck-section .project-check-facts{grid-template-columns:1fr}}
+
+/* Version-2 re-export has separate acceptance state from legacy snapshot export. */
+.snapshot-reexport-summary,.snapshot-reexport-accept-card{padding:18px;background:rgba(105,137,185,.055);border:1px solid var(--line);border-radius:12px;margin:18px 0}
+.snapshot-reexport-accept-card{background:rgba(207,161,83,.07)}
+.snapshot-reexport-history-heading{margin-top:24px}
+.snapshot-reexport-diff{margin:22px 0}.snapshot-reexport-diff .code-view{max-height:440px}
+.snapshot-reexport-note{white-space:pre-wrap;overflow-wrap:anywhere}
+#snapshot-reexport-status,#snapshot-reexport-note-status,#snapshot-reexport-history-status{overflow-wrap:anywhere;line-height:1.8}
+#snapshot-reexport-acceptance{margin-top:20px}
+@media(max-width:680px){.snapshot-reexport-summary,.snapshot-reexport-accept-card{padding:14px}.snapshot-reexport-section .pane-heading{align-items:flex-start}.snapshot-reexport-section .pane-heading button,.snapshot-reexport-section .review-buttons button{max-width:100%;white-space:normal}.snapshot-reexport-section .project-check-facts{grid-template-columns:1fr}}
