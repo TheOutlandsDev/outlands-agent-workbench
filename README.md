@@ -5,7 +5,10 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.20 adds **Named task presets**: privately save the current Task under a
+Version 0.21 adds **Preset preview and comparison**: explicitly view a saved goal
+beside the current Task draft without changing Task. A highlight spans the first
+through last difference; Load remains a separate explicit action. It retains
+**Named task presets**: privately save the current Task under a
 new name for an already configured project, then explicitly refresh, select and
 load its goal into Task. Presets preserve the approved project profile and never
 start Run or select a model. It retains **Workspace search and focused reads**:
@@ -233,6 +236,39 @@ enforces the plan requirement. An edit requires the current file hash and one ex
 span. Bytes outside that span are preserved, including surrounding whitespace
 and line endings. Whole-file `write_file` is refused. Tests are protected, and
 independent final checks run before a task becomes Ready for review.
+
+## Preview a private preset before loading
+
+Choose a configured Python or Java project, explicitly **Refresh private presets**,
+and select a compatible saved name. Choose **Preview and compare selected preset**
+to view its saved instructions beside the current Task draft. The current draft
+may be empty or whitespace. Preview does not fill Task or start a task.
+
+The two read-only views preserve exact text. A highlight covers the span from
+the first through last differing Unicode character, so unchanged middle text
+may also be highlighted. Matching goals are labelled identical. Exact UTF-8
+hashes identify both observations. The comparison performs no normalization,
+newline folding, model request, Git command, check or source read.
+
+Review the instructions, then explicitly **Load selected preset into Task** if
+wanted. Loading still only fills Task; **Run task** remains separate. Existing
+scripted Tasks stay read-only and cannot load a different goal, but can preview
+and compare. An unrelated admission hold can remain while previewing; it does
+not enable Task or Run. Close comparison to clear only that preview.
+
+Draft/name, project/model, preset selection, refresh/save/load, configuration
+context and task submission changes discard the old comparison. Reload does not
+restore or request it. Stale config/task/profile/history/record pins and unsafe
+or partial stores refuse preview; older incompatible profiles cannot be previewed
+or loaded. No new record, job, cache file, import or export is created.
+
+The current draft is limited to 0–2,000 Unicode codepoints and 8,000 UTF-8 bytes,
+with no NUL or invalid Unicode. Saved goals retain the existing nonblank rule.
+The preview request is at most 32,768 bytes and the complete response at most
+65,536 bytes, including both unabridged goals; no text is silently clipped.
+Comparisons, goal text and hashes are private project context and remain outside
+public uploads. These sequential checks assume trusted stable single-owner
+storage and do not qualify Run freshness or prove source correctness.
 
 ## Save and load private task presets
 
@@ -1290,7 +1326,7 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-Version 0.19's recorded offline qualification passed 836 unit methods across 36 suites, including
+Final v0.21 offline qualification passed 919 unit methods across 40 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1358,6 +1394,14 @@ synthetic hold allows navigation while refusing a save. Unit/controller/HTTP
 checks separately exercise scope, source/config/Git/journal drift, Unicode and
 line endings, result bounds, races, restarts, framing and route-specific caps.
 
+Preset-comparison acceptance exercises invented Python/Java save/list/preview,
+exact current-draft and saved-goal hashes, unchanged definitions/private bytes,
+separate explicit Load, restart persistence and retained unrelated holds. It then
+runs separate fixed checks against selected copies with unchanged scope/checks
+and loaded goals. Preview itself starts no agent, check or model request. Browser
+qualification also covers empty and identical drafts, Unicode highlights, literal
+markup text, Close and input invalidation, scripted read-only Task and held Run.
+
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
@@ -1370,7 +1414,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.20 adds no real-model qualification. Named task presets, snapshot review workspaces,
+Version 0.21 adds no real-model qualification. Preset previews, named task presets, snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context

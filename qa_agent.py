@@ -26,6 +26,7 @@ from qa_snapshot_reexport import acceptance as snapshot_reexport_acceptance
 from qa_snapshot_editor import acceptance as snapshot_editor_acceptance
 from qa_workspace_search import acceptance as workspace_search_acceptance
 from qa_task_presets import acceptance as task_presets_acceptance
+from qa_preset_comparison import acceptance as preset_comparison_acceptance
 
 
 def main():
@@ -67,7 +68,7 @@ def main():
         timeout=30,
         check=True,
     )
-    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py", "test_project_revisions.py", "test_project_refresh.py", "test_run_comparison.py", "test_run_comparison_integration.py", "test_project_readiness.py", "test_project_readiness_integration.py", "test_patch_bundle.py", "test_patch_bundle_integration.py", "test_bundle_project_check.py", "test_bundle_project_check_integration.py", "test_bundle_workspace.py", "test_bundle_workspace_integration.py", "test_workspace_recheck.py", "test_workspace_recheck_integration.py", "test_snapshot_export.py", "test_snapshot_export_integration.py", "test_snapshot_project_check.py", "test_snapshot_project_check_integration.py", "test_snapshot_workspace.py", "test_snapshot_workspace_integration.py", "test_snapshot_recheck.py", "test_snapshot_recheck_integration.py", "test_snapshot_reexport.py", "test_snapshot_reexport_integration.py", "test_snapshot_editor.py", "test_snapshot_editor_integration.py", "test_workspace_search.py", "test_workspace_search_integration.py", "test_task_presets.py", "test_task_presets_integration.py"]:
+    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py", "test_project_revisions.py", "test_project_refresh.py", "test_run_comparison.py", "test_run_comparison_integration.py", "test_project_readiness.py", "test_project_readiness_integration.py", "test_patch_bundle.py", "test_patch_bundle_integration.py", "test_bundle_project_check.py", "test_bundle_project_check_integration.py", "test_bundle_workspace.py", "test_bundle_workspace_integration.py", "test_workspace_recheck.py", "test_workspace_recheck_integration.py", "test_snapshot_export.py", "test_snapshot_export_integration.py", "test_snapshot_project_check.py", "test_snapshot_project_check_integration.py", "test_snapshot_workspace.py", "test_snapshot_workspace_integration.py", "test_snapshot_recheck.py", "test_snapshot_recheck_integration.py", "test_snapshot_reexport.py", "test_snapshot_reexport_integration.py", "test_snapshot_editor.py", "test_snapshot_editor_integration.py", "test_workspace_search.py", "test_workspace_search_integration.py", "test_task_presets.py", "test_task_presets_integration.py", "test_preset_comparison.py", "test_preset_comparison_integration.py"]:
         tests = subprocess.run(
             [
                 sys.executable,
@@ -214,6 +215,7 @@ class Boundary(unittest.TestCase):
         **snapshot_editor_acceptance(jdk, work),
         **workspace_search_acceptance(jdk, work),
         **task_presets_acceptance(jdk, work),
+        **preset_comparison_acceptance(jdk, work),
     }
     (work / "acceptance.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, sort_keys=True))
