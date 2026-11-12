@@ -5,7 +5,11 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.18 adds **Scoped workspace editor**: explicitly select an approved
+Version 0.19 adds **Workspace search and focused reads**: explicitly search current
+approved files in a verified private snapshot review workspace, read small
+numbered ranges from source or protected tests, then open a pinned editable
+result in the existing editor. Search and read run no checks, Git commands,
+providers or model requests. It retains **Scoped workspace editor**: explicitly select an approved
 editable file in a verified private snapshot review worktree, load its exact
 current text, preview one unique replacement and save the pinned change. A fresh
 passing snapshot recheck is required before controller re-export. Editing runs
@@ -442,6 +446,58 @@ The host and private store must remain trusted and stable: sequential rechecks
 are not a multiwriter transaction or an atomic filesystem snapshot. Keep these
 archives, generated repositories, source copies, notes and logs out of public
 source and uploads.
+
+## Search a private snapshot review workspace
+
+Select a verified creation in **Snapshot workspace history**, then use
+**Workspace search and focused reads**. This panel searches the current selected
+private worktree; the task Context tab continues to show saved agent tool results.
+
+1. Enter a literal query and explicitly choose **Search approved workspace files**. Search
+   considers only approved selected UTF-8 files. Results show relative paths,
+   1-based line numbers, Unicode code-point columns, clipped excerpts, file hashes
+   and editable/protected labels. It never discovers directories or expands scope.
+2. Select a returned match, choose an inclusive range of up to 80 lines, then
+   explicitly **Read selected range**. The numbered range carries the current
+   whole-file and workspace hashes. Protected tests can be read in this panel.
+3. For an editable match, explicitly **Open editable result in editor** to load the full
+   bounded file in the existing editor after fresh file/workspace hash checks.
+   It does not preview or save an edit. Protected results cannot enter the editor.
+4. Review a unique exact replacement and explicitly save through the editor, then
+   perform a fresh snapshot recheck and separate private export review.
+
+Searches use the existing case-sensitive literal helper: queries contain 1–128
+UTF-8 bytes, with no NUL or newline. One hit is reported per matching line, in
+path/line order, with at most 20 returned hits. The inner serialized result stays
+within 8,192 bytes including editable labels; trailing hits may be omitted to fit,
+with total counts and clipping shown. Search/read wrappers are capped at 16,384
+bytes. Focused reads use 1-based inclusive ranges of at most 80 lines and a maximum
+line number of 1,000,000. Per-line search/read excerpts have 512/1,024-byte UTF-8
+limits. Empty files have no invented lines; LF, CRLF and lone CR are recognized
+without modifying underlying bytes. A clipped read may omit requested lines;
+returned ranges and flags state what was actually included.
+
+Each read and editor-open request pins the whole selected workspace snapshot and
+file hash from the search. Changed selected bytes, protected tests, source,
+task/config, creation/check or Git controls refuse stale access; search must be
+explicitly refreshed. The controller reinspects before and after responding.
+Parent workspace/input/history changes and explicit editor/recheck/export actions
+discard cached browser pins; late responses for old selections are ignored.
+Changing inputs never submits a search, read or editor-open request automatically.
+
+Search/read make no source/record writes, Git/check/worker/model calls, runtime
+reconciliation or hold access. An unrelated admission hold can remain while
+searching and reading. Editor-open reads saved admission for the editor and still
+writes no files; a hold blocks later saving. Malformed or unresolved edit evidence
+continues to refuse inspection. New results are current byte observations, not
+check results, model qualification, source-correctness proof or adoption approval.
+
+The 32-file/32-KiB-per-file/128-KiB-total selected scope remains unchanged. HTTP
+input is capped at 32,768 bytes for all three routes; editor-open retains the
+existing 262,144-byte full-text response bound. Trusted stable single-owner
+storage and sequential guards are not an atomic multiwriter snapshot. Search
+queries, excerpts and worktree content stay private. Archive formats, prior
+results and the original Java hold remain unchanged.
 
 ## Edit a private snapshot review workspace
 
@@ -1167,7 +1223,7 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-Final offline qualification passed 792 unit methods across 34 suites, including
+Final offline qualification passed 836 unit methods across 36 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1226,6 +1282,15 @@ Editor integration tests cover exact Unicode/CRLF bytes, stale controls, saved
 admission, one-use previews, restart, uncertain writes, partial records, bounds
 and a new-attempt requirement even after a byte-identical revert.
 
+Workspace-search acceptance navigates actual checked invented Python/Java
+workspaces through protected excerpts and pinned editable handoff, performs an
+explicit editor save, refuses old search pins, then runs fresh fixed checks and
+reviews/downloads private v2 exports. Guards prove navigation performs no checks,
+Git, providers, worker reconciliation or saved-record writes. A retained unrelated
+synthetic hold allows navigation while refusing a save. Unit/controller/HTTP
+checks separately exercise scope, source/config/Git/journal drift, Unicode and
+line endings, result bounds, races, restarts, framing and route-specific caps.
+
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
@@ -1238,7 +1303,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.18 adds no real-model qualification. Snapshot review workspaces,
+Version 0.19 adds no real-model qualification. Snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context

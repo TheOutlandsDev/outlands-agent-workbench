@@ -39,6 +39,7 @@ from snapshot_recheck import inspect as inspect_snapshot_recheck
 from snapshot_recheck import history_pin as snapshot_recheck_history_pin
 from snapshot_recheck import valid_receipt as valid_snapshot_recheck_receipt
 from snapshot_editor import read as read_snapshot_editor, prepare as prepare_snapshot_editor, save as save_snapshot_editor
+from workspace_search import search as search_workspace, read as read_workspace, validate_open as validate_workspace_open
 from git_workspace import inspect as inspect_workspace
 from git_workspace import validate_files as validate_workspace_files
 
@@ -2682,6 +2683,59 @@ class Manager:
         require(history == snapshot_recheck_history_pin(root), "SNAPSHOT_EDITOR_STALE")
         return ids, history
 
+    def _workspace_search_inspection(self, workspace_id):
+        require(type(workspace_id) is str and ID.fullmatch(workspace_id) is not None, "WORKSPACE_SEARCH_ID")
+        try:
+            return self._snapshot_recheck_inspection(workspace_id)
+        except Refused as error:
+            code = str(error)
+            suffix = ("UNRESOLVED" if code == "SNAPSHOT_EDITOR_UNRESOLVED" else
+                      "PROJECT_CHANGED" if code == "SNAPSHOT_RECHECK_PROJECT_CHANGED" else
+                      "CREATION_REQUIRED" if code in {"SNAPSHOT_RECHECK_CREATION_REQUIRED", "SNAPSHOT_RECHECK_ID"} else
+                      "LIMIT" if code.endswith("_LIMIT") else "RECORD_INVALID")
+            raise Refused("WORKSPACE_SEARCH_" + suffix) from None
+        except (OSError, ValueError, KeyError, TypeError, UnicodeError, RecursionError):
+            raise Refused("WORKSPACE_SEARCH_RECORD_INVALID") from None
+
+    def _workspace_search_unchanged(self, workspace_id, before):
+        require(self._workspace_search_inspection(workspace_id)["summary"] == before["summary"], "WORKSPACE_SEARCH_STALE")
+
+    def workspace_search(self, request):
+        """Search current approved worktree bytes without execution or state reconciliation."""
+        with self.lock:
+            require(type(request) is dict and set(request) == {"workspace_id", "query"}, "WORKSPACE_SEARCH_INPUT")
+            inspected = self._workspace_search_inspection(request["workspace_id"])
+            result = search_workspace(inspected, request["query"])
+            self._workspace_search_unchanged(request["workspace_id"], inspected)
+            require(len(canonical(result)) <= 16384, "WORKSPACE_SEARCH_OUTPUT_LIMIT")
+            return result
+
+    def workspace_read(self, request):
+        """Read a bounded numbered range with exact file and whole-snapshot pins."""
+        with self.lock:
+            require(type(request) is dict and set(request) == {"workspace_id", "path", "expected_sha256",
+                    "snapshot_sha256", "start_line", "end_line"}, "WORKSPACE_SEARCH_INPUT")
+            inspected = self._workspace_search_inspection(request["workspace_id"])
+            result = read_workspace(inspected, request["path"], request["expected_sha256"], request["snapshot_sha256"],
+                                    request["start_line"], request["end_line"])
+            self._workspace_search_unchanged(request["workspace_id"], inspected)
+            require(len(canonical(result)) <= 16384, "WORKSPACE_SEARCH_OUTPUT_LIMIT")
+            return result
+
+    def workspace_search_open(self, request):
+        """Explicit read-only handoff of one pinned editable result to the existing editor."""
+        with self.lock:
+            self.snapshot_editor_draft = None
+            require(type(request) is dict and set(request) == {"workspace_id", "path", "expected_sha256", "snapshot_sha256"},
+                    "WORKSPACE_SEARCH_INPUT")
+            inspected = self._workspace_search_inspection(request["workspace_id"])
+            validate_workspace_open(inspected, request["path"], request["expected_sha256"], request["snapshot_sha256"])
+            result = read_snapshot_editor(inspected, request["path"])
+            result["admission"] = self._snapshot_editor_admission()
+            self._workspace_search_unchanged(request["workspace_id"], inspected)
+            require(len(canonical(result)) <= 262144, "WORKSPACE_SEARCH_OUTPUT_LIMIT")
+            return result
+
     def snapshot_editor_files(self, request):
         with self.lock:
             self.snapshot_editor_draft = None
@@ -3375,6 +3429,30 @@ def make_handler(manager, token, origin):
                         result = manager.bundle_workspace_preview(path.removeprefix("/api/bundle-workspace-preview/"),
                                                                   raw, hashes[0] if hashes else None)
                     self.send(200, canonical(result))
+                    return
+                if path.startswith("/api/workspace-search") or path.startswith("/api/workspace-read"):
+                    routes = {"/api/workspace-search": manager.workspace_search,
+                              "/api/workspace-read": manager.workspace_read,
+                              "/api/workspace-search-open": manager.workspace_search_open}
+                    require(path in routes, "WORKSPACE_SEARCH_INPUT")
+                    types, lengths = self.headers.get_all("Content-Type", []), self.headers.get_all("Content-Length", [])
+                    require(self.headers.get("Transfer-Encoding") is None and len(types) == 1
+                            and types[0].split(";", 1)[0].strip().lower() == "application/json"
+                            and len(lengths) == 1 and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
+                            "WORKSPACE_SEARCH_INPUT")
+                    length = int(lengths[0])
+                    require(0 < length <= 32768, "WORKSPACE_SEARCH_LIMIT")
+                    raw = self.rfile.read(length)
+                    require(len(raw) == length, "WORKSPACE_SEARCH_INPUT")
+                    try:
+                        request = parse(raw)
+                    except Refused:
+                        raise Refused("WORKSPACE_SEARCH_INPUT") from None
+                    result = routes[path](request)
+                    encoded = canonical(result)
+                    limit = 262144 if path == "/api/workspace-search-open" else 16384
+                    require(len(encoded) <= limit, "WORKSPACE_SEARCH_OUTPUT_LIMIT")
+                    self.send(200, encoded)
                     return
                 if path.startswith("/api/snapshot-editor-"):
                     routes = {"/api/snapshot-editor-files": manager.snapshot_editor_files,
