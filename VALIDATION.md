@@ -1,84 +1,88 @@
-# Version 0.18 validation
+# Version 0.19 validation
 
-Final offline qualification on one Linux host passed **792 unit methods across
-34 suites**: the prior 744, 23 editor engine methods and 25 controller/HTTP
-methods. Actual Python/Java edit → fresh isolated recheck → reviewed private v2
-export passed, along with all prior acceptance probes. Editor operations made
-zero checks, Git commands, worker or model requests; fresh checks ran separately
-through existing fixed-check workers. Real bundles and evidence remain private.
+Final offline qualification on one Linux host passed **836 unit methods across
+36 suites**: the prior 792, 20 pure workspace-search methods and 24 controller/HTTP
+methods. Actual invented Python/Java search → protected/focused read → pinned
+editor handoff → explicit edit → fresh isolated recheck → reviewed private v2
+export passed, along with all prior acceptance probes. Navigation made zero
+checks, Git commands, workers or model requests. Real workspace content and
+bundles remain private.
 
 | Area | Observed result |
 | --- | --- |
-| Exact editing | One nonempty unique byte span; Unicode, LF/CRLF/mixed bytes and missing final newline preserved outside the span |
-| Scope | Existing approved editable snapshot-workspace files only; protected/control paths, links, escapes and unsafe modes refused |
-| Mode compatibility | Existing 0600/0644/0664 preserved beneath verified owner-only private job directory; original/candidate evidence is 0600 |
-| Pins | Source/task/config/creation/check/Git controls, all selected bytes, edit history and recheck history revalidated |
-| Admission | Saved holds, active/uncertain records, owned-worker entries and unresolved edits refuse saves without reconciliation |
-| One-use preview | Explicit list/open/preview/save; expiry, replacement and restart invalidate pins; no autosave or automatic rerun |
-| Retained writes | Failed and post-replacement uncertain outcomes retain evidence and block later mutations without cleanup/retry/rollback |
-| Journal | Strict finite receipts, original/candidate hashes, partial/link/count guards, aggregate bounds and new-record reservation |
-| Fresh checks | Every saved edit records prior attempt IDs; controller re-export refuses them, including after reverting to identical bytes |
-| HTTP | Session/origin and duplicate-header, transfer encoding, exact fields, body-size/short-read/JSON guards tested |
-| Python/Java | Actual separate fixed checks pass, private packets verify as strict v2 and exact baseline-to-snapshot patches |
-| Preservation | Original project/Git, historical creation/recheck/review evidence and unrelated synthetic holds remain unchanged |
-| Browser | Python LF and captured Java CRLF selection, explicit saves/checks/review/download, parent/selection/reload invalidation observed |
-| Download integrity | Both downloaded archives match acceptance digests and tested file hashes; notes and private paths absent |
-| Teardown | Owned temporary browser server stopped, listener closed and original/historical bytes verified unchanged |
+| Approved scope | Only current selected files in verified private snapshot workspaces; no recursive discovery or scope expansion |
+| Literal search | Case-sensitive matching, deterministic path/line order, Unicode columns and current file/workspace hashes |
+| Focused reads | Inclusive numbered ranges, protected/editable labels, LF/CRLF/CR, empty files and explicit clipping/EOF |
+| Pinned handoff | Explicit editable-only open rechecks whole snapshot and file hash; no automatic preview, save or run |
+| Stale evidence | Changed file/other selected file, source/config/task/Git/creation or unresolved edit evidence refuses access |
+| Race guards | Locked before/after inspections refuse drift observed during search, read or open |
+| Read-only navigation | Guarded search/read skip admission and hold access; all three navigation routes preserve private file hashes |
+| Held state | Search/read and admission-labelled handoff remain available under unrelated synthetic hold; later save refuses |
+| HTTP | Exact fields, authentication/origin, duplicate headers, transfer encoding, short reads, JSON and route-specific caps tested |
+| Python/Java | Actual separate fixed checks pass after explicit edits; strict v2 packets match exact tested snapshots |
+| Preservation | Original project/Git and historical creation/check/review records remain unchanged; synthetic holds retained |
+| Browser | Protected reads/editor refusal, Python LF, Java CRLF and café search, pinned handoff and full private export flows observed |
+| Invalidation | Parent, workspace selection, range, save and page reload discard old source observations and dependent editor pins |
+| Download integrity | Both browser ZIP hashes/strict v2 metadata/check counts/current selected hashes match private receipts |
+| Teardown | Temporary owned server stopped, listener closed, exactly two private editable targets changed and historical bytes preserved |
 
-## Evidence classes and retained development outcomes
+## Evidence classes and preserved outcomes
 
-Unit fixtures use invented selected projects. Engine tests use supplied inspection
-objects and guarded filesystem fixtures; they execute no project checks or Git.
-Controller tests use actual private Git creation with clearly invented check
-observations. These are separate from the full runner's actual Bubblewrap Python
-unittest and Java compilation/protected-main checks, and from the browser's
-actual Python four-test and Java one-main results. One Java test means one
-executed protected main, not its number of assertions. No model was called.
+All selected projects are invented. Pure engine tests use supplied inspection
+objects and never access files, Git, checks or a provider. Controller fixtures use
+actual private Git creation with clearly invented recorded check observations.
+These are separate from the full runner's actual Bubblewrap Python unittest and
+Java compilation/protected-main checks, and from the browser's actual Python
+four-test and Java one-main results. One Java test means one executed protected
+main, not an assertion count. No model was called.
 
-The first 20-method engine run passed. The first 23-method integration run
-exposed a real compatibility defect: the engine assumed mode 0600 while actual
-Git checkout files used host-created 0664. The engine now supports and preserves
-0600/0644/0664 inside the verified owner-only private job directory; 23 focused
-engine methods passed. The second 25-method integration run passed behavior
-checks but hit a test-cleanup double close after explicit restart. The corrected
-fixture owns both manager lifetimes; a separate 25-method run passed. All earlier
-logs remain retained. No failed runtime request, job or hold was retried, erased
-or relabelled. The final full qualification passed on its new private root.
+The first focused pure run passed 20 methods; the first focused integration run
+passed 24. The first full qualification passed 836 methods/36 suites and all
+actual acceptance probes on its new private root. Final engine/controller/UI
+bytes stayed unchanged through browser qualification and freeze. Earlier
+milestone failures, partial records, holds and successful results remain separate
+and preserved; no failed runtime request or held job was retried, erased or
+relabelled. A read-only download collector needed a task-root path normalization
+fix, then reread the same unchanged packets without repeating any application
+operation.
 
-The browser version badge was corrected to 0.18 during qualification, with an
-exact one-label HTML change; engine/controller/JavaScript bytes stayed unchanged.
-Reload verified that label and discarded unsaved editor pins. Browser tests
-reviewed and saved exactly two invented edits, performed fresh fixed checks,
-explicitly accepted/downloaded two private v2 packets, then closed the temporary
-server. Java selected text retained its original CRLF bytes despite browser
-textarea normalization. A parent SHA input change and workspace switch discarded
-old editor/export state. Browser locator and read-only download-collector helper
-errors were corrected without repeating a save, check, acceptance or download.
+Browser testing performed exactly two explicit saves, fresh rechecks, private
+acceptances and downloads. Protected Python/Java test excerpts remained read-only;
+editable handoff showed current exact hashes and Java CRLF bytes. Parent SHA-input
+change discarded search/editor previews, range change discarded excerpt/handoff,
+workspace switch disabled old export, and save cleared old search results. Reload
+cleared cached observations and displayed 0.19. After the actual check/export
+flows, an invented unrelated hold was added and retained; search/read/open and
+preview remained available while Save stayed disabled. This was a separate
+synthetic fixture, never a change to the original uncertain Java trial.
 
 ## Bounds and trust limits
 
-32 approved UTF-8 files, 32,768 bytes per file, 131,072 total selected bytes.
-Requests/full-text responses: 262,144 bytes. Previews: 131,072 bytes. Diff: 240
-lines/8,192 UTF-8 bytes with clipping. Journal: 200 entries, 2 MiB aggregate raw
-receipts, 32,768 bytes per receipt and reserved before a new write; retained
-original/candidate copies each have the per-file bound. Preview expiry is five
-minutes or restart. Unsafe, partial, malformed or unfinished records refuse
-without older-record fallback or repair.
+32 approved UTF-8 files, 32,768 bytes/file and 131,072 total selected bytes. Query:
+1–128 UTF-8 bytes, no NUL/newline; literal case-sensitive search returns one hit
+per matching line, at most 20. Inner search results remain within 8,192 serialized
+bytes including editable labels, trimming trailing hits when necessary while
+retaining total counts and truncation. Search/read wrappers: 16,384 bytes. Search
+line excerpts: 512 UTF-8 bytes. Focused reads: 1-based inclusive ranges of at most
+80 lines, maximum line number 1,000,000 and 1,024 UTF-8 bytes per line, with actual
+returned ranges/EOF/clipping. Empty files have no invented lines. HTTP input:
+32,768 bytes for all three navigation routes; editor-open output retains the
+existing 262,144-byte full-text bound.
 
-A save writes one existing private worktree file and a new separate journal,
-never original project files or historical results. A failure can leave the file
-changed with uncertain finalization. Sequential guards and atomic replacement
-assume a trusted stable single-owner filesystem; they are not multiwriter
-compare-and-swap, authenticity or crash-recovery proof. The controller's new
-attempt requirement uses the private journal; standalone archive verification
-remains a hash/evidence check without human approval or access to that journal.
-V1/v2 archive schemas remain unchanged. Passing fixed checks do not establish
-source correctness, model competence, provider completion or adoption permission.
+The controller supplies and repeats verified filesystem inspections; pure helper
+hashes are structural checks, not authorization or authenticity. Reads are
+sequential on trusted stable single-owner storage, not an atomic multiwriter
+snapshot or proof against transient changes. Search results are current byte
+observations, not checks, model qualification or adoption permission. Opening a
+result writes no files and does not bypass editor admission, review or fresh
+recheck requirements. Existing v1/v2 archive and edit/recheck schemas remain
+unchanged. Search queries, excerpts, relative paths and hashes contain private
+source context and stay outside public uploads.
 
 The original uncertain Java trial remains unqualified, with cause and provider
 completion unknown. Its exact hold/result hashes are unchanged. No model request,
 recovery, eviction, service change, original-project adoption or license assignment
-occurred. Earlier evidence remains in [version 0.17 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/5c4f5901ad07c114b9a20c27403387dc9ff732e4/VALIDATION.md).
+occurred. Earlier evidence remains in [version 0.18 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/4d431fbc13454eb418818906ef410025c122e533/VALIDATION.md).
 Qualification used Python 3.10.12, Git 2.34.1 and Temurin JDK 21.0.13+9 targeting
 Java 17 on Linux. Local passes are not GitHub CI passes. Licensing remains
 **UNASSIGNED**; see [origins](ORIGINS.md).

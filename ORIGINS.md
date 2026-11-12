@@ -163,3 +163,12 @@ No external editor, UI framework, copied parser or new dependency is included.
 Original/candidate source copies and real edit/runtime evidence stay private.
 The existing archive formats, notices, original Java hold and unassigned license
 remain unchanged. Offline tests and fixed checks do not qualify a local model.
+
+Version 0.19 brings interactive scoped literal search and focused numbered reads
+to verified private snapshot workspaces, with a pinned explicit handoff into the
+existing editor. It reuses the unchanged pure project_context helpers and snapshot
+inspection boundaries, adding approved editable/protected labels, browser stale
+response guards and invented offline Python/Java fixtures. No external search
+index, parser, editor framework or dependency was introduced. Queries, excerpts,
+worktrees and runtime evidence stay private. Archive schemas, original Java hold,
+notices and UNASSIGNED licensing remain unchanged. No new model result is claimed.
