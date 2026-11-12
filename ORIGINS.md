@@ -210,3 +210,15 @@ fixtures are synthetic observations, separate from actual independent fixed
 checks. Real histories, queries, goals, metadata and comparisons remain private.
 Existing notices, archive schemas, original uncertain Java hold and UNASSIGNED
 licensing stay unchanged; no live model qualification or reuse license is claimed.
+
+Version 0.23 adds explicit single-run saved-evidence review from a pinned history
+search selection. The new bounded anchored reader and pure reducer reuse the
+existing saved-comparison sanitation and request diagnostics, without invoking
+the live run view, worker reconciliation or model/runtime operations. Its
+interface displays saved task scope, check specifications and recorded results,
+historical request measurements and a bounded patch. Invented Python/Java
+histories and separate actual fixed checks remain different evidence classes.
+Real histories, goals, records, diagnostics, patches and review receipts remain
+private. No framework, dependency, service, search index or stored review token
+is added. Existing notices, original Java hold and UNASSIGNED licensing remain
+unchanged; no new real-model qualification or reuse license is claimed.

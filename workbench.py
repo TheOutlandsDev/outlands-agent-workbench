@@ -26,6 +26,7 @@ from preset_comparison import compare_goals
 from run_diagnostics import summarize as summarize_diagnostics
 from run_comparison import compare_runs
 from run_history import search_history, review_record
+from saved_run_review import review_saved_run
 from project_readiness import summarize as summarize_readiness
 from patch_bundle import MAX_ARCHIVE, build_bundle, verify_bundle
 from bundle_project_check import check_project
@@ -914,6 +915,194 @@ class Manager:
             require(self._run_history_inspection()[1] == pin, "HISTORY_SEARCH_HISTORY_CHANGED")
             require(len(canonical(result)) <= 65536, "HISTORY_SEARCH_OUTPUT_LIMIT")
             return result
+
+    @staticmethod
+    def _saved_run_review_file(fd, name, limit):
+        """Read bounded bytes, or only pin identity at limit zero; refuse unsafe files."""
+        require(type(limit) is int and 0 <= limit <= 262144, "SAVED_REVIEW_LIMIT")
+        try:
+            child = os.open(name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW, dir_fd=fd)
+        except FileNotFoundError:
+            return None, None, False
+        with os.fdopen(child, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_uid == os.getuid()
+                    and stat.S_IMODE(before.st_mode) == 0o600, "SAVED_REVIEW_STORE_UNSAFE")
+            raw = stream.read(limit + 1) if limit else b""
+            identity = Manager._task_preset_identity(before)
+            require(identity == Manager._task_preset_identity(os.fstat(stream.fileno()))
+                    == Manager._task_preset_identity(os.stat(name, dir_fd=fd, follow_symlinks=False)),
+                    "SAVED_REVIEW_EVIDENCE_CHANGED")
+            return raw, identity, len(raw) > limit
+
+    def _saved_run_review_inspection(self, run_id, metadata):
+        """Observe one saved task/result/events/patch without runtime readers."""
+        require(type(run_id) is str and ID.fullmatch(run_id) is not None
+                and type(metadata) is dict, "SAVED_REVIEW_INPUT")
+        opened, directories, notes, files = [], {}, [], {}
+
+        def note(code):
+            if code not in notes:
+                notes.append(code)
+
+        def directory(parent_fd, name, key, optional=False):
+            try:
+                fd = (readiness_directory(self.data) if parent_fd is None else
+                      os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd))
+            except FileNotFoundError:
+                if optional:
+                    directories[key] = None
+                    return None
+                raise
+            opened.append(fd)
+            info = os.fstat(fd)
+            require(info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o700,
+                    "SAVED_REVIEW_STORE_UNSAFE")
+            directories[key] = self._task_preset_identity(info)
+            return fd
+
+        def record(fd, name, key, limit, patch=False):
+            raw, identity, limited = ((None, None, False) if fd is None else
+                                     self._saved_run_review_file(fd, name, limit))
+            observation = {"identity": identity, "status": "MISSING", "sha256": None}
+            files[key] = observation
+            if raw is None:
+                note("RECORD_MISSING")
+                return None, None, 0
+            digest = sha(raw)
+            observation.update(status="LIMIT" if limited else "PRESENT", sha256=digest)
+            if limited:
+                note("RECORD_LIMIT")
+                if patch:
+                    note("PATCH_TRUNCATED")
+                # The manifest pins only this bounded prefix, plus file identity.
+                return None, None, len(raw)
+            try:
+                value = raw.decode("utf-8") if patch else parse(raw)
+                if not patch and type(value) is not dict:
+                    raise Refused("INVALID_JSON")
+            except (Refused, UnicodeError, ValueError, TypeError, RecursionError):
+                observation["status"] = "INVALID"
+                note("RECORD_INVALID")
+                return None, digest, len(raw)
+            return value, digest, len(raw)
+
+        try:
+            root_fd = directory(None, None, "data")
+            tasks_fd = directory(root_fd, "tasks", "tasks")
+            runs_fd = directory(root_fd, "runs", "runs")
+            run_fd = directory(runs_fd, run_id, "run", optional=True)
+            task, task_hash, _ = record(tasks_fd, run_id + ".json", "task", 32768)
+            result, result_hash, _ = record(run_fd, "result.json", "result", 32768)
+            patch, patch_hash, _ = record(run_fd, "changes.diff", "patch", 65536, patch=True)
+            names, invalid_names, truncated = [], [], False
+            if run_fd is not None:
+                with os.scandir(run_fd) as entries:
+                    for index, entry in enumerate(entries):
+                        if index >= 1024:
+                            truncated = True
+                            break
+                        if entry.name.startswith("event-"):
+                            if re.fullmatch(r"event-[0-9]{3,6}[.]json", entry.name) is None:
+                                invalid_names.append(entry.name)
+                                note("RECORD_INVALID")
+                            else:
+                                if len(names) == 256:
+                                    truncated = True
+                                    break
+                                names.append(entry.name)
+            else:
+                note("RECORD_MISSING")
+            if not names:
+                note("RECORD_MISSING")
+            if truncated:
+                note("EVENT_LIMIT")
+            events, remaining, budget_exhausted = [], 2097152, False
+            for name in sorted(names):
+                if remaining <= 1:
+                    budget_exhausted = True
+                    _, identity, _ = self._saved_run_review_file(run_fd, name, 0)
+                    files["events/" + name] = {"status": "NOT_READ" if identity is not None else "MISSING",
+                                              "sha256": None, "identity": identity}
+                    if identity is None:
+                        note("RECORD_MISSING")
+                    note("EVENT_LIMIT")
+                    continue
+                value, _, consumed = record(run_fd, name, "events/" + name, min(262144, remaining - 1))
+                remaining -= consumed
+                if remaining <= 1:
+                    budget_exhausted = True
+                    note("EVENT_LIMIT")
+                if value is not None:
+                    events.append(value)
+            # Repin directory names and descriptors. Missing run directories are
+            # observations too: appearance before this check is evidence drift.
+            checks = [(self.data, "data"), (self.data / "tasks", "tasks"),
+                      (self.data / "runs", "runs"), (self.data / "runs" / run_id, "run")]
+            for path, key in checks:
+                try:
+                    fd = readiness_directory(path)
+                except FileNotFoundError:
+                    require(directories[key] is None, "SAVED_REVIEW_EVIDENCE_CHANGED")
+                    continue
+                try:
+                    info = os.fstat(fd)
+                    require(info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o700,
+                            "SAVED_REVIEW_STORE_UNSAFE")
+                    require(directories[key] == self._task_preset_identity(info),
+                            "SAVED_REVIEW_EVIDENCE_CHANGED")
+                finally:
+                    os.close(fd)
+            manifest = {"id": run_id, "directories": directories, "files": files,
+                        "event_names": sorted(names), "invalid_event_names": sorted(invalid_names),
+                        "events_truncated": truncated, "event_budget_exhausted": budget_exhausted}
+            bundle = {"id": run_id, "metadata": metadata, "task": task, "task_sha256": task_hash,
+                      "result": result, "result_sha256": result_hash, "events": events,
+                      "patch": patch, "patch_sha256": patch_hash, "notes": sorted(notes)}
+            return bundle, sha(canonical(manifest))
+        except Refused as error:
+            if str(error).startswith("SAVED_REVIEW_"):
+                raise
+            raise Refused("SAVED_REVIEW_STORE_UNSAFE") from None
+        except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+            raise Refused("SAVED_REVIEW_STORE_UNSAFE") from None
+        finally:
+            for fd in reversed(opened):
+                os.close(fd)
+
+    def run_history_review(self, request):
+        """Explicit single-run saved evidence; no live state or recovery."""
+        with self.lock:
+            require(type(request) is dict and set(request) == {"id", "record_sha256", "history_sha256"},
+                    "SAVED_REVIEW_INPUT")
+            require(type(request["id"]) is str and ID.fullmatch(request["id"]) is not None
+                    and type(request["record_sha256"]) is str and SHA256.fullmatch(request["record_sha256"]) is not None
+                    and type(request["history_sha256"]) is str and SHA256.fullmatch(request["history_sha256"]) is not None,
+                    "SAVED_REVIEW_INPUT")
+            try:
+                records, history, _ = self._run_history_inspection()
+                require(request["history_sha256"] == history, "SAVED_REVIEW_HISTORY_CHANGED")
+                record = next((row for row in records if row["id"] == request["id"]), None)
+                require(record is not None, "SAVED_REVIEW_NOT_FOUND")
+                require(record["record_sha256"] == request["record_sha256"], "SAVED_REVIEW_RECORD_CHANGED")
+                require("id" not in record["metadata"] or (type(record["metadata"]["id"]) is str
+                        and record["metadata"]["id"] == request["id"]),
+                        "SAVED_REVIEW_RECORD_INVALID")
+                bundle, evidence = self._saved_run_review_inspection(request["id"], record["metadata"])
+                result = review_saved_run(bundle, record["record_sha256"], history, evidence)
+                require(self._saved_run_review_inspection(request["id"], record["metadata"])[1] == evidence,
+                        "SAVED_REVIEW_EVIDENCE_CHANGED")
+                require(self._run_history_inspection()[1] == history, "SAVED_REVIEW_HISTORY_CHANGED")
+                require(len(canonical(result)) <= 65536, "SAVED_REVIEW_OUTPUT_LIMIT")
+                return result
+            except Refused as error:
+                code = str(error)
+                if code.startswith("SAVED_REVIEW_"):
+                    raise
+                suffix = code.removeprefix("HISTORY_SEARCH_")
+                allowed = {"INPUT", "STORE_UNSAFE", "LIMIT", "HISTORY_CHANGED", "RECORD_CHANGED",
+                           "NOT_FOUND", "OUTPUT_LIMIT", "RECORD_INVALID"}
+                raise Refused("SAVED_REVIEW_" + (suffix if suffix in allowed else "STORE_UNSAFE")) from None
 
     def comparison_bundle(self, run_id):
         metadata_path = self.meta_path(run_id)
@@ -3678,6 +3867,24 @@ def make_handler(manager, token, origin):
                 self.guard(True)
                 require(self.headers.get("Origin") == origin, "ORIGIN_REFUSED")
                 path = urlsplit(self.path).path
+                if path == "/api/run-history-review":
+                    types, lengths = self.headers.get_all("Content-Type", []), self.headers.get_all("Content-Length", [])
+                    require(self.headers.get("Transfer-Encoding") is None and len(types) == 1
+                            and types[0].split(";", 1)[0].strip().lower() == "application/json"
+                            and len(lengths) == 1 and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
+                            "SAVED_REVIEW_INPUT")
+                    length = int(lengths[0])
+                    require(0 < length <= 32768, "SAVED_REVIEW_LIMIT")
+                    raw = self.rfile.read(length)
+                    require(len(raw) == length, "SAVED_REVIEW_INPUT")
+                    try:
+                        request = parse(raw)
+                    except Refused:
+                        raise Refused("SAVED_REVIEW_INPUT") from None
+                    encoded = canonical(manager.run_history_review(request))
+                    require(len(encoded) <= 65536, "SAVED_REVIEW_OUTPUT_LIMIT")
+                    self.send(200, encoded)
+                    return
                 if path.startswith("/api/run-history-"):
                     routes = {"/api/run-history-search": manager.run_history_search,
                               "/api/run-history-open": manager.run_history_open}

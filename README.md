@@ -5,7 +5,12 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.22 adds **Run history search and filters**: explicitly search saved
+Version 0.23 adds **Saved Run Review**: explicitly inspect one search result's
+saved task scope, check specifications and recorded results, historical request
+diagnostics and bounded patch. Review reads private saved evidence with current
+metadata/history pins and a second evidence check. It performs no live worker
+reconciliation and leaves Task, model, project and comparison slots unchanged.
+It retains **Run history search and filters**: explicitly search saved
 job metadata by ID or task text, filter by project/outcome, review pinned saved
 metadata and choose an existing comparison side. These actions never reconcile
 workers or start a task. It retains **Preset preview and comparison**: explicitly view a saved goal
@@ -1265,6 +1270,51 @@ stable single-owner storage and are not an atomic multiwriter snapshot.
 Queries, goals, saved IDs, metadata, comparisons and hashes contain private
 project context. Keep real histories and evidence out of public uploads.
 
+## Review one saved run
+
+Search saved history, explicitly select a result, then choose **Review selected
+saved evidence**. The selected run's metadata/history pins must still match.
+The read-only panel shows its saved goal, approved relative file scope and
+fingerprints, editable-file choices, check specifications and budgets, recorded
+check counts/outcomes, historical request diagnostics and bounded patch preview.
+These are saved observations, not current project correctness or live worker
+status. A recorded response is not proof that a task succeeded or that an
+unsettled provider request finished. No private source file is opened.
+
+Missing or malformed optional records remain Unknown with finite notes. Failed,
+uncertain, running and legacy observations remain as saved; review does not
+repair records, retry a run or inspect or clear a hold. Historical diagnostics
+omit live-state and hold fields. Missing task budgets are Unknown rather than
+defaulted to an invented allowance. The complete bounded saved goal is retained;
+patch clipping and incomplete evidence are explicit. Raw prompts, responses,
+exception text, check output, private extra fields and absolute source paths are
+excluded from this response.
+
+This action is separate from **Review selected saved metadata**, the Left/Right
+handoffs and **Compare saved runs**. It changes none of those selections and
+never starts Run, checks, Git or a model. Changing search text, filters, selection
+or navigation discards old evidence; stale responses cannot fill an old view.
+An unrelated admission hold may leave saved review available while Task/Run stay
+disabled. Review writes no index, token, cache, job or history record.
+
+Each evidence inspection reads task/result files up to 32,768 bytes each and
+patch bytes up to 65,536, with at most 8,192 UTF-8 bytes displayed. It admits at
+most 256 event names while processing at most 1,024 directory entries, with one
+lookahead for truncation. Events are limited to 262,144 bytes each and a 2-MiB
+aggregate read budget including refusal-byte reservations. Oversized records
+produce limit notes; only a bounded prefix and file identity are pinned, never
+an unbounded full-file hash. Admitted events skipped after the byte budget is
+spent still undergo safety and identity checks without reading contents.
+Unsafe links, ownership, modes, multiple links or
+changed evidence refuse review. Both saved evidence and bounded metadata history
+are inspected twice. These bounds apply per inspection, not to the entire
+request. The response is at most 65,536 bytes and refuses if its complete
+sanitized content cannot fit. Sequential pins assume trusted stable single-owner
+storage and are not an atomic multiwriter snapshot.
+
+Real saved tasks, names, goals, hashes, diagnostics, results and patches contain
+private project context and stay outside public source uploads.
+
 ## Compare saved runs
 
 Choose **Compare runs**, select two different saved-run IDs, then press
@@ -1382,7 +1432,7 @@ python3 -B qa_agent.py --jdk-home /absolute/jdk \
   --work-dir /absolute/new-private-acceptance
 ```
 
-Final v0.22 offline qualification passed 961 unit methods across 42 suites, including
+Final v0.23 offline qualification passed 1,004 unit methods across 44 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1463,11 +1513,24 @@ full-goal and ID search, project/state/unknown filters, pinned metadata review,
 deliberate comparison handoffs, separate explicit Compare, restart and retained
 holds. Saved outcomes are seeded observations, not executed agent results.
 Separate actual fixed checks pass on selected Python/Java copies. The final
-frontend passed 183 isolated Node validator/handoff checks and browser checks
+v0.22 frontend passed 183 isolated Node validator/handoff checks and browser checks
 for explicit actions, Unicode, literal markup, local invalidation and held-state
 review. The browser fixture stubs the normal live history feed empty to isolate
 this panel; it does not qualify live worker reconciliation. See validation for
 the frontend-only amendment and retained test-collector corrections.
+
+Saved-run-review acceptance covers nine invented Python/Java ready, failed,
+uncertain, running, legacy, corrupt and unknown saved histories, separate explicit
+Compare consistency and exact review/hash persistence after restart. It preserves
+all source/config/task/record bytes and modes plus an unrelated hold, then runs
+independent fixed checks on selected copies. The final v0.23 frontend passed 189
+isolated Node checks, including actual pure-helper Python/Java/legacy response
+compatibility. Browser checks cover complete goals, scope, check specifications,
+results, diagnostics, patch text, separate metadata review, missing budgets,
+stale-history refusal, restart and held-state review. The live history feed is
+stubbed empty in that browser fixture; qualification does not establish live
+worker reconciliation or real-model completion. VALIDATION.md records all limits
+and retained collector corrections.
 
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
@@ -1481,7 +1544,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.22 adds no real-model qualification. Preset previews, named task presets, snapshot review workspaces,
+Version 0.23 adds no real-model qualification. Saved-run reviews, preset previews, named task presets, snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context

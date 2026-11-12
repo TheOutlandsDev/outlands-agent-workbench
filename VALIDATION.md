@@ -1,121 +1,149 @@
-# Version 0.22 validation
+# Version 0.23 validation
 
-Final offline qualification on one Linux host passed **961 unit methods across
-42 suites**: the prior 919, 26 pure history methods and 16 controller/HTTP methods.
-Actual invented Python/Java history search → pinned metadata review → deliberate
-ID handoff → separate explicit comparison → restart passed. Separate actual
-fixed checks passed on selected copies: four Python unit tests and one Java
-protected main. All prior acceptance probes also passed. No agent Run or model
-inference was started by the new acceptance.
+Final offline qualification on one Linux host passed **1,004 unit methods across
+44 suites**: the prior 961, 22 pure saved-review methods and 21 controller/HTTP
+methods. Invented Python/Java single-run search → explicit saved-evidence review
+→ separate comparison → restart acceptance passed. Separate actual fixed checks
+passed on selected copies: four Python unit tests and one Java protected main.
+All prior acceptance probes also passed. The new acceptance started no agent Run
+or model inference, and the complete runner made zero inference requests.
 
 | Area | Observed result |
 | --- | --- |
-| Search | Literal case-sensitive query matches a valid full saved goal or ID before display clipping; no text normalization or query trimming |
-| Filters | Exact historical project alias and saved state, including explicit unknown values; choices include inspected historical projects |
-| Ordering | Known creation times newest first, then unknown; descending ID breaks ties |
-| Metadata | Explicit review rechecks collection and raw-record hashes and returns only cleaned saved metadata; private extra fields excluded |
-| Evidence drift | Changed records/history, stale pins, unsafe stores, malformed wrappers and duplicate IDs refuse without repair |
-| Boundaries | Search/open read jobs metadata only; no config/task/source/result/event/hold reader, process probe, provider, worker or live-history reconciliation |
-| HTTP | Explicit POST routes inherit session/Host/Origin, strict JSON/framing and request/response bounds; negative cases covered |
-| Handoff | Fresh explicit metadata open fills only the requested Left or Right slot; no automatic pair, Task assignment or Compare request |
-| Comparison | Existing saved-evidence comparison is a separate explicit action and may read its existing task/result/event/diff inputs |
-| Python/Java | Seeded saved observations searched/reviewed; independent fixed checks pass on copies without changing original source/config/tasks |
-| Browser | Explicit search/review/handoff/Compare, Unicode, literal markup, no matches, unknown metadata, input invalidation and restart observed |
-| Held state | Read-only history review works with an unrelated invented hold while Task/Run remain disabled and composer values unchanged |
-| Preservation | All initial 56 browser fixture files retain exact bytes/modes; only a new invented hold was added and retained |
-| Teardown | Both temporary owned servers stopped and the loopback listener was verified closed |
+| Explicit action | One pinned search selection opens saved scope, check specifications/results, historical diagnostics and patch without a second run |
+| Shared sanitation | Reuses the existing pure Compare-side summary; complete valid goal retained, private extras and raw request/response/output text excluded |
+| Historical diagnostics | Live-derived state and hold fields omitted; missing budgets and absent non-scripted request evidence remain Unknown |
+| Saved outcomes | Failed, uncertain, running, legacy and corrupt observations retained without reconciliation, repair or retry |
+| Current pins | Requested raw metadata/history pins validated, then evidence and metadata history independently inspected again before return |
+| Evidence manifest | Admitted names, raw hashes or bounded prefix hashes, missing/invalid/limited markers and file/directory identities participate |
+| Unsafe stores | No-follow, owner-only regular single-link files and anchored private directories required; unsafe storage and identity drift refuse |
+| Byte exhaustion | Admitted events skipped after the read budget still receive zero-byte safety and identity checks |
+| HTTP | Explicit POST uses session/Host/Origin checks and exact JSON/framing/request/response caps; negative cases tested |
+| UI | Exact nested DTO/type/enum/pin validation, text nodes, explicit single review request, busy locks and stale-response guards |
+| Separation | Review changes no Task/model/project/comparison slot; existing metadata review and Compare remain separate explicit actions |
+| Restart/hold | UI clears cached evidence; saved hashes/review persist; an unrelated invented hold remains and keeps Task/Run disabled |
+| Preservation | All 77 original browser fixture files retain exact bytes/modes; only an invented tenth job and unrelated hold were added |
+| Teardown | Both temporary owned servers stopped; the loopback listener was verified closed |
 
-## Evidence classes and retained corrections
+## Evidence classes and review sequence
 
-All selected projects, names, histories and instructions are invented. Saved
-REVIEW_READY, FAILED and UNCERTAIN rows are seeded observations, not actual agent
-outcomes. Pure helper tests perform no I/O or runtime work. Controller fixtures
-guard excluded readers and operations and exercise actual private metadata files
-and bounded HTTP. Separate Bubblewrap Python unittest and Java compilation/
-protected-main checks on selected copies are independent of search/open. One Java
-test denotes one protected main, not an assertion count. Prior scripted-client
-acceptance remains separate and does not qualify a real model.
+All projects, histories, names and instructions used for qualification are
+invented. Saved ready/failed/uncertain/running labels, checks and patches are
+seeded observations, not executed agent results. Nine cases cover Python/Java
+ready and failed histories plus uncertain, running, legacy, corrupt and unknown
+evidence. The pure helper performs no I/O or mutation. Controller fixtures guard
+live view/history/refresh/result, source/config/hold, process/provider/worker,
+check and Git boundaries while exercising real private files and bounded HTTP.
+Separate actual Bubblewrap Python unittest and Java compile/protected-main checks
+run on copied selected bytes. One Java test means one protected main, not an
+assertion count. Prior scripted-client checks do not qualify a real model.
 
-The first pure run passed 26 methods. The initial integration run passed 15 of
-16: a test expected query/filter errors for non-string inputs, whereas the
-contract requires an input error. Correcting only that expectation yielded
-16/16; both logs are retained. The first complete backend qualification passed
-961/42 and actual acceptance. Independent frontend review found malformed
-match-field and note types plus terminal-line-separator identifier acceptance.
-Only the new history validators in app.js were tightened. The other 99 qualified
-executable/static/input hashes stayed unchanged; no Python/controller/Java input
-changed. The amended frontend passed **183 isolated Node validator and mocked
-handoff checks** and independent review. An initial negative Node fixture had
-misclassified a valid alias as invalid; its correction required no source edit.
-All 100 final qualified inputs match the reviewed snapshot.
+The first pure run passed 22 methods. The initial controller suite passed 19.
+Independent review then found that admitted events skipped after exhausting the
+byte budget needed safety/identity pins even though no content could be read.
+The reader was tightened before complete qualification, and two added regression
+methods passed with the amended 21-method suite. Malformed event-prefixed names
+with bad extensions are also noted and pinned without reading their contents.
+Both focused logs remain retained. Unknown historical budgets and absent request
+completion were clarified before the first pure run, avoiding invented 1/1
+budgets or a claim of non-applicability from missing non-scripted evidence.
 
-One preliminary browser opening of the existing comparison-history reader
-preceded the frontend amendment; it made no new search, metadata-open or Compare
-request. The corrected UI was reloaded before all 17 final browser observations.
-The browser fixture deliberately stubs the normal live history feed empty and
-counts it, preventing unrelated saved-worker reconciliation during this panel's
-qualification. New search/open and the existing read-only comparison routes are
-real. This is not acceptance of the normal live history feed or worker recovery.
+Frontend static/syntax checks passed, followed by 177 preliminary and 189 final
+isolated Node validator/mocked-request checks. A missing-selection guard and
+strict sorted diagnostic-note validation were finalized before the last run.
+Actual invented Python, Java and legacy helper responses passed compatibility
+checks. Independent final controller/UI review passed before complete
+qualification. All 104 qualified executable/static/example input hashes stayed
+unchanged through the full runner, browser qualification and freeze. No failed
+runtime request or held job was retried, cleaned up, erased or relabelled.
 
-Across two browser sessions there were nine explicit search requests, seven
-metadata-open requests (including handoffs), and one explicit Compare request.
-Search controls did not issue requests on typing, filter changes or local Clear.
-Search matched a query beyond the normal goal prefix, and the clipped excerpt
-retained the complete query. Metadata review showed the complete Unicode goal
-and literal markup as text. Left-only handoff kept Right empty; later Right
-handoff left comparison unrequested until the separate Compare click. A read-only
-collector initially checked only the first part of the comparison panel; the
-full DOM confirmed both IDs/cards. Compare was not repeated to correct that
-collector. Java combining/astral text, case-sensitive no-match, unknown legacy
-metadata and retained uncertain observations were also reviewed. Reload cleared
-cached results/details and comparison slots. A subsequent review after restart
-worked under an invented hold with Task/Run disabled. No captured browser console
-warnings/errors occurred; the observed badge was 0.22.
+## Browser observations
 
-Guarded Run/start, refresh, process-probe, provider, outbound HTTP and worker-launch
-counts were all zero. Existing comparison-history reads are separate from search
-and may occur when opening the panel; the empty normal-feed stub is a fixture
-limit. Initial source/config/task/job/run bytes and modes remained unchanged.
-No historical failure, partial record or hold was retried, cleaned up, erased or
-relabelled. Private fixture observations and logs are excluded from publication.
+The browser used a fresh invented fixture, with Run/start, refresh, process
+probes, provider/outbound HTTP and worker launches blocked and counted. The normal
+live history feed was deliberately stubbed empty to isolate this read-only panel
+from unrelated saved-worker reconciliation. New metadata search/open and saved
+review routes are real. This does not qualify the live history feed or recovery.
+
+Seven explicit searches, one metadata-open and eleven explicit saved-review
+requests occurred across two sessions. One review intentionally refused a stale
+history pin after an additive invented tenth job; the other ten displayed saved
+evidence. A separate fresh search/review succeeded without changing the original
+nine records. There were zero browser Compare requests and zero guarded
+execution/provider/process calls. Opening, typing, filters, selection, local Clear
+and disclosure expansion issued no automatic review request.
+
+Python review showed its complete combining/astral Unicode goal and literal
+markup, editable/protected file scope, task/result fingerprints, fixed check
+specifications, baseline/final check counts, historical diagnostics and saved
+patch. Java failed review showed its java-main sources/main class and recorded
+failed checks. Existing failed, uncertain, running, legacy and corrupt views
+retained their distinct observations. Missing task budgets displayed Unknown;
+absent non-scripted request evidence displayed provider completion unknown.
+Separate metadata review discarded full saved evidence, and a no-match search
+kept the evidence action disabled. Composer values and both comparison slots
+remained unchanged. Close retained the draft; reload cleared query, selection
+and review. After restart, review of Java evidence remained available while an
+invented unrelated hold kept Task and Run disabled. That hold was retained.
+
+Three browser collector corrections are preserved privately: disclosure controls
+were HTML SUMMARY elements rather than the inferred Playwright button role; an
+assertion expected capitalized Unknown instead of the rendered provider-completion
+label; another expected a RUNNING result in a fixture deliberately missing its
+result, whose separate saved-state label correctly remained Running. Existing
+rendered fields confirmed each result without repeating the application review
+request or changing application source. Twenty-six private observation records
+and screenshots preserve the flow. Captured warnings/errors before restart were
+zero; a second console collection was not made after restart.
+
+Both sessions preserved all initial fixture bytes and modes. The only additions
+were the explicit synthetic history-pin test job and the invented hold. Private
+fixture logs, records, hashes and screenshots are excluded from public source.
 
 ## Bounds and trust limits
 
-Each inspection processes at most 1,024 directory entries, admits at most 200
-metadata filenames, reads at most 32,768 bytes per file and stays within a 2-MiB
-logical read budget including overflow-byte reservations. One lookahead entry
-can be consumed to detect truncation. Search and open each perform two bounded
-inspections to detect intervening drift; 2 MiB is not a total per-request bound.
-Metadata files must be owner-only regular single-link files in owner-only
-anchored data/jobs directories. No-follow opens and descriptor/path identity
-checks reject unsafe or changed storage. This is a sequential observation on
+The request contains exactly one 16-lowercase-hex run ID and two 64-lowercase-hex
+metadata/history pins. Existing bounded jobs inspection admits at most 200 names,
+processes at most 1,024 directory entries with one lookahead, reads at most
+32,768 bytes per record and uses a 2-MiB logical budget per inspection.
+
+Saved evidence requires owner-0700 anchored data/tasks/runs/selected-run directories
+and owner-0600 regular single-link no-follow files. The selected run directory
+may be absent; required parent directories may not be unsafe or substituted.
+Task/result limits are 32,768 bytes each. Patch input is at most 65,536 bytes,
+with an 8,192-byte UTF-8 preview and explicit clipping/integrity notes. At most
+256 exact event names are admitted while processing at most 1,024 directory
+entries plus one lookahead. Each event reads at most 262,144 bytes plus a possible
+refusal byte; all event reads together stay within 2 MiB including those
+reservations. Remaining admitted files receive safety/identity checks with zero
+content bytes after exhaustion. Malformed event-prefixed names are observed but
+not opened. Partial event catalogs and byte limits are explicit.
+
+A bounded overflow prefix and file identity are pinned for an oversized record;
+this is not a full-file content hash or complete-evidence claim. Optional malformed
+JSON/UTF-8 and missing records stay Unknown with finite notes. Unsafe links,
+ownership, mode, multiple links and changed identities refuse instead of falling
+back. Raw prompts, responses, exception text, check output, extra private fields
+and absolute source paths are not returned. Saved goals, selected relative paths,
+model labels and patches remain private project context intentionally shown in
+the local owner interface.
+
+Both metadata history and saved evidence are inspected twice. Limits apply per
+inspection, not to the entire request. Pins are sequential observations on
 trusted stable single-owner storage, not an atomic multiwriter snapshot or a
-crash-durability guarantee.
+crash-durability guarantee. They do not prove authenticity, rights, current source
+correctness or provider completion. No new stored index, review token, cache,
+archive format, execution route or external dependency is introduced. HTTP input
+is at most 32,768 bytes; the complete canonical response is at most 65,536 and
+refuses if it cannot fit without silently dropping the valid full goal.
 
-A query is at most 128 UTF-8 bytes and excludes NUL, CR, LF and invalid Unicode.
-Empty query means all inspected rows. Saved valid goals allow 0–2,000 codepoints
-and at most 8,000 UTF-8 bytes; legacy missing/invalid fields become unknown,
-with invalid-present fields explicitly noted. Known labels display at most
-160 UTF-8 bytes. Query matches are computed before clipping; metadata review
-returns the complete cleaned goal. Results are capped at 100 rows and reduced
-further to fit the 65,536-byte canonical response. Matched/returned/inspected
-counts and independent catalog/result truncation flags disclose omissions.
-The new HTTP requests are at most 32,768 bytes. A truncated catalog is a bounded
-subset, not a claim that all saved runs were searched.
-
-The frontend validates response shapes, exact enum/type membership, ID/hash
-lengths and complete alias matches, with text-node rendering and current-input
-checks before handoff. Hash pins are integrity observations, not ownership,
-authenticity or authorization proofs. Saved states are observations, not live
-status or current source correctness. Search reads no source and performs no
-checks. It creates no persistent search cache, token, history index or record.
-
-Real histories, goals, names, configuration, source, comparisons, bundles and
-runtime records remain excluded from public uploads. The original uncertain
-Java trial remains unqualified; cause and provider completion are unknown. Its
-exact hold/result preservation hashes remain unchanged. No inference, recovery,
-eviction, service change, original-project adoption or license assignment
-occurred. Earlier evidence remains in [version 0.21 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/a94ce24f01eee07aeaafb6dce6ca9484e0865fad/VALIDATION.md).
+Real histories, tasks, goals, names, configuration, diagnostics, patches, bundles,
+logs and runtime records remain excluded from public uploads. The original
+uncertain Java trial remains unqualified, with cause and provider completion
+unknown. Its exact hold/result preservation hashes remain unchanged; no held
+Manager or runtime reader was instantiated. No inference, recovery, eviction,
+service change, original-project adoption or license assignment occurred.
+Earlier evidence remains in [version 0.22 validation](https://github.com/TheOutlandsDev/outlands-agent-workbench/blob/c75d5e3fbaebf3811e327df3621bf4d10456f884/VALIDATION.md).
 Qualification used Python 3.10.12, Git 2.34.1 and Temurin JDK 21.0.13+9 targeting
 Java 17 on Linux. Local passes are not GitHub CI passes. Licensing remains
 **UNASSIGNED**; see [origins](ORIGINS.md).
