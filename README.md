@@ -41,6 +41,12 @@ refusal, later scoped trace classification and private restart-gate limits remai
 documented in [validation](VALIDATION.md). The `launch.py` prerequisite doctor
 was not exercised by this server-CLI check.
 
+A later, separate `launch.py --check-only` trial passed with no model or JDK
+configured. It covers one isolated Python prerequisite unittest and Git version
+inspection, with the requested workspace remaining absent. The full launcher
+handoff and server startup were not exercised by this check; its evidence and
+temporary-file limits are recorded in [validation](VALIDATION.md).
+
 This is controlled process-lifecycle verification with unchanged production
 engine, admission and providers. It retains **Complete Review Workflow Verification**: the restricted
 offline harness can inspect the completed scripted run through normal history,
