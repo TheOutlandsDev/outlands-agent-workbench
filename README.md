@@ -47,6 +47,12 @@ inspection, with the requested workspace remaining absent. The full launcher
 handoff and server startup were not exercised by this check; its evidence and
 temporary-file limits are recorded in [validation](VALIDATION.md).
 
+A separate full launcher trial then passed with a fresh absent workspace and no
+model or JDK. It completed the doctor, initialized the demo and handed the same
+process to the normal server. The browser showed genuinely empty history; no
+task was run. Normal server shutdown and workspace/source preservation were
+observed, with the narrow limits recorded in [validation](VALIDATION.md).
+
 This is controlled process-lifecycle verification with unchanged production
 engine, admission and providers. It retains **Complete Review Workflow Verification**: the restricted
 offline harness can inspect the completed scripted run through normal history,
