@@ -189,6 +189,45 @@ qualification. The earlier 1,214-method/56-suite native result, observer/gate
 failures and limits remain separate; the original Java hold and UNASSIGNED
 licensing remain unchanged.
 
+## Separate full launcher handoff observation
+
+On **2026-11-13**, one unchanged full `launch.py` invocation used the 132-file
+source at merged commit `951e46b4c2d427429ad417341169dc0447f0d1fe`, a fresh absent
+private workspace and no model or JDK. It produced the doctor PASS line followed
+by the normal server URL. The same owned PID and process start stamp survived
+execve, with the exact expected `workbench.py serve` command after handoff.
+
+The doctor inspected Git's version and its unchanged PASS gate establishes one
+isolated Python prerequisite unittest with the required passing flags. Raw
+isolated unittest output is unavailable from the normal launcher. The product
+removed its disposable self-test/output files; the temporary area was empty at
+closure. Private launcher logs, ready/result records and the new workspace remain
+retained. The earlier check-only observation remains a separate trial.
+
+Genuine demo initialization created six files and 18 directories, including the
+workspace root. Configuration had no models and one Arithmetic demo project;
+the two project files and task matched the source fixtures exactly. All 15 data
+stores remained empty. The browser loaded Arithmetic demo, Scripted / no
+inference and history zero, with no feed patch. No task Run or Stop was requested,
+and the tab was closed before server shutdown. The copied calculator fixture is
+intentionally initially failing; no project tests were run or fixes inferred.
+
+Normal SIGTERM server shutdown exited zero, the owned listener refused a later
+connection with ECONNREFUSED, and launcher stderr was empty. No recorder
+containment was used. Ready and closed workspace snapshots had identical bytes,
+modes and link counts. All 132 source hashes matched before and after, before
+this documentation update. Root's two authorized original Java preservation
+hashes also remained unchanged.
+
+This observes only demo setup without a configured model, process handoff,
+browser loading and shutdown. It adds no task, model, JDK, real-project, Git
+project-operation or GitHub CI qualification, and no syscall or broad descendant
+audit was performed. Raw host versions, paths, process/port/token values and
+runtime records remain private. Earlier failures, observer/gate limits, unknown
+causes and the 1,214-method/56-suite native qualification remain separate. The
+original uncertain Java hold and UNASSIGNED licensing remain unchanged; no code
+feature, deployment or license change is introduced.
+
 ## Scope and evidence classes
 
 Four new source modules provide a separate live Run/Stop QA wrapper, native

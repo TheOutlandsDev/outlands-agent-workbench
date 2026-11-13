@@ -363,3 +363,16 @@ retained private launcher outputs and result evidence. This adds no public
 helper, code feature, dependency, full launcher/server qualification, project
 check, model or Java-agent result. Earlier failures, unknown causes, private-data
 exclusions, the original uncertain Java hold and UNASSIGNED licensing remain.
+
+### Version 0.29 full launcher handoff observation
+
+A separate unchanged full-launcher trial on 2026-11-13 passed the doctor,
+initialized a fresh demo workspace without model/JDK configuration and handed
+the same process to the normal server. Browser loading showed genuine empty
+history, followed by normal owned server shutdown and preserved workspace/source
+bytes. No task or project check ran; this is not a model or coding-fix result.
+The product's disposable prerequisite self-test cleanup is separate from retained
+private logs and workspace evidence. No public helper, product feature,
+dependency, syscall audit, deployment or rights claim is added. Earlier failures,
+private gate limits, unknown causes, the original uncertain Java hold and
+UNASSIGNED licensing remain.
