@@ -159,6 +159,36 @@ tool pins. The original uncertain Java trial remains held/unqualified. Earlier
 unconfirmed causes remain separate. No new unit-test, GitHub CI, real-model or
 Java-agent qualification, code feature, deployment or license change follows.
 
+## Separate launcher check-only prerequisite observation
+
+On **2026-11-13**, one unchanged `launch.py --check-only` invocation used the
+132-file source at merged commit `e45a27ce1dc8a007c0366ebc64c04346f8953341`, a
+fresh private workspace path and no model or JDK configuration. It returned PASS
+and exit zero, with no launcher stderr, outer timeout or containment. All 132
+source hashes matched before and after, before this documentation update, and
+the requested workspace remained absent. The earlier server-CLI observations
+did not run this separate doctor.
+
+The launcher inspected Git's version and its unchanged PASS condition requires
+exactly one isolated Python prerequisite unittest, exit zero and no timeout,
+output-limit or infrastructure-error flags. That source gate establishes the
+count of one; the normal CLI does not expose the raw isolated unittest output.
+No raw host versions, private paths or runtime identifiers are published here.
+
+The product normally removes its fresh disposable self-test directory and
+temporary check-output file. The trial's temporary area was empty at closure.
+This expected cleanup is distinct from the private launcher stdout, stderr,
+process result and source-pin evidence, which remain retained. It does not
+remove or relabel any earlier failed fixture. Failure detail from this CLI is
+sparse; the PASS does not reconstruct historical failure causes.
+
+This qualifies only that prerequisite configuration. No workspace initialization,
+full launcher handoff, server, provider, JDK, project check, model or coding agent
+was exercised. It adds no Git project-operation, unit-suite rerun or GitHub CI
+qualification. The earlier 1,214-method/56-suite native result, observer/gate
+failures and limits remain separate; the original Java hold and UNASSIGNED
+licensing remain unchanged.
+
 ## Scope and evidence classes
 
 Four new source modules provide a separate live Run/Stop QA wrapper, native

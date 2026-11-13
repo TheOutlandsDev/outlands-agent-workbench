@@ -352,3 +352,14 @@ concurrent-mutation qualification. No product code, frontend feature, dependency
 upstream implementation, rights claim or license is added. Earlier failures,
 unknown historical causes, private-record exclusions, the original uncertain
 Java hold and UNASSIGNED licensing remain.
+
+### Version 0.29 launcher check-only observation
+
+A separate unchanged `launch.py --check-only` trial on 2026-11-13 passed with no
+model or JDK configured. It inspects Git's version and requires one disposable
+isolated Python prerequisite unittest; the raw unittest output is not exposed
+by the launcher. The product's temporary self-test cleanup remains distinct from
+retained private launcher outputs and result evidence. This adds no public
+helper, code feature, dependency, full launcher/server qualification, project
+check, model or Java-agent result. Earlier failures, unknown causes, private-data
+exclusions, the original uncertain Java hold and UNASSIGNED licensing remain.
