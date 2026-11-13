@@ -34,6 +34,13 @@ Run/Stop browser observations remain separate historical evidence. See
 [validation](VALIDATION.md) for the dated scope, preserved failures and limits.
 No new real-model or agent trial was performed.
 
+A separate normal `workbench.py serve` observation now covers browser loading of
+fresh invented Python/Java saved histories, read-only restart and owned server
+shutdown. It executes no task, project check or model. The first strict observer
+refusal, later scoped trace classification and private restart-gate limits remain
+documented in [validation](VALIDATION.md). The `launch.py` prerequisite doctor
+was not exercised by this server-CLI check.
+
 This is controlled process-lifecycle verification with unchanged production
 engine, admission and providers. It retains **Complete Review Workflow Verification**: the restricted
 offline harness can inspect the completed scripted run through normal history,
