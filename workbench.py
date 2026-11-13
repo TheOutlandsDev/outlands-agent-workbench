@@ -28,6 +28,7 @@ from run_comparison import compare_runs
 from run_history import search_history, review_record
 from saved_run_review import review_saved_run
 from saved_review_decisions import summarize_review_decision
+from saved_review_history import summarize_review_history, inspect_review_history_entry
 from project_readiness import summarize as summarize_readiness
 from patch_bundle import MAX_ARCHIVE, build_bundle, verify_bundle
 from bundle_project_check import check_project
@@ -1168,6 +1169,53 @@ class Manager:
                 allowed = {"INPUT", "STORE_UNSAFE", "LIMIT", "HISTORY_CHANGED", "RECORD_CHANGED",
                            "NOT_FOUND", "OUTPUT_LIMIT", "RECORD_INVALID"}
                 raise Refused("SAVED_REVIEW_" + (suffix if suffix in allowed else "STORE_UNSAFE")) from None
+
+    def _saved_review_history_read(self, request, detail=False):
+        """Read an explicitly pinned receipt catalog/entry without changing decisions."""
+        fields = {"id", "record_sha256", "history_sha256", "evidence_sha256"}
+        with self.lock:
+            require(type(request) is dict and set(request) == fields | ({"name"} if detail else set()),
+                    "SAVED_REVIEW_INPUT")
+            require(type(request["id"]) is str and ID.fullmatch(request["id"]) is not None
+                    and all(type(request[key]) is str and SHA256.fullmatch(request[key]) is not None
+                            for key in fields - {"id"}), "SAVED_REVIEW_INPUT")
+            if detail:
+                require(type(request["name"]) is str and re.fullmatch(r"review-0[0-9]{2}[.]json", request["name"]) is not None,
+                        "SAVED_REVIEW_INPUT")
+            try:
+                records, history, _ = self._run_history_inspection()
+                require(request["history_sha256"] == history, "SAVED_REVIEW_HISTORY_CHANGED")
+                record = next((row for row in records if row["id"] == request["id"]), None)
+                require(record is not None, "SAVED_REVIEW_NOT_FOUND")
+                require(record["record_sha256"] == request["record_sha256"], "SAVED_REVIEW_RECORD_CHANGED")
+                require("id" not in record["metadata"] or (type(record["metadata"]["id"]) is str
+                        and record["metadata"]["id"] == request["id"]), "SAVED_REVIEW_RECORD_INVALID")
+                bundle, evidence = self._saved_run_review_inspection(request["id"], record["metadata"])
+                require(request["evidence_sha256"] == evidence, "SAVED_REVIEW_EVIDENCE_CHANGED")
+                descriptor = bundle["review_decision_evidence"]
+                value = (inspect_review_history_entry(request["id"], descriptor, request["name"]) if detail else
+                         summarize_review_history(request["id"], descriptor))
+                require(self._saved_run_review_inspection(request["id"], record["metadata"])[1] == evidence,
+                        "SAVED_REVIEW_EVIDENCE_CHANGED")
+                require(self._run_history_inspection()[1] == history, "SAVED_REVIEW_HISTORY_CHANGED")
+                result = {"version": 1, "id": request["id"], "record_sha256": record["record_sha256"],
+                          "history_sha256": history, "evidence_sha256": evidence, "history": value}
+                require(len(canonical(result)) <= 65536, "SAVED_REVIEW_OUTPUT_LIMIT")
+                return result
+            except Refused as error:
+                code = str(error)
+                if code.startswith("SAVED_REVIEW_"):
+                    raise
+                suffix = code.removeprefix("HISTORY_SEARCH_")
+                allowed = {"INPUT", "STORE_UNSAFE", "LIMIT", "HISTORY_CHANGED", "RECORD_CHANGED",
+                           "NOT_FOUND", "OUTPUT_LIMIT", "RECORD_INVALID"}
+                raise Refused("SAVED_REVIEW_" + (suffix if suffix in allowed else "STORE_UNSAFE")) from None
+
+    def saved_review_history(self, request):
+        return self._saved_review_history_read(request)
+
+    def saved_review_history_entry(self, request):
+        return self._saved_review_history_read(request, detail=True)
 
     def comparison_bundle(self, run_id):
         metadata_path = self.meta_path(run_id)
@@ -3932,6 +3980,27 @@ def make_handler(manager, token, origin):
                 self.guard(True)
                 require(self.headers.get("Origin") == origin, "ORIGIN_REFUSED")
                 path = urlsplit(self.path).path
+                if path.startswith("/api/saved-review-history"):
+                    routes = {"/api/saved-review-history": manager.saved_review_history,
+                              "/api/saved-review-history-entry": manager.saved_review_history_entry}
+                    require(path in routes, "SAVED_REVIEW_INPUT")
+                    types, lengths = self.headers.get_all("Content-Type", []), self.headers.get_all("Content-Length", [])
+                    require(self.headers.get("Transfer-Encoding") is None and len(types) == 1
+                            and types[0].split(";", 1)[0].strip().lower() == "application/json"
+                            and len(lengths) == 1 and re.fullmatch(r"[0-9]{1,10}", lengths[0]) is not None,
+                            "SAVED_REVIEW_INPUT")
+                    length = int(lengths[0])
+                    require(0 < length <= 32768, "SAVED_REVIEW_LIMIT")
+                    raw = self.rfile.read(length)
+                    require(len(raw) == length, "SAVED_REVIEW_INPUT")
+                    try:
+                        request = parse(raw)
+                    except Refused:
+                        raise Refused("SAVED_REVIEW_INPUT") from None
+                    encoded = canonical(routes[path](request))
+                    require(len(encoded) <= 65536, "SAVED_REVIEW_OUTPUT_LIMIT")
+                    self.send(200, encoded)
+                    return
                 if path == "/api/run-history-review":
                     types, lengths = self.headers.get_all("Content-Type", []), self.headers.get_all("Content-Length", [])
                     require(self.headers.get("Transfer-Encoding") is None and len(types) == 1

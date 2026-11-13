@@ -7,6 +7,7 @@ let taskPresetBusy=false,taskPresetSequence=0,taskPresetSnapshot=null,taskPreset
 let comparisonOpen=false,comparisonOpening=false,comparisonBusy=false,comparisonHistoryLoading=false,comparisonSequence=0,comparisonHistorySequence=0,comparisonLeftId="",comparisonRightId="",normalRefreshInFlight=Promise.resolve(),comparisonHistoryReady=false,comparisonOpeningCancel=null,comparisonOpenSequence=0;
 let runHistoryReady=false,runHistoryBusy=false,runHistorySequence=0,runHistoryResult=null,runHistorySelectedId='',runHistoryReview=null,runHistoryNavigationLocks=[];
 let savedRunReview=null;
+let savedReviewHistory=null,savedReviewHistoryDetail=null,savedReviewHistorySelectedName='',savedReviewHistorySequence=0;
 let readinessOpen=false,readinessOpening=false,readinessReady=false,readinessBusy=false,readinessProjectId="",readinessSequence=0,readinessOpenSequence=0,readinessOpeningCancel=null;
 let bundleOpen=false,bundleOpening=false,bundleBusy=false,bundleRunId=null,bundlePreview=null,bundleSequence=0,bundleOpenSequence=0,bundleOpeningCancel=null;
 let projectCheckOpen=false,projectCheckOpening=false,projectCheckReady=false,projectCheckBusy=false,projectCheckProjectId="",projectCheckSequence=0,projectCheckOpenSequence=0,projectCheckOpeningCancel=null;
@@ -1606,6 +1607,7 @@ function setRunHistoryControls(){
   $('run-history-select').disabled=locked||!runHistoryResult||!runHistoryResult.runs.length;
   $('run-history-review').disabled=locked||!row;
   $('saved-run-review-open').disabled=locked||!row;
+  setSavedReviewHistoryControls();
   for(const side of ['left','right'])$('run-history-'+side).disabled=locked||!row||!comparisonHistoryReady;
   $('run-history-query-note').textContent=query.bytes+' / 128 UTF-8 bytes · empty matches all inspected records · literal, case-sensitive, no newline or NUL.'+(query.valid?'':' Query is invalid.');
 }
@@ -1669,7 +1671,7 @@ async function useRunHistorySelection(side=null){
 $('run-history-review').addEventListener('click',()=>useRunHistorySelection());
 for(const side of ['left','right'])$('run-history-'+side).addEventListener('click',()=>useRunHistorySelection(side));
 $('history').addEventListener('click',event=>{if(!event.target.closest('button'))return;if(runHistoryBusy){event.preventDefault();event.stopImmediatePropagation();return;}if(comparisonOpen||comparisonOpening){invalidateRunHistory('Live-view selection changed. Search saved metadata explicitly again.');setRunHistoryControls();}},true);
-for(const [id,event] of [['project','change'],['model','change'],['new-task','click'],['setup-open','click'],['setup-close','click'],['refresh-open','click'],['refresh-close','click'],['task-form','submit']])$(id).addEventListener(event,()=>{invalidateRunHistory('Task or navigation context changed. Search saved metadata explicitly again.');setRunHistoryControls();});
+for(const [id,event] of [['project','change'],['model','change'],['goal','input'],['new-task','click'],['setup-open','click'],['setup-close','click'],['refresh-open','click'],['refresh-close','click'],['task-form','submit']])$(id).addEventListener(event,()=>{invalidateRunHistory('Task or navigation context changed. Search saved metadata explicitly again.');setRunHistoryControls();});
 
 const savedRunReasons=['EXECUTION_ERROR','PLAN_REQUIRED','PLAN_ONCE','PLAN_LIMIT','PROVIDER_SEND_TIMEOUT','PROVIDER_HEADER_TIMEOUT','PROVIDER_BODY_TIMEOUT','PROVIDER_HTTP','PROVIDER_INCOMPLETE','RESPONSE_LIMIT','MODEL_MESSAGE','MODEL_CONTENT','MODEL_CALL','ONE_TOOL_PER_TURN','UNKNOWN_TOOL','FINAL_REQUIRED','FINAL_CHECKS_FAILED','CHECK_EXECUTION_FAILED','OWNER_INTERRUPT','TURN_BUDGET_EXHAUSTED','SESSION_TIME_LIMIT','CONTEXT_LIMIT','CHECKS_PASSED','SOURCE_HASH_CHANGED','ORIGINAL_SOURCE_CHANGED','READ_SCOPE','WRITE_SCOPE','TOOL_ARGUMENTS','PROTECTED_FILE_CHANGED','WORK_TREE_CHANGED','REPLACEMENT_NOT_UNIQUE','FILE_HASH_CHANGED','REPLACEMENT_LIMIT','UNKNOWN_CHECK','JDK_REQUIRED','UNFINISHED','JSON_LIMIT','INVALID_JSON','DUPLICATE_JSON_KEY','JSON_CONSTANT','REQUEST_SIZE_LIMIT','CONTEXT_QUERY','CONTEXT_FILES','CONTEXT_PATH','CONTEXT_SNAPSHOT_LIMIT','CONTEXT_UTF8','CONTEXT_RANGE','STALE_EDIT_HASH'];
 const savedRunSummaryNotes=['RECORD_MISSING','RECORD_INVALID','RECORD_LIMIT','EVENT_LIMIT','PATCH_TRUNCATED','LEGACY_TASK_FINGERPRINT','INCOMPLETE_METRICS','TASK_FINGERPRINT_MISMATCH','PATCH_FINGERPRINT_MISMATCH'];
@@ -1678,7 +1680,7 @@ const savedRunMetricKeys=['prompt_eval_count','eval_count','total_duration','loa
 const savedDecisionStates={UNREVIEWED:'Unreviewed',ACCEPTED:'Accepted for these saved hashes',REJECTED:'Rejected for these saved hashes',STALE:'Stale decision',UNKNOWN:'Unknown'};
 const savedDecisionNotes={REVIEW_CATALOG_MISSING:'The selected saved run directory is unavailable; no complete review catalog was observed.',REVIEW_CATALOG_PARTIAL:'The bounded review catalog is partial. An observed receipt is not necessarily globally latest.',REVIEW_CATALOG_INVALID:'Review names or their sequence are invalid. No earlier decision was substituted.',REVIEW_RECORD_MISSING:'An admitted review record is missing. Its earlier decision was not reconstructed.',REVIEW_RECORD_INVALID:'An admitted review record is invalid. No earlier acceptance was substituted.',REVIEW_RECORD_LIMITED:'An admitted review record exceeded a read bound or could not be fully read. No older receipt was substituted.',CURRENT_RESULT_UNKNOWN:'A canonical hash of the complete parsed saved result is unavailable.',CURRENT_PATCH_UNKNOWN:'The complete saved patch hash is unavailable.',CURRENT_PATCH_DECLARATION_UNKNOWN:'The saved result does not contain a valid declared patch hash.',CURRENT_ARTIFACTS_INCONSISTENT:'The saved result’s declared patch hash differs from the observed patch.',REVIEW_ARTIFACTS_CHANGED:'The recorded decision names a different result or patch hash.'};
 const savedRunErrors={SAVED_REVIEW_INPUT:'The saved-evidence request did not contain the exact required pins.',SAVED_REVIEW_STORE_UNSAFE:'Saved evidence could not be read safely. Inspect the retained private records.',SAVED_REVIEW_LIMIT:'Saved evidence exceeds a bounded inspection limit.',SAVED_REVIEW_HISTORY_CHANGED:'Saved metadata history changed. Search explicitly again before reviewing evidence.',SAVED_REVIEW_RECORD_CHANGED:'The selected saved metadata changed. Search explicitly again.',SAVED_REVIEW_NOT_FOUND:'The selected saved run is unavailable. Search explicitly again.',SAVED_REVIEW_OUTPUT_LIMIT:'The complete saved review exceeds its bounded response size. No partial review was displayed.',SAVED_REVIEW_RECORD_INVALID:'Saved evidence needs inspection. No private raw exception was displayed.',SAVED_REVIEW_EVIDENCE_CHANGED:'Saved task, result, event or patch evidence changed during inspection. Search and review explicitly again.',SAVED_REVIEW_RESPONSE:'The saved-evidence response failed its exact fields, types, bounds or pin checks.'};
-function clearSavedRunReview(text){savedRunReview=null;$('saved-run-review-detail').replaceChildren();$('saved-run-review-detail').hidden=true;$('saved-run-review-open').setAttribute('aria-expanded','false');$('saved-run-review-status').textContent=text||'Select a search result, then review its saved evidence explicitly.';}
+function clearSavedRunReview(text){clearSavedReviewHistory();savedRunReview=null;$('saved-run-review-detail').replaceChildren();$('saved-run-review-detail').hidden=true;$('saved-run-review-open').setAttribute('aria-expanded','false');$('saved-run-review-status').textContent=text||'Select a search result, then review its saved evidence explicitly.';}
 function savedRunNumber(value,min=0,max=Number.MAX_SAFE_INTEGER){return Number.isSafeInteger(value)&&value>=min&&value<=max;}
 function savedRunNullableNumber(value,min=0,max=Number.MAX_SAFE_INTEGER){return value===null||savedRunNumber(value,min,max);}
 function savedRunText(value,characters,bytes){return taskPresetUnicode(value)&&Array.from(value).length<=characters&&new TextEncoder().encode(value).length<=bytes;}
@@ -1755,7 +1757,7 @@ function renderSavedRunReview(value){
   const scope=node('section',undefined,'saved-run-scope');scope.append(node('h4','Saved selected-file scope'));
   if(!value.summary.files.length)scope.append(node('p','Unknown · no valid saved task file scope is available.','muted'));
   else{const files=node('ul',undefined,'saved-run-files');for(const file of value.summary.files){const row=node('li');row.append(node('h5',file.path),diagnosticList([['Saved edit permission',file.editable?'Editable':'Protected'],['Saved baseline SHA-256',file.sha256]],'context-file-facts'));files.append(row);}scope.append(files);}
-  children.push(renderSavedDecision(value.decision,value.summary),scope,comparisonRunCard(value.summary,'Saved run'));
+  children.push(renderSavedDecision(value.decision,value.summary),renderSavedReviewHistoryShell(),scope,comparisonRunCard(value.summary,'Saved run'));
   if(value.summary.result_reason!==null)children.push(node('p','Recorded result reason: '+savedRunReason(value.summary.result_reason),'small muted'));
   children.push(renderSavedRunDiagnostics(value.diagnostics),node('p','The evidence fingerprint covers bounded saved observations, including missing/invalid/limited evidence markers. It does not establish authenticity, globally complete history or current source correctness. Goals and patch previews remain private.','small muted'));
   $('saved-run-review-detail').replaceChildren(...children);$('saved-run-review-detail').hidden=false;$('saved-run-review-open').setAttribute('aria-expanded','true');
@@ -1770,3 +1772,114 @@ async function reviewSelectedSavedEvidence(){
   finally{runHistoryFinish();}
 }
 $('saved-run-review-open').addEventListener('click',reviewSelectedSavedEvidence);
+
+const savedReviewHistoryFields=['name','status','sha256','verdict','recorded','result_sha256','patch_sha256','artifact_state'];
+const savedReviewHistoryRelations={MATCHING:'Matches the observed saved artifacts',STALE:'Names different saved artifacts',UNKNOWN:'Artifact relation unknown'};
+function clearSavedReviewHistory(text){
+  savedReviewHistorySequence++;savedReviewHistory=null;savedReviewHistoryDetail=null;savedReviewHistorySelectedName='';
+  if($('saved-review-history-summary')){$('saved-review-history-summary').replaceChildren();$('saved-review-history-summary').hidden=true;}
+  if($('saved-review-history-select')){$('saved-review-history-select').replaceChildren(Object.assign(node('option','List saved review history explicitly'),{value:''}));$('saved-review-history-select').value='';}
+  if($('saved-review-history-detail')){$('saved-review-history-detail').replaceChildren();$('saved-review-history-detail').hidden=true;}
+  if($('saved-review-history-status'))$('saved-review-history-status').textContent=text||'No receipt list has been requested. The current decision above is unchanged.';
+}
+function savedReviewHistorySelected(){return savedReviewHistory&&savedReviewHistory.history.entries.find(row=>row.name===savedReviewHistorySelectedName)||null;}
+function setSavedReviewHistoryControls(){
+  if(!$('saved-review-history-list'))return;
+  const locked=runHistoryLocked()||!savedRunReview,row=savedReviewHistorySelected();
+  $('saved-review-history-list').disabled=locked;
+  $('saved-review-history-select').disabled=locked||!savedReviewHistory||!savedReviewHistory.history.entries.length;
+  $('saved-review-history-inspect').disabled=locked||!row;
+}
+function savedReviewHistoryPins(context){
+  const review=context&&context.review;
+  return Boolean(runHistoryOpenPins(context)&&review&&validSavedRunReview(review,context)&&runHistoryId(review.id)&&review.id===context.row.id&&runHistoryHash(review.record_sha256)&&review.record_sha256===context.record&&runHistoryHash(review.history_sha256)&&review.history_sha256===context.history&&runHistoryHash(review.evidence_sha256)&&context.evidence===review.evidence_sha256);
+}
+function savedReviewHistoryCurrent(context){return savedReviewHistoryPins(context)&&runHistorySelectionCurrent(context)&&context.review===savedRunReview&&context.historySequence===savedReviewHistorySequence;}
+function savedReviewHistoryRelation(row,current){
+  if(row.status!=='OK'||Object.values(current).some(hash=>hash===null)||current.patch_sha256!==current.result_patch_sha256)return 'UNKNOWN';
+  return row.result_sha256===current.result_sha256&&row.patch_sha256===current.patch_sha256?'MATCHING':'STALE';
+}
+function validSavedReviewHistoryRow(row,current,detail=false){
+  if(!taskPresetExact(row,detail?[...savedReviewHistoryFields,'note']:savedReviewHistoryFields)||!savedDecisionName(row.name)||!savedRunEnum(row.status,['OK','MISSING','INVALID','LIMITED'])||!(row.sha256===null||runHistoryHash(row.sha256))||!savedRunEnum(row.artifact_state,Object.keys(savedReviewHistoryRelations)))return false;
+  if(row.status==='OK'){
+    if(!runHistoryHash(row.sha256)||!savedRunEnum(row.verdict,['accepted','rejected'])||!savedRunNumber(row.recorded)||!runHistoryHash(row.result_sha256)||!runHistoryHash(row.patch_sha256)||detail&&!savedRunText(row.note,2000,8000))return false;
+  }else if([row.verdict,row.recorded,row.result_sha256,row.patch_sha256].some(value=>value!==null)||detail&&row.note!==null)return false;
+  return row.artifact_state===savedReviewHistoryRelation(row,current);
+}
+function savedReviewHistorySameFields(left,right,fields){return fields.every(field=>left[field]===right[field]);}
+function validSavedReviewHistoryEnvelope(value,context,detail=false){
+  if(!savedReviewHistoryPins(context)||!taskPresetExact(value,['version','id','record_sha256','history_sha256','evidence_sha256','history'])||value.version!==1||!runHistoryId(value.id)||value.id!==context.review.id||!runHistoryHash(value.record_sha256)||value.record_sha256!==context.record||!runHistoryHash(value.history_sha256)||value.history_sha256!==context.history||!runHistoryHash(value.evidence_sha256)||value.evidence_sha256!==context.evidence||!taskPresetBounded(value))return false;
+  const history=value.history,decision=context.review.decision,fields=['result_sha256','patch_sha256','result_patch_sha256'],notes=decision.notes.filter(code=>code!=='REVIEW_ARTIFACTS_CHANGED');
+  return taskPresetExact(history,['version','inspected','catalog_complete','current','notes',detail?'entry':'entries'])&&history.version===1&&savedRunNumber(history.inspected,0,100)&&history.inspected===decision.inspected&&typeof history.catalog_complete==='boolean'&&history.catalog_complete===decision.catalog_complete&&taskPresetExact(history.current,fields)&&Object.values(history.current).every(hash=>hash===null||runHistoryHash(hash))&&savedReviewHistorySameFields(history.current,decision.current,fields)&&savedRunCodes(history.notes,Object.keys(savedDecisionNotes).filter(code=>code!=='REVIEW_ARTIFACTS_CHANGED'),true)&&history.notes.length===notes.length&&history.notes.every((code,index)=>code===notes[index]);
+}
+function validSavedReviewHistory(value,context){
+  if(!validSavedReviewHistoryEnvelope(value,context))return false;
+  const history=value.history,rows=history.entries;
+  if(!Array.isArray(rows)||rows.length!==history.inspected||rows.length>100||!rows.every(row=>validSavedReviewHistoryRow(row,history.current))||!savedRunOrderedRows(rows,'name')||history.catalog_complete&&rows.some((row,index)=>row.name!=='review-'+String(index).padStart(3,'0')+'.json'))return false;
+  for(const [status,code] of [['MISSING','REVIEW_RECORD_MISSING'],['INVALID','REVIEW_RECORD_INVALID'],['LIMITED','REVIEW_RECORD_LIMITED']])if(history.notes.includes(code)!==rows.some(row=>row.status===status))return false;
+  const latest=rows.length?rows[rows.length-1]:null,receipt=context.review.decision.receipt;
+  return receipt===null?latest===null||latest.status!=='OK':latest!==null&&latest.status==='OK'&&savedReviewHistorySameFields(latest,receipt,['name','sha256','verdict','recorded','result_sha256','patch_sha256']);
+}
+function validSavedReviewHistoryEntry(value,context){
+  if(!validSavedReviewHistoryEnvelope(value,context,true)||!context.list||!context.entry||!validSavedReviewHistory(context.list,context)||!validSavedReviewHistoryRow(value.history.entry,value.history.current,true))return false;
+  const receipt=context.review.decision.receipt;
+  return context.list.history.entries.includes(context.entry)&&savedReviewHistorySameFields(value.history.entry,context.entry,savedReviewHistoryFields)&&(!receipt||receipt.name!==value.history.entry.name||value.history.entry.note===receipt.note);
+}
+function renderSavedReviewHistoryShell(){
+  const section=node('section',undefined,'saved-review-history');section.id='saved-review-history-panel';section.setAttribute('aria-labelledby','saved-review-history-title');
+  const title=node('h4','Saved review receipt history');title.id='saved-review-history-title';
+  const list=node('button','List saved review history','secondary');list.id='saved-review-history-list';list.type='button';list.addEventListener('click',listSavedReviewHistory);
+  const status=node('p','No receipt list has been requested. The current decision above is unchanged.','muted');status.id='saved-review-history-status';status.setAttribute('role','status');
+  const summary=node('div');summary.id='saved-review-history-summary';summary.hidden=true;
+  const select=node('select');select.id='saved-review-history-select';select.disabled=true;select.append(Object.assign(node('option','List saved review history explicitly'),{value:''}));select.addEventListener('change',selectSavedReviewHistory);
+  const label=node('label','Observed receipt · ascending filename ordinal');label.append(select);
+  const inspect=node('button','Inspect selected historical review','secondary');inspect.id='saved-review-history-inspect';inspect.type='button';inspect.disabled=true;inspect.addEventListener('click',inspectSavedReviewHistoryEntry);
+  const actions=node('div',undefined,'review-buttons saved-review-history-actions');actions.append(list,inspect);
+  const detail=node('div',undefined,'saved-review-history-detail');detail.id='saved-review-history-detail';detail.hidden=true;
+  section.append(title,node('p','Historical receipt observations are ordered by filename ordinal, not timestamp. Selecting or inspecting an earlier acceptance never replaces the current decision or authorizes export, Run or source adoption.','small muted'),actions,status,summary,label,detail);return section;
+}
+function renderSavedReviewHistory(value){
+  const history=value.history,summary=[diagnosticList([['Review records inspected',String(history.inspected)],['Observed catalog',history.catalog_complete?'Complete and canonical at inspection':'Missing, partial or invalid · global completeness unknown']],'diagnostic-facts run-history-facts')];
+  if(!history.catalog_complete)summary.push(node('p','This list contains bounded observed receipts. Omitted or damaged evidence prevents a claim about the globally latest review. A usable older receipt does not repair the current decision.','context-warning'));
+  if(history.notes.length)summary.push(comparisonNoteList(history.notes,savedDecisionNotes));
+  $('saved-review-history-summary').replaceChildren(...summary);$('saved-review-history-summary').hidden=false;
+  const placeholder=node('option',history.entries.length?'Choose an observed receipt explicitly':history.catalog_complete?'Complete empty review catalog':'No receipt rows in this incomplete observation');placeholder.value='';
+  $('saved-review-history-select').replaceChildren(placeholder,...history.entries.map(row=>Object.assign(node('option',row.name+' · '+row.status+' · '+(row.status==='OK'?(row.verdict==='accepted'?'Accepted':'Rejected'):'No usable verdict')+' · '+savedReviewHistoryRelations[row.artifact_state]),{value:row.name})));$('saved-review-history-select').value='';
+  $('saved-review-history-status').textContent=history.entries.length?'Listed observed receipts in ascending filename ordinal. Select and inspect one explicitly; the current decision above is unchanged.':history.catalog_complete?'The observed catalog is complete and empty. There is no historical receipt to inspect.':'No historical receipt can be selected from this incomplete observation. This is not an Unreviewed finding.';
+}
+function selectSavedReviewHistory(){
+  savedReviewHistorySequence++;savedReviewHistorySelectedName=$('saved-review-history-select').value;savedReviewHistoryDetail=null;$('saved-review-history-detail').replaceChildren();$('saved-review-history-detail').hidden=true;
+  $('saved-review-history-status').textContent=savedReviewHistorySelected()?'Receipt selected locally. Inspect it explicitly; no request or decision change was made.':'Choose an observed receipt explicitly.';setSavedReviewHistoryControls();
+}
+function renderSavedReviewHistoryEntry(value){
+  const row=value.history.entry,children=[node('h5','Historical receipt · '+row.name),node('p','This selected historical record is separate from the current decision above. Its artifact relation is a saved observation, not export or execution permission.','small muted'),diagnosticList([['Observed record status',row.status],['Observed artifact relation',savedReviewHistoryRelations[row.artifact_state]],['Receipt raw SHA-256',comparisonValue(row.sha256)],['Recorded verdict',row.verdict===null?'Unknown':row.verdict==='accepted'?'Accepted':'Rejected'],['Recorded time (UTC or epoch seconds)',row.recorded===null?'Unknown':savedDecisionTime(row.recorded)],['Receipt result SHA-256',comparisonValue(row.result_sha256)],['Receipt patch SHA-256',comparisonValue(row.patch_sha256)],['Current canonical result content SHA-256',comparisonValue(value.history.current.result_sha256)],['Current observed patch SHA-256',comparisonValue(value.history.current.patch_sha256)],['Current result-declared patch SHA-256',comparisonValue(value.history.current.result_patch_sha256)]],'context-file-facts saved-review-history-facts')];
+  if(row.status==='OK'){const note=node('pre',row.note,'code-view saved-review-history-note');note.id='saved-review-history-note';children.push(node('h5','Private historical review note'),note);if(row.note==='')children.push(node('p','The saved note is empty.','small muted'));}
+  else children.push(node('p','This receipt has no usable sanitized verdict, time, artifact pins or note. Private raw record contents were not displayed.','context-warning'));
+  $('saved-review-history-detail').replaceChildren(...children);$('saved-review-history-detail').hidden=false;$('saved-review-history-status').textContent='Showing the explicitly selected historical receipt. The current decision, Task, model, project, comparison slots and export controls are unchanged.';
+}
+function savedReviewHistoryFailure(error){
+  const text=diagnosticText(savedRunErrors,error&&error.message)||'Saved review history failed its bounded fields, pins or selected-receipt checks. Search and review saved evidence explicitly again.';
+  invalidateRunHistory(text);clearSavedRunReview(text);setRunHistoryControls();
+}
+async function listSavedReviewHistory(){
+  if(!$('saved-review-history-list')||$('saved-review-history-list').disabled||runHistoryLocked())return;
+  const review=savedRunReview,row=runHistorySelected(),result=runHistoryResult;if(!review||!row||!result)return;
+  runHistorySequence++;clearSavedReviewHistory('Reading the explicitly requested bounded review history…');
+  const context={...runHistoryContext(),row,result,record:review.record_sha256,history:review.history_sha256,evidence:review.evidence_sha256,review,historySequence:savedReviewHistorySequence};
+  if(!savedReviewHistoryPins(context)){savedReviewHistoryFailure(new Error('SAVED_REVIEW_INPUT'));return;}
+  runHistoryBegin('Reading saved review receipt history only…');
+  try{const value=await api('/api/saved-review-history',{id:review.id,record_sha256:context.record,history_sha256:context.history,evidence_sha256:context.evidence});if(!savedReviewHistoryCurrent(context))return;if(!validSavedReviewHistory(value,context))throw new Error('SAVED_REVIEW_RESPONSE');savedReviewHistory=value;renderSavedReviewHistory(value);}
+  catch(error){if(savedReviewHistoryCurrent(context))savedReviewHistoryFailure(error);}
+  finally{runHistoryFinish();}
+}
+async function inspectSavedReviewHistoryEntry(){
+  if(!$('saved-review-history-inspect')||$('saved-review-history-inspect').disabled||runHistoryLocked())return;
+  const review=savedRunReview,row=runHistorySelected(),result=runHistoryResult,list=savedReviewHistory,entry=savedReviewHistorySelected();if(!review||!row||!result||!list||!entry)return;
+  runHistorySequence++;savedReviewHistorySequence++;savedReviewHistoryDetail=null;$('saved-review-history-detail').replaceChildren();$('saved-review-history-detail').hidden=true;
+  const context={...runHistoryContext(),row,result,record:review.record_sha256,history:review.history_sha256,evidence:review.evidence_sha256,review,list,entry,historySequence:savedReviewHistorySequence};
+  if(!savedReviewHistoryPins(context)||!validSavedReviewHistory(list,context)){savedReviewHistoryFailure(new Error('SAVED_REVIEW_INPUT'));return;}
+  runHistoryBegin('Reading the explicitly selected historical receipt only…');
+  try{const value=await api('/api/saved-review-history-entry',{id:review.id,record_sha256:context.record,history_sha256:context.history,evidence_sha256:context.evidence,name:entry.name});if(!savedReviewHistoryCurrent(context)||savedReviewHistory!==list||savedReviewHistorySelected()!==entry||$('saved-review-history-select').value!==entry.name)return;if(!validSavedReviewHistoryEntry(value,context))throw new Error('SAVED_REVIEW_RESPONSE');savedReviewHistoryDetail=value;renderSavedReviewHistoryEntry(value);}
+  catch(error){if(savedReviewHistoryCurrent(context)&&savedReviewHistory===list&&savedReviewHistorySelected()===entry)savedReviewHistoryFailure(error);}
+  finally{runHistoryFinish();}
+}

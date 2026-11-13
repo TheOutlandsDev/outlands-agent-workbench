@@ -188,3 +188,13 @@ input{font:inherit;width:100%;color:var(--text);background:#0d131c;border:1px so
 .saved-run-decision .saved-run-decision-note{max-height:280px;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;tab-size:4}
 .saved-run-decision-receipt dd,.saved-run-decision-hashes dd{overflow-wrap:anywhere;word-break:break-word}
 @media(max-width:680px){.saved-run-decision{padding:13px}.saved-run-decision .saved-run-decision-note{max-height:220px}}
+
+/* Historical receipts remain separate from the observed current decision. */
+.saved-review-history{margin:22px 0;padding:17px;border:1px solid var(--line);border-radius:9px;min-width:0}
+.saved-review-history>h4{margin:0 0 12px}.saved-review-history>.small,.saved-review-history>.muted{line-height:1.8}
+.saved-review-history-actions{display:flex;flex-wrap:wrap;gap:11px;margin:15px 0}
+.saved-review-history-actions button{white-space:normal}.saved-review-history select{width:100%;min-width:0;box-sizing:border-box}
+.saved-review-history-detail{margin-top:18px;padding-top:17px;border-top:1px solid var(--line)}
+.saved-review-history-facts dd,#saved-review-history-status{overflow-wrap:anywhere;word-break:break-word;line-height:1.8}
+.saved-review-history-note{max-height:280px;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;tab-size:4}
+@media(max-width:680px){.saved-review-history{padding:13px}.saved-review-history-actions{align-items:flex-start;flex-direction:column}.saved-review-history-note{max-height:220px}}
