@@ -32,6 +32,7 @@ from qa_saved_run_review import acceptance as saved_run_review_acceptance
 from qa_offline_workflow import acceptance as offline_workflow_acceptance
 from qa_saved_review_decisions import acceptance as saved_review_decisions_acceptance
 from qa_saved_review_history import acceptance as saved_review_history_acceptance
+from qa_complete_review_workflow import acceptance as complete_review_workflow_acceptance
 
 
 def main():
@@ -73,7 +74,7 @@ def main():
         timeout=30,
         check=True,
     )
-    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py", "test_project_revisions.py", "test_project_refresh.py", "test_run_comparison.py", "test_run_comparison_integration.py", "test_project_readiness.py", "test_project_readiness_integration.py", "test_patch_bundle.py", "test_patch_bundle_integration.py", "test_bundle_project_check.py", "test_bundle_project_check_integration.py", "test_bundle_workspace.py", "test_bundle_workspace_integration.py", "test_workspace_recheck.py", "test_workspace_recheck_integration.py", "test_snapshot_export.py", "test_snapshot_export_integration.py", "test_snapshot_project_check.py", "test_snapshot_project_check_integration.py", "test_snapshot_workspace.py", "test_snapshot_workspace_integration.py", "test_snapshot_recheck.py", "test_snapshot_recheck_integration.py", "test_snapshot_reexport.py", "test_snapshot_reexport_integration.py", "test_snapshot_editor.py", "test_snapshot_editor_integration.py", "test_workspace_search.py", "test_workspace_search_integration.py", "test_task_presets.py", "test_task_presets_integration.py", "test_preset_comparison.py", "test_preset_comparison_integration.py", "test_run_history.py", "test_run_history_integration.py", "test_saved_run_review.py", "test_saved_run_review_integration.py", "test_offline_workflow.py", "test_offline_workflow_integration.py", "test_saved_review_decisions.py", "test_saved_review_decisions_integration.py", "test_saved_review_history.py", "test_saved_review_history_integration.py"]:
+    for pattern in ["test_agent.py", "test_workbench.py", "test_project_setup.py", "test_git_workspace.py", "test_launch.py", "test_run_diagnostics.py", "test_project_context.py", "test_context_integration.py", "test_project_revisions.py", "test_project_refresh.py", "test_run_comparison.py", "test_run_comparison_integration.py", "test_project_readiness.py", "test_project_readiness_integration.py", "test_patch_bundle.py", "test_patch_bundle_integration.py", "test_bundle_project_check.py", "test_bundle_project_check_integration.py", "test_bundle_workspace.py", "test_bundle_workspace_integration.py", "test_workspace_recheck.py", "test_workspace_recheck_integration.py", "test_snapshot_export.py", "test_snapshot_export_integration.py", "test_snapshot_project_check.py", "test_snapshot_project_check_integration.py", "test_snapshot_workspace.py", "test_snapshot_workspace_integration.py", "test_snapshot_recheck.py", "test_snapshot_recheck_integration.py", "test_snapshot_reexport.py", "test_snapshot_reexport_integration.py", "test_snapshot_editor.py", "test_snapshot_editor_integration.py", "test_workspace_search.py", "test_workspace_search_integration.py", "test_task_presets.py", "test_task_presets_integration.py", "test_preset_comparison.py", "test_preset_comparison_integration.py", "test_run_history.py", "test_run_history_integration.py", "test_saved_run_review.py", "test_saved_run_review_integration.py", "test_offline_workflow.py", "test_offline_workflow_integration.py", "test_saved_review_decisions.py", "test_saved_review_decisions_integration.py", "test_saved_review_history.py", "test_saved_review_history_integration.py", "test_complete_review_workflow.py", "test_complete_review_workflow_integration.py"]:
         tests = subprocess.run(
             [
                 sys.executable,
@@ -226,6 +227,7 @@ class Boundary(unittest.TestCase):
         **offline_workflow_acceptance(jdk, work),
         **saved_review_decisions_acceptance(jdk, work),
         **saved_review_history_acceptance(jdk, work),
+        **complete_review_workflow_acceptance(jdk, work),
     }
     (work / "acceptance.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, sort_keys=True))
