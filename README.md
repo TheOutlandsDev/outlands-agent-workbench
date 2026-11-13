@@ -60,6 +60,14 @@ normal server shut down cleanly. This qualifies the stated invented scripted
 workflow, with retained tooling limits; it adds no real-model or real-project
 claim. See [validation](VALIDATION.md) for the separate dated observation.
 
+A separate saved-workspace observation then used the normal launcher with a
+fresh, clearly invented terminal history and saved accepted review. The browser
+read its checks, diff and review without running a task or writing a decision.
+Only the normal server-info record changed; the saved evidence stayed exact
+through shutdown. This verifies startup, rendering and preservation of invented
+records, with the doctor's prerequisite test separate. It does not qualify
+resuming a worker. See [validation](VALIDATION.md) for the dated scope and limits.
+
 This is controlled process-lifecycle verification with unchanged production
 engine, admission and providers. It retains **Complete Review Workflow Verification**: the restricted
 offline harness can inspect the completed scripted run through normal history,
