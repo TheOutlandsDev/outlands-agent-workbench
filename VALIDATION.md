@@ -89,6 +89,76 @@ case, real-model request or Java-agent trial was performed. The prior 1,214-meth
 verification adds no new unit-test or GitHub CI claim. The original failed runs,
 unconfirmed historical cause and earlier worker-exit audit limits remain intact.
 
+## Normal server-CLI observations and retained observer limits
+
+On **2026-11-13**, two normal `workbench.py serve` sessions used the unchanged
+132-file merged source at `6ef01d96e60e9e35e7a254b5c9cedc6471997217`. The product
+CLI, Manager, handler and browser feed were not patched or replaced. External
+process/connect tracing observed the CLI and its descendants. The `launch.py`
+prerequisite doctor was not run; it performs a separate isolated check and
+therefore is outside this zero-task/check startup observation.
+
+A fresh private fixture contained only explicitly invented terminal metadata and
+tasks for Python and Java profiles. The browser freshly loaded each session and
+selected Java, then Python. Both rows displayed FAILED, 0/12 turns and Scripted /
+no inference. Result and patch pins stayed Pending; Accept, Reject, Download and
+Git workspace creation stayed disabled. These are seeded saved observations,
+not executed failed agent runs or failed tests. Browser actions were read-only;
+no task Run or Stop action was requested.
+
+An independent API client made four GET requests per session: the normal index,
+history and the two selected run views. The three API response bodies matched
+exactly in hash and byte length across restart. Fresh session-token hashes
+differed, so the token-bearing index bodies were expected to differ. The client
+saved hashes and finite labels without raw tokens or response bodies; its HTTP
+observations remain separate from visible browser evidence.
+
+The initial case had 16 files and 22 directories. After both sessions it had 17
+files and the same 22 directories. The only allowed product-file change was
+normal creation, then replacement, of the configured data directory's
+`server-info.json`, containing exactly the current loopback URL and owned CLI
+PID. Every other file byte, mode and link
+count remained unchanged. All 132 source hashes stayed unchanged during the
+observations, before this documentation update. Private session/audit artifacts
+were outside the product fixture and remain excluded from public source.
+
+Both owned CLI processes shut down through normal SIGTERM handling and exited
+zero; all 40 first-session and 50 restart process/thread traces ended with
+zero-exit records. No
+containment or adopted-child cleanup was used. Both owned listeners subsequently
+refused connections with ECONNREFUSED. Each session trace recorded one initial
+CLI execution, no additional execution or non-thread child creation, and no IP
+or other connect calls beyond four failed AF_UNIX attempts to the local nscd
+socket, each returning ENOENT. This is scoped process/connect evidence, not an
+operating-system-wide network or worker-exit audit.
+
+The first external supervisor required zero connect calls of any kind and
+therefore refused those four failed local probes. Its original summary remains
+FAILED/unqualified. Later independent saved-trace classification and bounded
+closure review cleared the one planned restart; the first session was not rerun
+or relabelled. The revised external classifier accepts only the exact failed
+local nscd calls, bounded to four, and the restart summary qualified. Product
+source and handler behavior were unchanged by that observer correction.
+
+A later static review found two limits in the private restart gate: an
+alternative qualified=true branch would skip the separate review requirement,
+and the gate did not explicitly compare its mirrored first summary. That review
+arrived after restart had launched. Root then independently confirmed the actual
+mirror was byte-identical to the original first summary, both remained
+unqualified, and all recorded pins matched. The private helper was retired
+unchanged and is not public source. Those checks address the actual observed
+path; they do not qualify adversarial gate inputs, the alternative branch or
+concurrent mutation. No blanket gate PASS is claimed.
+
+Private observer setup refusals before a runtime claim remain retained. No task
+worker, project check, provider/model request, JDK or Git command, new Live
+Run/Stop case, adoption or export was performed by these sessions. Root's final
+closure record preserves the two original authorized Java hashes and existing
+tool pins. The original uncertain Java trial remains held/unqualified. Earlier
+1,214-method/56-suite complete native qualification, all historical failures and
+unconfirmed causes remain separate. No new unit-test, GitHub CI, real-model or
+Java-agent qualification, code feature, deployment or license change follows.
+
 ## Scope and evidence classes
 
 Four new source modules provide a separate live Run/Stop QA wrapper, native

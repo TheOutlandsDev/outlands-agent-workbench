@@ -333,3 +333,22 @@ remain separate from model or Java-agent qualification. No new dependency,
 upstream source, frontend feature, rights claim, license or public runtime data
 is introduced. Original notices, private-record exclusions, the unconfirmed
 historical cause, uncertain Java hold and UNASSIGNED licensing remain.
+
+### Version 0.29 normal server-CLI observations
+
+Separate local browser/API observations on 2026-11-13 use the normal unmodified
+`workbench.py serve` entry point with fresh invented Python/Java terminal saved
+metadata, read-only restart and normal owned server shutdown. They execute no
+task or project check and do not exercise the `launch.py` prerequisite doctor,
+JDK, Git, provider or model. The metadata's FAILED labels are seeded history,
+not actual failed agent or test outcomes. Private external observers, traces,
+session metadata and fixture records are excluded from public source.
+
+The first strict external observer refusal remains unqualified; later bounded
+classification of failed local nscd probes and the planned restart observations
+are recorded separately. Validation also preserves the late private restart-gate
+finding, actual-path mirror/pin checks and the absence of adversarial or
+concurrent-mutation qualification. No product code, frontend feature, dependency,
+upstream implementation, rights claim or license is added. Earlier failures,
+unknown historical causes, private-record exclusions, the original uncertain
+Java hold and UNASSIGNED licensing remain.
