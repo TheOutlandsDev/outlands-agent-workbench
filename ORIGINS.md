@@ -286,3 +286,19 @@ or Java-agent qualification, deployment or license assignment. Real records and
 all generated fixtures remain private; the original uncertain Java hold remains
 held/unqualified and licensing stays UNASSIGNED. Naming-only provenance checks
 remain distinct from authorship or redistribution clearance.
+
+
+## Version 0.29: live run and stop verification
+
+This milestone adds a separate QA wrapper, native acceptance and regression
+tests around the unchanged v0.28 controlled worker and normal browser handler.
+A durable successful Running-view response gates the single explicit owned Stop;
+browser-visible execution is separately observed. The original finite worker
+deadline and ownership/argument/source/receipt checks remain unchanged. Missing
+agent artifacts remain incomplete and cannot authorize review/export. No agent,
+model or project check executes in this controlled case. Production modules,
+old QA modules, Java client and browser JavaScript/CSS remain unchanged except
+the runner's new stage and HTML version badge. No dependency, deployment,
+license or rights clearance is added. Generated fixtures and receipts remain
+private; the original uncertain Java trial remains held/unqualified and licensing
+stays UNASSIGNED. Naming-only provenance checks are separate from technical tests.
