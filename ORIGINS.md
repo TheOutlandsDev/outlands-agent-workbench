@@ -286,3 +286,44 @@ or Java-agent qualification, deployment or license assignment. Real records and
 all generated fixtures remain private; the original uncertain Java hold remains
 held/unqualified and licensing stays UNASSIGNED. Naming-only provenance checks
 remain distinct from authorship or redistribution clearance.
+
+
+## Version 0.29: live run and stop verification
+
+This milestone adds a separate QA wrapper, native acceptance and regression
+tests around the unchanged v0.28 controlled worker and normal browser handler.
+A durable successful Running-view response gates the single explicit owned Stop;
+browser-visible execution is separately observed. The original finite worker
+deadline and ownership/argument/source/receipt checks remain unchanged. Missing
+agent artifacts remain incomplete and cannot authorize review/export. No agent,
+model or project check executes in this controlled case. The initial draft kept
+production modules, old QA modules, Java client and browser JavaScript/CSS
+unchanged except the runner's new stage and HTML version badge. The separately
+reviewed recheck reliability amendment below changes the guarded receipt reader
+and its existing integration tests. No dependency, deployment,
+license or rights clearance is added. Generated fixtures and receipts remain
+private; the original uncertain Java trial remains held/unqualified and licensing
+stays UNASSIGNED. Naming-only provenance checks are separate from technical tests.
+
+
+### Version 0.29 recheck reliability amendment
+
+A fresh synthetic open/replace/fstat reproduction identified a concrete atomic
+publication read defect class; the original failed native run's exact cause is
+still unconfirmed. The shared named-file reader now explicitly closes every
+opened leaf descriptor, including refused directory inputs. Only recheck_view
+opts into one guarded reopen for a regular descriptor found unlinked before
+reading. Existing replacement safety, bounds, schema/ID validation, single-open
+defaults elsewhere and worker custody remain. Four labelled synthetic receipt
+regression methods were added to the existing integration suite. They execute no
+worker, project check, compiler, provider, network or Git command.
+
+The first corrected regression run exposed the directory-descriptor leak; its
+failure and source remain retained. The unchanged tests then passed. A focused
+native attempt was namespace-refused with zero project tests and remains failed.
+Distinct fresh Python/Java qualification and a new complete offline run passed
+all 1,214 unit methods across 56 suites and every native acceptance stage. Earlier
+failures are not relabelled. Browser observations remain specific to the initial
+v0.29 source. No new dependency, upstream source, rights claim, license or public
+runtime data is introduced. Original notices, private-record exclusions, the
+uncertain Java hold and UNASSIGNED licensing remain.

@@ -307,8 +307,8 @@ def readiness_directory(root):
         raise
 
 
-def readiness_read_file(root, name, limit=32768):
-    """Read one approved relative file using guarded directory descriptors."""
+def readiness_read_file(root, name, limit=32768, *, retry_unlinked=False):
+    """Read one approved file; optionally reopen one atomically replaced receipt."""
     relative(name)
     fd = readiness_directory(root)
     try:
@@ -317,15 +317,24 @@ def readiness_read_file(root, name, limit=32768):
             next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
             os.close(fd)
             fd = next_fd
-        child = os.open(parts[-1], os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW, dir_fd=fd)
-        with os.fdopen(child, "rb") as stream:
-            info = os.fstat(stream.fileno())
-            require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, "INPUT_TYPE")
-            raw = stream.read(limit + 1)
-            require(len(raw) <= limit, "FILE_LIMIT")
-            require(b"\x00" not in raw, "BINARY_INPUT")
-            raw.decode("utf-8")
-            return raw
+        for attempt in range(2 if retry_unlinked else 1):
+            child = os.open(parts[-1], os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW, dir_fd=fd)
+            try:
+                info = os.fstat(child)
+                # Atomic publication can unlink the opened regular inode before
+                # fstat. Close it and check the newly named file once; never read
+                # unlinked bytes or relax any guard on the replacement.
+                if retry_unlinked and attempt == 0 and stat.S_ISREG(info.st_mode) and info.st_nlink == 0:
+                    continue
+                require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, "INPUT_TYPE")
+                with os.fdopen(child, "rb", closefd=False) as stream:
+                    raw = stream.read(limit + 1)
+                    require(len(raw) <= limit, "FILE_LIMIT")
+                    require(b"\x00" not in raw, "BINARY_INPUT")
+                    raw.decode("utf-8")
+                    return raw
+            finally:
+                os.close(child)
     finally:
         os.close(fd)
 
@@ -3139,7 +3148,7 @@ class Manager:
                 child, log = self.recheck_children.pop(attempt_id)
                 log.close()
             try:
-                raw = readiness_read_file(attempt, "receipt.json", 262144)
+                raw = readiness_read_file(attempt, "receipt.json", 262144, retry_unlinked=True)
                 receipt = parse(raw)
             except (Refused, OSError, ValueError):
                 raise Refused("RECHECK_RECORD_INVALID") from None

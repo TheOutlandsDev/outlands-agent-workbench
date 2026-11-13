@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import tempfile
 import unittest
 from contextlib import ExitStack, contextmanager
@@ -16,6 +17,7 @@ from test_bundle_workspace_integration import (
     create_request, fake_worker, no_provider_calls, populate_workspace_projects, private_hashes, workspace_job,
 )
 from workbench import Manager, init_demo, make_handler
+import workbench as controller
 
 
 PRIVATE_SENTINEL = "invented-private-workspace-recheck-sentinel"
@@ -570,6 +572,175 @@ class WorkspaceRecheckHTTPTests(unittest.TestCase):
                     code, value = request("POST", "/api/workspace-recheck-preview", bodies[0][2], headers)
                     self.assertEqual((code, value["error"]), (409, reason))
             self.assertEqual(before, private_hashes(root))
+
+
+class RecheckReceiptReplacementTests(unittest.TestCase):
+    """Saved receipt reader regressions; all checks and child identities are invented.
+
+    These cases run no worker, compiler, project check, provider, network or Git
+    command. A temporary-file replacement models the existing atomic writer.
+    """
+
+    @contextmanager
+    def receipt_fixture(self, *, java=False, exited=False):
+        with tempfile.TemporaryDirectory() as directory, no_provider_calls(), ExitStack() as stack:
+            guarded = []
+            for name in ["workbench.subprocess.Popen", "workbench.subprocess.run", "workbench.os.killpg",
+                         "workbench.process_stamp", "workbench.replace_json", "agent.Session.run",
+                         "agent.Session.checks", "isolation.check", "java_check.check", "git_workspace.git",
+                         "git_workspace.fixed_checks"]:
+                guarded.append(stack.enter_context(patch(name, side_effect=AssertionError("saved-reader execution or writer"))))
+            root = Path(directory)
+            paths = init_demo(root / "workspace", None)
+            manager = Manager(Path(paths["config"]), Path(paths["data_dir"]))
+            identifier, workspace_id = "a" * 16, "b" * 16
+            attempt = manager.data / "workspace-rechecks" / identifier
+            attempt.mkdir(mode=0o700)
+            initial = {"version": 1, "format": "outlands-workspace-recheck-v1", "id": identifier,
+                "workspace_id": workspace_id, "status": "PREPARING", "created": 1,
+                "source_applied": False, "workspace_modified": False,
+                "creation_sha256": "c" * 64, "preview_sha256": "d" * 64, "history_sha256": "e" * 64}
+            spec = {"kind": "java-main", "sources": ["sample/Sum.java", "sample/SumTest.java"],
+                    "main_class": "sample.SumTest"} if java else "test_arithmetic.py"
+            task = {"checks": {"unit": spec}}
+            checks = passing_checks(None, task, None)
+            files = {name: sha(("Invented selected reader bytes: " + name).encode()) for name in
+                     (["sample/Sum.java", "sample/SumTest.java"] if java else ["arithmetic.py", "test_arithmetic.py"])}
+            verified = {**initial, "status": "VERIFIED", "finished": 2, "checks": checks,
+                "snapshot_sha256": "f" * 64, "checked_files": files, "task_sha256": sha(canonical(task)),
+                "bundle_sha256": sha(b"Invented reader bundle"), "config_sha256": sha(manager.config_raw),
+                "checks_sha256": sha(canonical(checks))}
+            self.assertTrue(controller.valid_recheck_receipt(initial))
+            self.assertTrue(controller.valid_recheck_receipt(verified))
+            path = attempt / "receipt.json"
+            write_new(path, canonical(initial))
+            child = Mock(); child.pid = 99999999; child.poll.return_value = 0 if exited else None
+            log = io.BytesIO()
+            manager.recheck_children[identifier] = (child, log)
+            try:
+                yield root, manager, identifier, path, verified, child, log, guarded
+            finally:
+                manager.recheck_children.pop(identifier, None)
+                log.close()
+                manager.close()
+                for guard in guarded:
+                    guard.assert_not_called()
+
+    @contextmanager
+    def replacement_window(self, root, path, replace):
+        original_open, original_fstat = os.open, os.fstat
+        evidence = {"attempts": 0, "fds": [], "last_committed": None}
+
+        def opened(name, flags, *args, **kwargs):
+            target = name == "receipt.json" and kwargs.get("dir_fd") is not None
+            if target:
+                evidence["attempts"] += 1
+            fd = original_open(name, flags, *args, **kwargs)
+            if target:
+                evidence["fds"].append(fd)
+                replace(evidence["attempts"])
+                evidence["last_committed"] = private_hashes(root)
+            return fd
+
+        with patch.object(controller.os, "open", side_effect=opened):
+            yield evidence
+        for fd in set(evidence["fds"]):
+            with self.assertRaises(OSError) as closed:
+                original_fstat(fd)
+            self.assertEqual(closed.exception.errno, 9)
+        if evidence["last_committed"] is not None:
+            self.assertEqual(private_hashes(root), evidence["last_committed"])
+
+    @staticmethod
+    def commit(path, raw):
+        stage = path.with_name(path.name + ".next")
+        write_new(stage, raw)
+        os.replace(stage, path)
+
+    def assert_custody(self, manager, identifier, child, log, *, exited):
+        child.poll.assert_called_once_with()
+        child.terminate.assert_not_called(); child.kill.assert_not_called(); child.wait.assert_not_called()
+        self.assertEqual(identifier in manager.recheck_children, not exited)
+        self.assertEqual(log.closed, exited)
+        if not exited:
+            self.assertIs(manager.recheck_children[identifier][0], child)
+
+    def test_atomic_replacement_adopts_new_python_java_receipt_for_live_or_exited_child(self):
+        for java in (False, True):
+            for exited in (False, True):
+                with self.subTest(java=java, exited=exited), self.receipt_fixture(java=java, exited=exited) as data:
+                    root, manager, identifier, path, verified, child, log, _ = data
+                    def replace(attempt):
+                        if attempt == 1:
+                            self.commit(path, canonical(verified))
+                    with self.replacement_window(root, path, replace) as evidence:
+                        result = manager.recheck_view(identifier)
+                    self.assertEqual(evidence["attempts"], 2)
+                    self.assertEqual(result, {**verified, "owned_active": not exited})
+                    self.assertEqual(path.read_bytes(), canonical(verified))
+                    self.assert_custody(manager, identifier, child, log, exited=exited)
+
+    def test_reopened_invalid_and_unsafe_replacements_still_refuse_without_fallback(self):
+        for kind in ("json", "schema", "id", "nul", "utf8", "limit", "hardlink", "symlink", "directory", "missing"):
+            with self.subTest(kind=kind), self.receipt_fixture(exited=True) as data:
+                root, manager, identifier, path, verified, child, log, _ = data
+                outside = root / "invented-replacement.json"
+                if kind in {"hardlink", "symlink"}:
+                    write_new(outside, canonical(verified))
+                def replace(attempt):
+                    if attempt != 1:
+                        return
+                    if kind in {"hardlink", "symlink", "directory", "missing"}:
+                        path.unlink()
+                        if kind == "hardlink": path.hardlink_to(outside)
+                        elif kind == "symlink": path.symlink_to(outside)
+                        elif kind == "directory": path.mkdir(mode=0o700)
+                        return
+                    changed = dict(verified)
+                    if kind == "schema": changed["checks"] = {"unit": {**verified["checks"]["unit"], "tests_ran": True}}
+                    if kind == "id": changed["id"] = "c" * 16
+                    raw = {"json": b"{", "nul": b"a\x00b", "utf8": b"\xff", "limit": b"x" * 262145}.get(kind, canonical(changed))
+                    self.commit(path, raw)
+                with self.replacement_window(root, path, replace) as evidence:
+                    with self.assertRaisesRegex(Refused, "^RECHECK_RECORD_INVALID$"):
+                        manager.recheck_view(identifier)
+                self.assertEqual(evidence["attempts"], 2)
+                self.assert_custody(manager, identifier, child, log, exited=True)
+
+    def test_two_unlinked_descriptors_refuse_after_exactly_two_opens(self):
+        with self.receipt_fixture() as data:
+            root, manager, identifier, path, verified, child, log, _ = data
+            def replace(_attempt):
+                self.commit(path, canonical(verified))
+            with self.replacement_window(root, path, replace) as evidence:
+                with self.assertRaisesRegex(Refused, "^RECHECK_RECORD_INVALID$"):
+                    manager.recheck_view(identifier)
+            self.assertEqual(evidence["attempts"], 2)
+            self.assertEqual(path.read_bytes(), canonical(verified))
+            self.assert_custody(manager, identifier, child, log, exited=False)
+
+    def test_default_reader_and_ordinary_invalid_original_never_retry(self):
+        with self.receipt_fixture() as data:
+            root, manager, identifier, path, verified, child, log, _ = data
+            def replace(attempt):
+                if attempt == 1:
+                    self.commit(path, canonical(verified))
+            with self.replacement_window(root, path, replace) as evidence:
+                with self.assertRaisesRegex(Refused, "^INPUT_TYPE$"):
+                    controller.readiness_read_file(path.parent, path.name, 262144)
+            self.assertEqual(evidence["attempts"], 1)
+            child.poll.assert_not_called()
+            self.assertIs(manager.recheck_children[identifier][0], child)
+            self.assertFalse(log.closed)
+        for raw in (b"{", canonical({"status": "VERIFIED"})):
+            with self.subTest(raw=raw[:16]), self.receipt_fixture() as data:
+                root, manager, identifier, path, _verified, child, log, _ = data
+                path.write_bytes(raw)
+                with self.replacement_window(root, path, lambda _: None) as evidence:
+                    with self.assertRaisesRegex(Refused, "^RECHECK_RECORD_INVALID$"):
+                        manager.recheck_view(identifier)
+                self.assertEqual(evidence["attempts"], 1)
+                self.assert_custody(manager, identifier, child, log, exited=False)
 
 
 if __name__ == "__main__":

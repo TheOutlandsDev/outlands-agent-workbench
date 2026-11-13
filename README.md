@@ -5,7 +5,15 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.28 adds **Failed and Stopped Run Workflow Verification**: two fresh,
+Version 0.29 adds **Live Run and Stop Verification**: a separate once-only QA
+harness exposes the normal browser Run and Stop controls for a fresh controlled
+child. Stop requires a durable successful Running-view response for that exact
+owned child and the original armed checkpoint. Browser-visible Running is checked
+separately from HTTP response delivery. The existing worker's finite deadline,
+truthful Failed metadata, missing-result review/export refusals and read-only
+restart remain in place. No agent, check or model executes in this new case.
+Real fixture records and receipts stay private. It retains version 0.28's
+**Failed and Stopped Run Workflow Verification**: two fresh,
 once-only QA fixtures exercise a controlled local child failure and an explicit
 owned stop at a bounded checkpoint. Both preserve the normal controller's Failed
 metadata when no agent result exists; separate private receipts distinguish the
@@ -13,6 +21,17 @@ controlled exit from the observed stop. These processes perform no agent, model
 or check execution and create no invented agent result, patch or review. Saved
 evidence remains incomplete and review/export gates refuse insufficient evidence.
 Restart inspection preserves the outcome without starting another attempt.
+
+The recheck reliability amendment passes **1,214 unit methods across 56 suites**
+and a fresh complete native acceptance run, including the inherited recheck path
+and the v0.29 Run/Stop case. A deterministic publication race now permits one
+strict guarded reopen of an atomically replaced recheck receipt; directory
+refusals also close their opened descriptor. The initial failed run stays retained
+and its exact runtime cause remains unconfirmed. Earlier browser observations
+apply to the initial v0.29 source; this amendment was qualified offline without a
+new browser or real-model trial. See [validation](VALIDATION.md) for evidence and
+retained limits. The update remains a draft PR for review.
+
 This is controlled process-lifecycle verification with unchanged production
 engine, admission and providers. It retains **Complete Review Workflow Verification**: the restricted
 offline harness can inspect the completed scripted run through normal history,
@@ -1609,6 +1628,49 @@ reload the page and repeat inspection. A new server session clears cached
 cards. This browser check verifies completed-feed composition and persistence;
 it does not show the earlier running-to-completed transition. Keep all receipts,
 histories, notes, worker evidence and exported patches private.
+
+## Verify live Run and Stop in the browser
+
+The separate `offline_live_stop.py` QA wrapper creates a fresh controlled Stop
+fixture. It reuses the unchanged lifecycle worker, strict launch checks and
+normal browser history/view/Run/Stop handler. It never adopts an existing
+project, previous fixture or real Workbench data root. Initialize a new private
+root outside source, then serve it on its fixed loopback port:
+
+```sh
+python3 -B offline_live_stop.py init --work-dir /absolute/new-private-live-stop
+python3 -B offline_live_stop.py serve --work-dir /absolute/new-private-live-stop --port 36231
+```
+
+Keep the fixed Arithmetic demo project, Scripted exercise profile and original
+Task. Click **Run task** once, observe **Running** for that selected run, then
+click **Stop task** once. The normal successful Running-view response and the
+original worker's armed checkpoint must be recorded for the exact owned child
+before explicit Stop is eligible. An HTTP response receipt alone does not prove
+the browser rendered it. The finite observation window does not authorize
+unbounded waiting, retries or a second task.
+
+The controlled worker executes no agent, model or project check and writes no
+agent result. Normal terminal metadata therefore remains **Failed**. A verified
+owned Stop requires the original durable SIGTERM/exit-130 receipt chain; expiry,
+containment, missing evidence or uncertain ownership stays unqualified. Review
+and export remain unavailable when result/patch evidence is missing.
+
+After settlement, close the foreground server, retain its receipts and restart
+the same serve command with the exact same source checkout. Reload the fresh
+session and inspect normal history, diagnostics and saved evidence read-only.
+Do not click Run or Stop again. Inspect the separate typed report with:
+
+```sh
+python3 -B offline_live_stop.py inspect --work-dir /absolute/new-private-live-stop
+```
+
+The native acceptance runner uses its own separate new fixture. Native HTTP
+checks, actual browser observations and real-model qualification are distinct.
+No Java agent is qualified and the original uncertain Java trial stays held.
+Keep all generated roots, session data, notes, logs, receipts, reports and
+screenshots private. See [validation](VALIDATION.md) for observed outcomes and
+the preserved finite-window and response-delivery limits.
 
 ## Verify failed and stopped workflow fixtures
 
