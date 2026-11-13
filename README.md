@@ -27,10 +27,12 @@ and a fresh complete native acceptance run, including the inherited recheck path
 and the v0.29 Run/Stop case. A deterministic publication race now permits one
 strict guarded reopen of an atomically replaced recheck receipt; directory
 refusals also close their opened descriptor. The initial failed run stays retained
-and its exact runtime cause remains unconfirmed. Earlier browser observations
-apply to the initial v0.29 source; this amendment was qualified offline without a
-new browser or real-model trial. See [validation](VALIDATION.md) for evidence and
-retained limits. The update remains a draft PR for review.
+and its exact runtime cause remains unconfirmed. Separate post-merge browser
+verification now covers fresh invented Java and Python bundle-workspace rechecks,
+their actual fixed checks and an unchanged read-only restart. The earlier live
+Run/Stop browser observations remain separate historical evidence. See
+[validation](VALIDATION.md) for the dated scope, preserved failures and limits.
+No new real-model or agent trial was performed.
 
 This is controlled process-lifecycle verification with unchanged production
 engine, admission and providers. It retains **Complete Review Workflow Verification**: the restricted
