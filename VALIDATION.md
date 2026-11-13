@@ -1,26 +1,72 @@
 # Version 0.29 validation
 
-All **1,210 unit methods across 56 suites passed** on the final source.
-The separate current-source targeted v0.29 native qualification and the actual
-browser Run/Stop plus read-only restart passed. All **128 qualified code, static
-and example hashes** stayed unchanged. These are local results, not GitHub CI.
+## Recheck reliability amendment
 
-The **complete native acceptance runner did not pass**: an unchanged inherited
-snapshot-recheck stage returned RECHECK_RECORD_INVALID before the v0.29 stage
-was reached. That failure is retained and is not repaired or requalified by the
-targeted result. The source update is prepared as a **draft PR**, with this full
-acceptance limitation explicit.
+All **1,214 unit methods across 56 suites passed** on the amended source. A
+separate fresh targeted Python/Java workspace and snapshot recheck qualification
+passed, followed by a **fresh complete native acceptance PASS**, including the
+previously blocked dependency path and the v0.29 Run/Stop case. All **128 code,
+static and example pins** remained unchanged during qualification. These are
+local offline results, not GitHub CI or real-model qualification.
+
+The initial v0.29 full acceptance run remains FAILED and retained. Its traceback
+identifies a guarded-read/parse refusal before schema/ID validation, but does not
+retain the underlying exception. Later saved receipts are complete JSON with
+VERIFIED status. Those later bytes do not establish what the failed read saw.
+The original runtime cause remains **unconfirmed**; a new PASS does not relabel
+that earlier run. Its complete worker-exit audit remains unverified.
+
+A fresh deterministic synthetic case proves a concrete source defect class:
+os.replace can unlink an opened regular receipt between open and fstat. The old
+reader rejects that descriptor with INPUT_TYPE. Only recheck_view now opts into
+one reopen after the first descriptor is both regular and has zero links. It
+never reads the unlinked descriptor. The newly named file must pass the existing
+no-follow/nonblocking, regular/single-link, bounded-size, NUL/UTF-8 and later
+schema/ID guards. A second unlink, malformed or unsafe replacement still refuses.
+There is no cached result, sleep, task retry, execution or record rewrite added
+by this bounded reread. Other callers retain a single-open default.
+
+Four new regression methods use invented Python/Java receipt shapes and fake
+live/exited children without a worker, Git, project check, compiler or provider.
+They cover valid replacement, malformed JSON/schema/IDs, binary/UTF-8/size bounds,
+multiple links, symlinks, directories, missing files, a second unlink, descriptor
+closure and unchanged defaults. The unchanged source failed these new cases as
+expected. The first corrected integration run exposed a real directory-descriptor
+leak: fdopen could raise before the old context closed its successful open. That
+failed result and source are retained. Explicit descriptor ownership now closes
+on every path, and the unchanged regression suite passes **25/25 methods**.
+
+The first focused native attempt was refused by the tool sandbox's Bubblewrap
+network-namespace restriction: infrastructure_error was true and zero project
+tests ran. It remains FAILED. A distinct fresh fixture with required namespace
+support passed actual Python/Java checks, intentional failed-check and owned-stop
+cases, source/Git preservation and earlier-evidence preservation. The complete
+runner then passed on another new fixture. Its collector observed no residual
+command lines naming that fresh root after exit; this bounded observation is
+not an operating-system-wide worker-exit or packet audit. No earlier failed
+workspace was reopened through Manager, repaired, reset, adopted or cleaned up.
+
+Earlier actual browser observations below apply to the **initial v0.29 source**.
+Browser HTML/JavaScript/CSS are unchanged by this amendment, but no new browser
+trial was run on the amended backend. Real records and generated fixtures remain
+private. The original uncertain Java trial remains held/unqualified, no Java
+agent or real model is qualified, and licensing remains UNASSIGNED. The source
+amendment remains a draft PR for review; no merge, release or deployment is part
+of this qualification.
 
 ## Scope and evidence classes
 
 Four new source modules provide a separate live Run/Stop QA wrapper, native
 acceptance and two regression suites. The existing runner adds the suites and
 calls the new acceptance stage last. The public snapshot has 132 files, including
-128 qualified code/static/example inputs. The other 123 inherited files remain
-byte-identical: production engine, Manager, admission, providers, Java client,
-old QA/worker modules, saved readers, review writer, export gates and browser
-JavaScript/CSS are unchanged. Only the HTML version badge changes outside docs,
-the runner and the four new modules. No dependency or service is installed.
+128 qualified code/static/example inputs. Relative to the initial v0.29 draft,
+the amendment changes only workbench.py, its existing recheck integration suite
+and three documentation files. The shared guarded reader closes every opened
+leaf descriptor, and only recheck_view opts into one reopen after a regular
+opened descriptor is found unlinked. Other reader defaults and strict receipt
+validation remain. Agent execution, admission logic, providers, Java client,
+workers, other readers, review writers, export gates and browser JavaScript/CSS
+are unchanged. No dependency or service is installed.
 
 The wrapper creates its own new private root around a new unchanged v0.28 Stop
 fixture. It reuses the original logical-command validation, source fingerprints,
@@ -147,9 +193,9 @@ Both consumed candidates, their code bytes, logs and fixture snapshots remain
 private and unchanged. Final qualification uses another fresh corrected-source
 workspace; it neither adopts nor re-executes either retained fixture.
 
-## Complete inherited acceptance limitation
+## Initial complete acceptance failure (retained)
 
-The final full runner passed all 1,210 unit methods but exited in the unchanged
+The initial v0.29 full runner passed all 1,210 unit methods but exited in the unchanged
 inherited snapshot-recheck acceptance path with RECHECK_RECORD_INVALID. That
 stage precedes the new v0.29 stage, so no v0.29 fixture or Run was consumed there.
 The inherited failure, source bytes and logs remain retained. Its finally block

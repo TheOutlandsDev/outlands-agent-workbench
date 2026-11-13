@@ -22,10 +22,15 @@ or check execution and create no invented agent result, patch or review. Saved
 evidence remains incomplete and review/export gates refuse insufficient evidence.
 Restart inspection preserves the outcome without starting another attempt.
 
-The v0.29 unit, targeted native and browser checks passed. The complete inherited
-acceptance runner stopped at an earlier snapshot-recheck stage before reaching
-the new case; that failure remains retained. This update is prepared as a draft
-PR with the full acceptance limitation recorded in [validation](VALIDATION.md).
+The recheck reliability amendment passes **1,214 unit methods across 56 suites**
+and a fresh complete native acceptance run, including the inherited recheck path
+and the v0.29 Run/Stop case. A deterministic publication race now permits one
+strict guarded reopen of an atomically replaced recheck receipt; directory
+refusals also close their opened descriptor. The initial failed run stays retained
+and its exact runtime cause remains unconfirmed. Earlier browser observations
+apply to the initial v0.29 source; this amendment was qualified offline without a
+new browser or real-model trial. See [validation](VALIDATION.md) for evidence and
+retained limits. The update remains a draft PR for review.
 
 This is controlled process-lifecycle verification with unchanged production
 engine, admission and providers. It retains **Complete Review Workflow Verification**: the restricted
