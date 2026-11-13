@@ -376,3 +376,16 @@ private logs and workspace evidence. No public helper, product feature,
 dependency, syscall audit, deployment or rights claim is added. Earlier failures,
 private gate limits, unknown causes, the original uncertain Java hold and
 UNASSIGNED licensing remain.
+
+### Version 0.29 launcher-to-scripted-patch observation
+
+A separate fresh full-launcher browser trial on 2026-11-13 completed the invented
+scripted Python task, actual baseline/agent/final checks, diff inspection, one
+accepted review and an actual private patch download, followed by normal server
+shutdown. The original project and public source stayed unchanged. This is
+deterministic scripted-workflow evidence, not real-model or real-project coding
+qualification. Private capture-command correction and download-permission
+tightening are retained separately from product behavior. No new code, helper,
+dependency, license or rights claim is published; records, notes, check output
+and patches remain private. Earlier failures, unknown causes, private gate
+limits, the original uncertain Java hold and UNASSIGNED licensing remain.

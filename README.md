@@ -53,6 +53,13 @@ process to the normal server. The browser showed genuinely empty history; no
 task was run. Normal server shutdown and workspace/source preservation were
 observed, with the narrow limits recorded in [validation](VALIDATION.md).
 
+A later fresh launcher-to-patch browser trial completed one deterministic
+scripted Python task, its checks and diff review, one explicit acceptance and an
+actual private patch download. The original project stayed unchanged and the
+normal server shut down cleanly. This qualifies the stated invented scripted
+workflow, with retained tooling limits; it adds no real-model or real-project
+claim. See [validation](VALIDATION.md) for the separate dated observation.
+
 This is controlled process-lifecycle verification with unchanged production
 engine, admission and providers. It retains **Complete Review Workflow Verification**: the restricted
 offline harness can inspect the completed scripted run through normal history,

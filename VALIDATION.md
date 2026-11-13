@@ -228,6 +228,55 @@ causes and the 1,214-method/56-suite native qualification remain separate. The
 original uncertain Java hold and UNASSIGNED licensing remain unchanged; no code
 feature, deployment or license change is introduced.
 
+## Separate full launcher-to-scripted-patch observation
+
+On **2026-11-13**, one fresh full launcher invocation used the unchanged 132-file
+source at merged commit `69debdb872281e4e284a564097381fe049ce3ee9`, with no model
+or JDK configured. The doctor passed and the normal server loaded the genuine
+Arithmetic demo. The unchanged doctor PASS gate establishes its one isolated
+prerequisite unittest; raw prerequisite output remains unavailable from the CLI.
+
+The browser clicked Run once, observed Running and then Ready for review after
+six deterministic scripted turns, and inspected the checks and diff. The saved
+task was terminal REVIEW_READY with controller-recorded worker exit zero. The
+recorded check observations were:
+
+| Stage | Tests | Exit | Observation |
+| --- | ---: | ---: | --- |
+| Baseline | 4 | 1 | 3 expected failures in the intentionally failing demo |
+| Agent-requested check | 4 | 0 | Passed |
+| Independent final check | 4 | 0 | Passed |
+
+None reported timeout, output-limit or infrastructure errors. The correction was
+confined to the private candidate copy; the original project and protected test
+stayed unchanged. After reviewing the diff, one explicit acceptance recorded the
+exact result/patch pins with source_applied false. One actual browser download
+produced a 112-byte private patch matching the saved complete patch exactly.
+No API substitute or fabricated download established that observation.
+
+All six original workspace files and all 132 source hashes remained exact before
+this documentation update. The final workspace had 45 files and 21 directories.
+The tab closed before normal SIGTERM server shutdown, which exited zero with no
+recorder containment, empty launcher stderr and a subsequently refused owned
+listener. Disposable prerequisite temporary files were cleaned by product
+design; the private workspace, logs, checks, review and download remain retained.
+
+An initial private browser capture command failed because its local filesystem
+binding was undefined, before any capture write or task Run. It was corrected in
+the same active session without app reload or task retry. The desktop download
+initially had mode 0664; only that exact owned file was tightened to 0600, with
+its bytes unchanged. Both are retained tooling observations, not product/task
+failures or additional trial attempts.
+
+This is actual isolated-check and browser evidence for the invented scripted
+Python demo. No real model, JDK, real project, adoption, Git workspace or new
+Workbench unit-suite/CI qualification is established. The worker exit is the
+normal controller's recorded result, not an independent descendant audit. Raw
+records, notes, check output, download, screenshots, runtime identifiers and
+private helpers stay excluded from public source. Earlier failures, unknown
+causes, observer/gate limits and the prior 1,214-method/56-suite native result
+remain separate. The original Java hold and UNASSIGNED licensing are unchanged.
+
 ## Scope and evidence classes
 
 Four new source modules provide a separate live Run/Stop QA wrapper, native
