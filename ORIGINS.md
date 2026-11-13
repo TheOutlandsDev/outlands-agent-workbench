@@ -389,3 +389,18 @@ tightening are retained separately from product behavior. No new code, helper,
 dependency, license or rights claim is published; records, notes, check output
 and patches remain private. Earlier failures, unknown causes, private gate
 limits, the original uncertain Java hold and UNASSIGNED licensing remain.
+
+### Version 0.29 saved-workspace launcher observation
+
+A separate existing-workspace launcher trial on 2026-11-13 used a fresh private
+fixture containing clearly invented terminal history, check values and an
+accepted review. Normal browser inspection and shutdown preserved those bytes;
+only the normal server-info placeholder was replaced. The doctor's prerequisite
+test is separate from the invented saved evidence. This qualifies startup,
+rendering and preservation, not new task/check/review execution or worker resume.
+Root seed validation and focused record-mode clearance preceded launch. A full
+helper audit was not performed; the review-tracking error was corrected before
+publication with the earlier private records retained. No public
+fixture, helper, code feature, dependency, rights claim or license is added.
+Earlier actual scripted qualification, failures, unknown causes, private gate
+limits, the original uncertain Java hold and UNASSIGNED licensing remain.

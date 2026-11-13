@@ -277,6 +277,61 @@ private helpers stay excluded from public source. Earlier failures, unknown
 causes, observer/gate limits and the prior 1,214-method/56-suite native result
 remain separate. The original Java hold and UNASSIGNED licensing are unchanged.
 
+## Separate saved-workspace launcher observation
+
+On **2026-11-13**, one normal launcher start used the unchanged 132-file source
+at merged commit `2e6e609742c7cf9083b180ab5b120e420262848f` and a new private
+fixture whose workspace already existed. Its configuration had no models or
+JDK and one clearly labelled synthetic project. The launcher loaded that
+configuration, skipped demo initialization and handed the same owned PID and
+process start stamp to the exact normal server command.
+
+The doctor inspected Git's version and returned PASS. Its unchanged source gate
+requires one isolated Python prerequisite unittest; raw prerequisite output is
+not exposed by the CLI. This executed prerequisite is separate from every saved
+task/check value below. No task or project check was run during this trial.
+
+The fixture contained one explicitly invented terminal REVIEW_READY run and
+accepted review, with 20 invented stored events. The profile, saved goal, plan,
+check outputs and review note visibly identified the evidence as invented and
+not executed. Its apparent six turns and four-test statuses were synthetic
+schema values, not observed task execution or test results. Saved metadata
+omitted worker PID, process-stamp and exit-code fields; it supplied no worker
+exit or worker-resumption evidence.
+
+The normal browser automatically selected the one history entry. Exactly three
+view-tab clicks inspected Checks, Diff and Review & export. They displayed the
+invented check labels, seeded one-line patch and existing accepted review pins
+and note. No Run, task Stop, edit, acceptance/rejection, review write, export,
+download, project check, preset, refresh, setup, Git/workspace, model or JDK action
+was requested. The tab closed before explicit normal server shutdown.
+
+The seeded workspace had 37 files and 21 directories. The sole seed-to-ready
+change was normal replacement of the explicitly invented server-info
+placeholder. The other 36 files retained their bytes, modes and link counts;
+all 21 directory rows stayed unchanged. All 37 ready and closed file rows matched exactly;
+saved task, check, patch and review records stayed unchanged. All 132 source
+hashes matched before and after, before this documentation update. Normal
+SIGTERM exited zero, the owned listener subsequently refused connections with
+ECONNREFUSED, and there was no recorder containment, launcher stderr or temporary
+residue. Product disposable prerequisite cleanup remains separate from retained
+private records, logs and workspace evidence.
+
+Root's actual seed validation and focused independent record-mode clearance
+preceded the single launcher start. A full-helper audit was not performed;
+messages to an idle reviewer had not started that review. This tracking error
+was corrected before publication, with the earlier private records retained.
+These observations qualify only startup,
+normal UI rendering and preservation of this invented saved fixture, not a newly
+executed task, check, review, accepted decision or resumed worker. No syscall,
+HTTP-method or broad descendant/network audit, real-model, Java-agent,
+real-project, new unit-suite/CI or deployment qualification follows. Private
+fixtures, records, notes, runtime identifiers, hashes, screenshots and helpers
+remain excluded from public source. Earlier actual scripted qualification, the
+1,214-method/56-suite native result, failed trials, unknown causes and observer
+gate limits remain separate. Root's two authorized original Java preservation
+hashes stayed unchanged; the original hold and UNASSIGNED licensing remain.
+
 ## Scope and evidence classes
 
 Four new source modules provide a separate live Run/Stop QA wrapper, native
