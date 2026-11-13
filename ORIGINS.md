@@ -269,3 +269,20 @@ checks, normal-feed completed-result browser inspection and real-model
 qualification remain separate evidence classes. No new dependency or license
 is introduced; real records remain private, the original uncertain Java trial
 remains held/unqualified and licensing stays UNASSIGNED.
+
+
+## Version 0.28: failed and stopped run workflow verification
+
+This milestone adds a separate standard-library QA lifecycle harness, native
+acceptance and regression tests. It reuses the original strict success harness,
+normal controller and saved-evidence readers without modifying them. A validated
+fixed launch is redirected only to its explicitly source-bound controlled child;
+real process exit/stop receipts are separate from agent results. No agent result,
+patch, review or Interrupted metadata is fabricated. Private incomplete evidence
+remains uncertain; current production admission, worker, provider behavior,
+Java client, browser JavaScript/CSS, writer and export gates are unchanged.
+Only the HTML version badge changes. There is no external dependency, real-model
+or Java-agent qualification, deployment or license assignment. Real records and
+all generated fixtures remain private; the original uncertain Java hold remains
+held/unqualified and licensing stays UNASSIGNED. Naming-only provenance checks
+remain distinct from authorship or redistribution clearance.
