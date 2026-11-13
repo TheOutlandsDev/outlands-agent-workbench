@@ -323,7 +323,13 @@ failure and source remain retained. The unchanged tests then passed. A focused
 native attempt was namespace-refused with zero project tests and remains failed.
 Distinct fresh Python/Java qualification and a new complete offline run passed
 all 1,214 unit methods across 56 suites and every native acceptance stage. Earlier
-failures are not relabelled. Browser observations remain specific to the initial
-v0.29 source. No new dependency, upstream source, rights claim, license or public
-runtime data is introduced. Original notices, private-record exclusions, the
-uncertain Java hold and UNASSIGNED licensing remain.
+failures are not relabelled. The earlier Live Run/Stop browser observations remain
+specific to the initial v0.29 source. Separate post-merge browser verification on
+2026-11-13 exercises fresh invented Python/Java bundle-workspace rechecks and
+read-only restart through the normal Manager/handler and unchanged UI. It uses a
+private allowlisted loopback wrapper rather than the production CLI; those
+helpers and actual records are excluded from public source. Actual fixed checks
+remain separate from model or Java-agent qualification. No new dependency,
+upstream source, frontend feature, rights claim, license or public runtime data
+is introduced. Original notices, private-record exclusions, the unconfirmed
+historical cause, uncertain Java hold and UNASSIGNED licensing remain.

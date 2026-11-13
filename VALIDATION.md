@@ -46,13 +46,48 @@ command lines naming that fresh root after exit; this bounded observation is
 not an operating-system-wide worker-exit or packet audit. No earlier failed
 workspace was reopened through Manager, repaired, reset, adopted or cleaned up.
 
-Earlier actual browser observations below apply to the **initial v0.29 source**.
-Browser HTML/JavaScript/CSS are unchanged by this amendment, but no new browser
-trial was run on the amended backend. Real records and generated fixtures remain
-private. The original uncertain Java trial remains held/unqualified, no Java
-agent or real model is qualified, and licensing remains UNASSIGNED. The source
-amendment remains a draft PR for review; no merge, release or deployment is part
-of this qualification.
+Earlier actual Live Run/Stop browser observations below apply to the **initial
+v0.29 source**. The merged recheck backend has separately passed the dated browser
+verification below. Browser HTML/JavaScript/CSS remain unchanged. Real records and
+generated fixtures stay private. The original uncertain Java trial remains
+held/unqualified, no Java agent or real model is qualified, and licensing remains
+UNASSIGNED. These validation observations include no release or deployment.
+
+## Post-merge Python/Java browser recheck verification
+
+On **2026-11-13**, fresh browser verification used the unchanged 132-file source
+at merged commit `a510c235e8b963d67d526f122f09f107f5652dd7`. A private allowlisted
+loopback wrapper served the normal `Manager`, `make_handler` and unchanged UI.
+The production CLI was not used; the wrapper avoided its server-info write.
+Private helpers, fixtures and actual records remain outside public source.
+
+The target history was genuinely empty, with no feed stub. Invented recorded
+bundles supplied separate actual creation checks. One manual Unicode comment was
+added to each editable private worktree. Through the browser, exactly two recheck
+previews and starts launched two workers, Java first and Python second. The
+browser observed PREPARING and then VERIFIED with owned_active false for both.
+The Java check ran one test and the Python check ran four; both exited zero with
+no infrastructure error, timeout or output truncation. These are fixed-check
+results on invented source, with no model or coding-agent execution.
+
+After settlement, a fresh-token server session and browser reload performed only
+GET history/detail inspection. It made zero POST, preview, start, spawn, provider,
+agent, check, review or export operations. Two final global-history response bodies
+and two selected-detail response bodies had exactly the same hashes across
+restart. All 204 file rows and 149 directory rows, including their modes, were
+unchanged during read-only restart. All 188 initial file bytes/modes were
+preserved; the live rechecks added only 16 files within the workspace-rechecks
+store. All 132 source hashes remained unchanged throughout acceptance, before
+this documentation update.
+
+Both temporary owned listeners were closed, with ECONNREFUSED observations. Root
+compared only the original uncertain Java trial's two authorized preservation
+hashes; both remained unchanged. The browser phases requested no adoption, commit
+or export; private setup bundle preparation remains separate. No new Live Run/Stop
+case, real-model request or Java-agent trial was performed. The prior 1,214-method,
+56-suite complete native qualification remains separate evidence; this browser
+verification adds no new unit-test or GitHub CI claim. The original failed runs,
+unconfirmed historical cause and earlier worker-exit audit limits remain intact.
 
 ## Scope and evidence classes
 
@@ -245,7 +280,7 @@ Read-only restart uses fresh managers and session tokens with the same source
 and fixture; it starts no worker, model, check, Stop, review writer or export.
 Prior Python/Java scripted-client and fixed-check acceptance remains separate.
 
-## Browser observations
+## Initial v0.29 Live Run/Stop browser observations (historical)
 
 One fresh, source-bound browser fixture runs through the real normal handler
 and real loopback HTTP. The browser clicked Run once, visibly showed Running
