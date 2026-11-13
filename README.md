@@ -5,7 +5,16 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
-Version 0.27 adds **Complete Review Workflow Verification**: the restricted
+Version 0.28 adds **Failed and Stopped Run Workflow Verification**: two fresh,
+once-only QA fixtures exercise a controlled local child failure and an explicit
+owned stop at a bounded checkpoint. Both preserve the normal controller's Failed
+metadata when no agent result exists; separate private receipts distinguish the
+controlled exit from the observed stop. These processes perform no agent, model
+or check execution and create no invented agent result, patch or review. Saved
+evidence remains incomplete and review/export gates refuse insufficient evidence.
+Restart inspection preserves the outcome without starting another attempt.
+This is controlled process-lifecycle verification with unchanged production
+engine, admission and providers. It retains **Complete Review Workflow Verification**: the restricted
 offline harness can inspect the completed scripted run through normal history,
 saved evidence, the explicit review-history list and selected detail. Restart
 inspection reuses the same saved artifacts without another worker or check.
@@ -1601,6 +1610,70 @@ cards. This browser check verifies completed-feed composition and persistence;
 it does not show the earlier running-to-completed transition. Keep all receipts,
 histories, notes, worker evidence and exported patches private.
 
+## Verify failed and stopped workflow fixtures
+
+The separate `offline_lifecycle.py` QA harness surrounds a fresh unchanged offline
+workflow with its own source-bound control and typed private receipts. Choose only
+one fixed `fail` or `stop` scenario per new outer root. Each root admits one exact
+configured demo launch; the harness redirects its validated command to a fixed
+controlled child and never runs the agent or a model. Existing success-workflow
+fixtures, production admission, review writers and export gates are unchanged.
+
+The failure child exits with code 23 after the parent-started handshake. The stop
+child first publishes a bounded armed checkpoint. One explicit Stop for the exact
+owned live child records intent and delegates the existing controller stop; a
+verified SIGTERM with exit 130 is retained separately. Both appear as **Failed**
+in normal history because no agent result exists. Deadline expiry, incomplete
+receipts and uncertain ownership stay unqualified; a process stop does not prove
+remote inference stopped. No result or Interrupted label is manufactured.
+
+The complete acceptance runner creates two fresh private lifecycle roots, reads
+normal history/view and diagnostics, explicitly inspects saved metadata/evidence
+and receipt history, then repeats read-only inspection after restart. Missing
+result/run evidence stays Unknown or incomplete, with an empty receipt list and
+no fabricated historical selection. Acceptance and export require the existing
+passing artifact evidence and are refused for these cases. Once-only claims,
+source/config/task bytes, runtime records and receipts are retained without
+reset, adoption, retry or cleanup. The native cases are controlled process
+experiments; focused tests use labelled fake receipts and child objects.
+
+After a successful complete acceptance run, inspect each retained case with the
+same source checkout and Python executable used by the runner:
+
+```sh
+python3 -B offline_lifecycle.py inspect \
+  --work-dir /absolute/new-private-acceptance/lifecycle-fail
+python3 -B offline_lifecycle.py inspect \
+  --work-dir /absolute/new-private-acceptance/lifecycle-stop
+```
+
+A verified report describes the expected controlled process behavior. The saved
+coding-task state remains Failed, with no completed agent result. For read-only
+browser inspection, run one case in the foreground on its fixed loopback port:
+
+```sh
+python3 -B offline_lifecycle.py serve \
+  --work-dir /absolute/new-private-acceptance/lifecycle-fail --port 36229
+# After stopping that server, inspect the separate Stop case:
+python3 -B offline_lifecycle.py serve \
+  --work-dir /absolute/new-private-acceptance/lifecycle-stop --port 36230
+```
+
+The two ports are fixed per scenario. Stop the owned foreground server with
+Ctrl+C. A normal session/shutdown receipt pair is added to the outer case; prior
+worker, stop and runtime evidence stays unchanged. The separate `init` command
+requires a new private root and exactly one `fail` or `stop` scenario; it never
+adopts an existing root or runs the controlled process. Full native acceptance
+creates and consumes its own fresh cases automatically.
+
+Keep generated roots and receipts outside the repository and out of GitHub. Use
+the same source checkout to inspect an existing case. Browser inspection of the
+completed cases is read-only: do not click Run, Stop, Accept, Reject or download.
+The actual controlled Stop belongs to the one native acceptance attempt.
+Separate existing Java checks in the full runner remain distinct from these
+cases; neither a Java agent nor the original uncertain Java trial is exercised.
+See [validation](VALIDATION.md) for observed outcomes and current limits.
+
 ## Run acceptance checks
 
 Use a shell with umask 022 for the complete suite: an existing negative
@@ -1616,7 +1689,7 @@ new acceptance directory under an owner-only private parent.
 )
 ```
 
-Final v0.27 offline qualification passed 1,145 unit methods across 52 suites, including
+Final v0.28 offline qualification passed 1,178 unit methods across 54 suites, including
 snapshot workspace, snapshot export and selected-project engine/controller/HTTP
 regressions. The runner compiles the Java client with Java 17 compatibility and
 warnings as errors, compares Python/Java scripted results,
@@ -1738,6 +1811,18 @@ sessions verify the same completed normal feed and exact note/time/hash persiste
 they do not observe the earlier RUNNING transition. VALIDATION.md records retained
 test corrections, exact normal CLI receipt additions and qualification limits.
 
+Version 0.28 adds 19 harness methods and 14 controller/HTTP integration methods.
+Its first complete native runner passes 1,178 methods across 54 suites, including
+all earlier acceptance stages. Two fresh actual controlled processes produce
+exit 23 and explicit owned SIGTERM/exit 130; both retain the normal Failed metadata
+with no agent result. Real review/export probes refuse insufficient evidence.
+Source/control/runtime evidence and Unknown incomplete review history remain exact
+after read-only restart. The inherited 624 frontend checks pass. Four native
+read-only browser sessions verify both completed normal feeds, diagnostics,
+disabled acceptance/export and cached-view clearing across restart, with zero new
+execution or action requests. VALIDATION.md records source-permission setup
+refusals, evidence classes, normal CLI receipt additions and all limitations.
+
 The runner makes no AI inference requests. The
 demo's `test_calculator.py` is intentionally failing before a task; use the acceptance runner rather than unrestricted test
 discovery across the entire repository.
@@ -1750,7 +1835,7 @@ execution and writes. It checks baseline reconstruction, tested/different/missin
 observations, project drift and preservation; the inspector performs no checks
 or model requests of its own.
 
-Version 0.27 adds no real-model qualification. The offline harness, saved-run reviews, preset previews, named task presets, snapshot review workspaces,
+Version 0.28 adds no real-model qualification. The offline harness, saved-run reviews, preset previews, named task presets, snapshot review workspaces,
 snapshot exports, workspace rechecks, bundle review workspaces, project checks,
 bundles, readiness,
 comparisons, refreshes and context
