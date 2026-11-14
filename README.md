@@ -5,6 +5,45 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
+Version 0.30 adds **Model Preflight Reliability** to the launcher's optional
+model-enabled prerequisite check. It validates every installed/loaded model row,
+refuses duplicate or malformed names, and reports finite refusal codes for HTTP,
+shape, limit, timeout, connection, protocol and expected cleanup failures.
+Expected cleanup errors preserve the original refusal. Every obtained response
+and the connection receive an explicit application close attempt.
+
+The provider stage constructs one loopback HTTP connection object, with a
+five-second timeout per blocking operation. It requests at most `GET /api/tags`
+then `GET /api/ps`, stopping at the first refusal. It reads at most 262,145 bytes
+per response and refuses bodies over 262,144 bytes or lists over 256 models.
+Configured models remain limited to eight unique names; names use the existing
+1-96 character ASCII model-name grammar. Extra API fields are allowed, but every
+row must be valid. Successful counts retain their earlier meaning:
+`installed_models` counts configured models confirmed installed, not the whole
+installed inventory; `loaded_approved_models` counts approved loaded models.
+
+This stage makes no inference, pull, unload or retry request. Its five seconds
+are **not a total elapsed deadline**; a slow trickle is not globally bounded by
+this change. One connection object does not imply one physical TCP connection.
+A loaded-model inventory does not attest idleness, prior-request completion,
+model quality, locality, tool support, context fit or successful coding. The
+metadata contract is narrower than those claims. Expected I/O failures become
+stable reasons without raw provider/error text; unexpected programmer errors
+still propagate after expected cleanup.
+
+All **37 focused offline unit methods passed**: 28 new preflight methods and
+nine existing launcher methods. These tests use only invented in-process
+responses and faults. Current qualification and retained regression failures are recorded in
+[validation](VALIDATION.md). No live provider check, native prerequisite run or
+inference was performed for v0.30. The existing original Java hold remains
+untouched and unqualified. A fresh, private six-turn Python repair case is
+prepared **NOT RUN**; the portable [trial plan](PYTHON-TRIAL-PLAN.md) leaves live
+checks, native prerequisites and inference for separate explicit approval.
+Private configurations, fixtures, tasks and receipts are excluded from GitHub.
+
+The following v0.29 results describe earlier observations, not a fresh full
+acceptance claim for v0.30.
+
 Version 0.29 adds **Live Run and Stop Verification**: a separate once-only QA
 harness exposes the normal browser Run and Stop controls for a fresh controlled
 child. Stop requires a durable successful Running-view response for that exact
@@ -68,8 +107,8 @@ through shutdown. This verifies startup, rendering and preservation of invented
 records, with the doctor's prerequisite test separate. It does not qualify
 resuming a worker. See [validation](VALIDATION.md) for the dated scope and limits.
 
-This is controlled process-lifecycle verification with unchanged production
-engine, admission and providers. It retains **Complete Review Workflow Verification**: the restricted
+That v0.29 process-lifecycle verification kept production engine, admission and
+providers unchanged. It retains **Complete Review Workflow Verification**: the restricted
 offline harness can inspect the completed scripted run through normal history,
 saved evidence, the explicit review-history list and selected detail. Restart
 inspection reuses the same saved artifacts without another worker or check.

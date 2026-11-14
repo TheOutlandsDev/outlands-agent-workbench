@@ -404,3 +404,38 @@ publication with the earlier private records retained. No public
 fixture, helper, code feature, dependency, rights claim or license is added.
 Earlier actual scripted qualification, failures, unknown causes, private gate
 limits, the original uncertain Java hold and UNASSIGNED licensing remain.
+
+
+## Version 0.30: model preflight reliability
+
+Prepared from the already-public Workbench source under the owner's explicit
+v0.30 instructions. This update changes the optional launcher's model metadata
+preflight, adds 28 fake-only test methods, includes those methods in the future
+acceptance suite list and updates the displayed version and documentation. The
+engine, Java client, task admission, checks and review/export flow are unchanged.
+The fresh private Python trial preparation remains NOT RUN; only its portable
+plan is included. No private helper, task, configuration, history or receipt is
+published.
+
+All 37 focused offline methods passed on 2026-11-14 UTC under guards against
+network and process operations. The same new suite failed against the old
+public launcher; the regression evidence stays private. Earlier full-native
+results remain historical. There was no live provider contact, inference,
+Java-agent trial or new native acceptance. Earlier failures, the original
+uncertain Java hold and unassigned licensing remain unchanged.
+
+API shape and standard-library behavior were checked against the primary
+[installed models](https://docs.ollama.com/api/tags),
+[loaded models](https://docs.ollama.com/api/ps) and
+[HTTP client](https://docs.python.org/3/library/http.client.html) documentation.
+They are specification references; no external implementation or example code
+was copied into this update. Names/response bounds are application policy and
+are not claims about all provider names or capacity. Five seconds is a timeout
+per blocking operation, not a total deadline or idleness proof.
+
+A bounded online matching search used only public project/file names and safe
+naming combinations. No matching implementation was identified in the returned
+results; unrelated generic results and search-expansion limits are retained in
+the private review. That search does not establish originality, ownership,
+license clearance or redistribution rights. Existing notices and unresolved
+rights remain; no license is assigned by this update.

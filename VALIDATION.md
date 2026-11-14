@@ -1,4 +1,73 @@
-# Version 0.29 validation
+# Version 0.30 validation
+
+## Model Preflight Reliability - focused offline qualification
+
+On **2026-11-14 UTC**, all **37 focused unit methods passed**: the nine existing
+launcher methods plus 28 new fake-response preflight methods. There were zero
+failures, errors or skips in the candidate run. An external Python audit hook
+was installed before product/test imports and blocked socket creation,
+connection, binding, address lookup, HTTP connect/send and process launches.
+It recorded **zero blocked events**. The new tests additionally forbid real
+socket and process APIs with mocks. Source hashes stayed unchanged during both
+runs. Private logs, attempt receipts and helpers are retained outside the kit.
+
+The old public launcher was tested first with the same 28 new methods and
+failed as expected. This is a retained regression observation, not a failed
+live provider attempt. Its failures include silently ignored malformed extra
+installed-model rows, unnormalized JSON/transport errors, missing explicit
+response cleanup and cleanup errors masking the original refusal. Multiple
+subtests and teardown assertions can fail within one method; their failure
+entries are not a count of separate model or task attempts. The candidate
+passed unchanged tests without a development retry or broader acceptance run.
+
+The cases cover successful empty/approved loaded inventories, missing selected
+models, unexpected loaded models, HTTP status failures at both endpoints,
+malformed UTF-8/JSON, duplicate JSON keys, non-finite values and deep nesting.
+They check root/list/row/name types, duplicate names, the 256-row bound, eight
+configured names, 96-character names, and exact/one-byte-over 262,144-byte
+bodies. Extra API fields remain allowed. Constructor, request, response and read
+faults include timeouts, OS failures, disconnects, protocol errors and incomplete
+reads. Response and connection cleanup faults either refuse success or preserve
+the existing primary error. Unexpected programmer errors still propagate.
+
+The fakes assert the fixed loopback host/port and timeout, only the ordered
+`GET /api/tags` and `GET /api/ps` operations, at most two requests and no retry,
+and bounded reads. Cleanup counters measure explicit application calls, not
+internal HTTP-library closes or physical TCP connections. The CLI cases use the
+real doctor control flow with fake tool versions and isolation; model-enabled
+check-only success/refusal leaves fresh or invented existing workspace state
+unchanged and performs no init or process handoff. The older foreground-launch
+method creates only a fresh temporary demo with doctor and exec mocked.
+
+The full `qa_agent.py` native acceptance runner was **not run for v0.30**. Its
+suite list now includes the new test file for future separately scoped use.
+No live provider check, inference, project check, Git/JDK executable, Bubblewrap
+trial, normal server or browser workflow ran in this qualification. The UI
+change is only the displayed version label; no new browser acceptance is
+claimed. All Python files also passed AST parsing without product execution.
+The earlier 1,214-method/full-native qualification below remains historical;
+it is not a new 1,242-method or full-native PASS for v0.30.
+
+The five-second HTTP timeout is per blocking operation, not a total elapsed
+deadline. Slow trickle responses are not globally bounded by this change. The
+installed/loaded metadata contract cannot establish provider idleness, request
+completion, tool support, context fit, quality, locality or successful coding.
+No earlier hold was read, hashed, reset or cleared. The original uncertain Java
+trial remains held and unqualified, and no Java-agent success is claimed.
+
+A separate fresh invented Python repair case was prepared offline with only
+`calculator.py` editable, `test_calculator.py` protected, the fixed `unit` check,
+six model turns and a 30-second per-request setting. Its model list is empty;
+its task, checks and inference remain **NOT RUN**. This is preparation, not a
+readiness or execution result. The public [plan](PYTHON-TRIAL-PLAN.md) requires
+separate approval for model selection/provider clearance, live prerequisite
+checks and any later inference. Actual paths, hashes and records remain private.
+
+Real records, fixtures, bundles and exports stay private. Earlier failures and
+unknown causes remain retained. Licensing stays UNASSIGNED. This update adds
+no deployment, model installation, service/access change or release.
+
+## Earlier version 0.29 validation (historical)
 
 ## Recheck reliability amendment
 
