@@ -439,3 +439,48 @@ results; unrelated generic results and search-expansion limits are retained in
 the private review. That search does not establish originality, ownership,
 license clearance or redistribution rights. Existing notices and unresolved
 rights remain; no license is assigned by this update.
+
+
+## Version 0.31: bounded preflight deadlines
+
+Prepared from the reviewed public v0.30 snapshot under the owner's explicit
+instructions for an offline-tested update and a new PR. The optional launcher
+now delegates its unchanged-scope metadata query to one owned Python worker.
+New supervisor code adds a monotonic work budget, bounded nonblocking IPC,
+strict typed output/exit gates and a separate bounded direct-child stop/reap
+allowance. The pure-query seam preserves the earlier HTTP regression coverage
+and adds first-primary notification before cleanup. The Java client, task
+engine, admission, checks, histories and review/export code remain unchanged.
+
+All 72 focused in-process fake methods passed on 2026-11-14 UTC. Separate fresh
+synthetic qualification observed one pinned old-query blocking counterexample
+and ten candidate cases using 11 actual owned Python children, all reaped.
+The candidate supervisor used shortened one/half-second budgets with fake HTTP
+objects; eight expiry cases were contained, two earlier refusals preserved and
+normal success/refusal completed. This is controlled offline process evidence,
+not real HTTP transport, model capability, production CLI startup or inference
+qualification. Full native acceptance and real-model checks were not run.
+
+The implementation uses standard-library process, pipe, selector and monotonic
+clock interfaces, checked against primary Python
+[subprocess](https://docs.python.org/3.10/library/subprocess.html),
+[selectors](https://docs.python.org/3.10/library/selectors.html) and
+[time](https://docs.python.org/3/library/time.html#time.monotonic) documentation.
+These are specification references; no external implementation/example code was
+copied into this update. Process creation and OS scheduling/reaping remain
+outside hard real-time guarantees; no hostile-code sandbox, descendant closure,
+graceful HTTP cleanup or provider-completion guarantee is added.
+
+A bounded public naming search used only the project name, non-sensitive new
+filenames and safe naming combinations. No matching implementation was
+identified in returned results; unrelated generic search expansion is recorded
+privately. That check does not establish originality, ownership, absence of
+copying or license/redistribution clearance. Existing notices, provenance limits
+and UNASSIGNED licensing remain unchanged.
+
+Only reviewed reusable source/tests and public instructions are included.
+Private helpers, fixtures, process records, event traces, inputs, real runs,
+bundles and receipts remain excluded. No old actual runtime or Java hold was
+read or changed. The original uncertain Java trial stays held and unqualified;
+the prepared Python trial remains unrun. Live provider checks, native launcher
+checks and inference still require their separate explicit authorization.

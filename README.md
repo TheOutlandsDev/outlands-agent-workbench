@@ -5,6 +5,52 @@ configured project and local model, follow the plan and checks, inspect the diff
 then review and download a patch. The agent edits a private copy; it never applies
 the patch to your project.
 
+Version 0.31 adds **Bounded Preflight Deadlines** to the optional model-enabled
+launcher check. One owned Python child runs the existing bounded metadata query;
+the parent supervises a single **ten-second work budget** across startup, both
+GETs, parsing and normal cleanup. A five-second timeout on each blocking HTTP
+operation remains inside the child. The child makes at most `GET /api/tags`
+then `GET /api/ps`; it never requests inference, download or unload and never
+retries. Scripted-only launch with no configured model still skips this worker.
+
+The parent sends at most 1,024 input bytes through a private pipe, with no model
+names in command arguments. It admits at most 4,096 output bytes and two strict
+JSON-line frames. A result alone cannot qualify success: it needs complete
+framing, EOF and a clean child exit before the deadline. Malformed worker
+output is refused without exposing raw payloads, commands or exception text.
+
+On expiry, the parent attempts to kill only its owned direct child and waits
+within one separate **one-second stop/reap budget**. It does not reset that
+allowance per operation, search for processes or signal another process group.
+A finite primary refusal reported before a cleanup stall remains the reason.
+Malformed or conflicting worker messages instead refuse as a worker protocol
+failure; an earlier frame does not override that conflict. Refusal diagnostics separately report `deadline_expired`, `forced_stop` (a kill
+attempt) and `worker_reaped`; an uncertain exit cannot produce PASS. Forced
+termination does not prove graceful HTTP cleanup or provider-side completion.
+
+The monotonic deadline begins before process creation and is checked again
+before sending model input. Process creation itself may be uninterruptible;
+operating-system scheduling, signals and reaping are not a hard real-time SLA.
+The limits bound application waits and stop attempts once the process handle is
+available. This contains the trusted direct worker; it is not a hostile-code
+sandbox or a claim that every descendant or remote operation stopped.
+
+All **72 focused fake-only unit methods passed**. Separate offline qualification
+used **11 actual owned Python children**: one retained old-query counterexample
+and ten candidate cases, all reaped. The candidate cases include blocked/slow
+reads, one shared tags-to-ps budget, cleanup stalls and a final result followed
+by a stalled exit. Their HTTP objects were synthetic, with actual transport
+forbidden. The [validation record](VALIDATION.md) states the shortened test
+budgets, preserved evidence and remaining limits. This update leaves live
+model checks and inference for separate explicit approval. Real records stay
+private and the original uncertain Java hold stays untouched and unqualified.
+The prepared Python repair case remains **NOT RUN**; its
+[portable plan](PYTHON-TRIAL-PLAN.md) remains separate from preflight testing.
+
+The following v0.30 qualification is historical. Its lack of an overall
+preflight deadline is the gap addressed by v0.31; its metadata and per-operation
+HTTP limits remain in the child.
+
 Version 0.30 adds **Model Preflight Reliability** to the launcher's optional
 model-enabled prerequisite check. It validates every installed/loaded model row,
 refuses duplicate or malformed names, and reports finite refusal codes for HTTP,

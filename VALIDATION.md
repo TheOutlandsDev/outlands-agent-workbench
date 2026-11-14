@@ -1,4 +1,120 @@
-# Version 0.30 validation
+# Version 0.31 validation
+
+## Bounded Preflight Deadlines - offline qualification
+
+On **2026-11-14 UTC**, all **72 focused fake-only unit methods passed** with
+zero failures, errors or skips: nine existing launcher methods, 28 existing
+HTTP/CLI preflight methods and 35 new supervisor/worker protocol methods. An
+external audit guard installed before product/test imports forbade socket,
+HTTP-connect/send and process operations; it recorded zero denied events. The
+new methods use in-memory children, selectors, byte channels and a fake clock.
+The earlier HTTP cases now call the explicit pure-query seam. The CLI cases
+retain real doctor control flow with prerequisite fakes and a mocked supervisor
+bridge; they perform no native doctor, worker launch or provider request.
+Existing assertions remain in place. No product/test development rerun occurred.
+
+The new methods exercise success only after complete final output, EOF and a
+strictly typed exit zero; a provisional result cannot qualify a still-running
+child. They cover just-before/exact-deadline boundaries, late process creation
+with no model input, the post-parent-cleanup deadline check, partial input writes
+and fragmented output, byte/schema/type/count bounds, malformed UTF-8/JSON,
+duplicate keys, non-finite values, partial/trailing frames, spawn/I/O failures,
+owned stop/reap limits and uncertain liveness. Primary notifications precede
+HTTP cleanup. A known earlier refusal survives a cleanup stall or unavailable
+reap evidence; malformed or conflicting messages refuse as WORKER. Unexpected
+child exceptions emit finite reasons without raw exception text.
+
+A separate fresh offline qualification used **11 actual owned Python children**.
+One child imported the pinned old public v0.30 query with a fake response whose
+read sleeps. The query remained blocked at the outer observer's one-second
+window after entering that read. The observer stopped and reaped that exact
+child. This retained counterexample is a controlled fake-call observation,
+not an old live-provider failure or a reopened real task.
+
+Ten further fresh children exercised the new supervisor and `worker_main` with
+invented model input and fake HTTP objects. A narrowly checked spawn adapter
+redirected only the expected production worker command to the private synthetic
+child. The actual parent selector, pipes, monotonic clock, signal and wait paths
+ran. Each candidate used a **one-second work budget and a separate half-second
+stop/reap allowance**, rather than waiting for the production ten/one defaults.
+The defaults and exact budget rules are also asserted by the fake unit suite.
+
+- Normal success completed with exit zero and no kill. A missing installed-model
+  refusal completed with exit two, the original reason and no kill.
+- Eight expiry cases covered a blocked read, slow progress inside a read, a
+  shared tags-to-ps budget, response cleanup, connection cleanup, both cleanup
+  stalls with an earlier primary refusal, and a final PASS frame followed by a
+  stalled child exit. Each returned in approximately **1.01 seconds** in this
+  one observation and required exactly one owned-child kill; exit minus nine
+  was observed and reaped. This is not a timing SLA for another host or provider.
+- Both earlier primary refusals stayed intact through forced cleanup stops.
+  Diagnostics separately recorded deadline expiry, a kill attempt and observed
+  reap. The shared-budget case reached the second GET before expiry; its timer
+  was not reset per endpoint. No additional GET or worker retry occurred.
+
+All 11 child handles were reaped, all parent streams closed, and the harness
+recorded no cleanup error. Parent and child guards recorded zero denied events.
+The parent admitted only each exact fixed child command, executable, cwd and
+clean environment, with a pre-spawn one-attempt fence. The child installed its
+socket/HTTP/process denial before product imports. Its HTTP connection and
+response objects were entirely synthetic. Sleeping inside a fake read is not
+an actual HTTP packet, socket, server or slow-wire trial. No real provider,
+model, task, project check, JDK, Git executable or Bubblewrap was invoked.
+
+Guard review preceded the in-process unit run; scoped product/test/helper
+static clearance preceded the owned-child qualification. Source hashes stayed
+unchanged during each run, and all 134 old public baseline file hashes remained
+unchanged through the counterexample. Product code, tests and helpers have not
+changed since qualification. Later documentation updates describe those saved
+results. Actual helper files, model input, event traces, process observations,
+logs and receipts remain owner-private outside the public source tree. The
+normal production worker script invocation, complete native acceptance runner,
+server/browser workflow and live HTTP exchange remain untested for v0.31.
+
+## Deadline contract and limits
+
+Production preflight has one ten-second monotonic work budget starting before
+process creation, including both GETs, parsing and normal cleanup. The parent
+checks expiry immediately after obtaining the child handle and sends no model
+input if creation was late. It supervises nonblocking pipes and admits at most
+1,024 input bytes, 4,096 total output bytes and two typed JSON-line frames. PASS
+requires a valid final result, EOF, exit zero and a final deadline check after
+parent cleanup. The existing HTTP byte/name/row limits and per-operation timeout
+remain inside the child. These metadata bounds do not establish model capability
+or provider idleness, and apply neither to inference requests nor task budgets.
+
+The stop path has one separate one-second budget for a direct-child kill attempt
+and reap wait. No process discovery, group kill, automatic worker retry, model
+pull or unload is added. Refusal diagnostics are the three booleans
+`deadline_expired`, `forced_stop` and `worker_reaped`; forced_stop denotes an
+attempt, not proof that a signal took effect. An unavailable reap remains visibly
+uncertain and cannot qualify success. A forced stop does not prove that every
+HTTP close finished, every descendant exited or any provider operation ended.
+The source preserves a valid primary reason through a cleanup stall, but
+rejects contradictory or malformed IPC rather than trusting an earlier frame.
+
+Process creation can be uninterruptible. OS scheduling, system calls, signal
+delivery and reaping are not hard real-time guarantees. The budgets bound the
+application's waits and stop attempts once its owned handle is available; they
+do not establish an absolute ten/eleven-second end-to-end wall-time SLA under
+arbitrary OS failure. The owned worker is trusted source, not a hostile-code
+security sandbox. Uncertainty stays a refusal without claiming process closure.
+
+The full `qa_agent.py` runner was not run for v0.31. Its explicit suite list now
+includes the new file for future separately scoped acceptance. Earlier full-suite
+and native results below remain historical; no new 1,277-method, full-native,
+Java-agent, live-model or GitHub CI PASS is claimed. No service, credential,
+access, release, deployment or license change occurred. The only UI change is
+the displayed version label; no new browser acceptance is claimed.
+
+Real records stay private. No old actual runtime or original uncertain Java hold
+was read, hashed, reset, reconciled or retried in this work. That Java trial
+remains held and unqualified. The earlier prepared Python repair case was not
+read or run; its public [plan](PYTHON-TRIAL-PLAN.md) still requires separate
+model selection, provider clearance, live/native checks and inference approval.
+Earlier failures and unknown causes remain retained; licensing stays UNASSIGNED.
+
+## Earlier version 0.30 validation (historical)
 
 ## Model Preflight Reliability - focused offline qualification
 
