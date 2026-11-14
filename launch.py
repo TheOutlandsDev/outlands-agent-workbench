@@ -16,6 +16,12 @@ from java_check import validate_jdk
 from workbench import HERE, init_demo, load_config
 
 
+# These are application limits, not claims about provider naming or capacity.
+PROVIDER_MAX_BYTES = 262144
+PROVIDER_MAX_MODELS = 256
+_PROVIDER_IO_ERRORS = (OSError, http.client.HTTPException, ValueError)
+
+
 def version(command):
     result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True,
                             env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, timeout=5, check=False)
@@ -25,25 +31,77 @@ def version(command):
     return lines[0]
 
 
-def provider(models):
-    connection = http.client.HTTPConnection("127.0.0.1", 11434, timeout=5)
+def _provider_names(raw):
+    require(type(raw) is bytes, "PROVIDER_PREFLIGHT_SHAPE")
+    require(len(raw) <= PROVIDER_MAX_BYTES, "PROVIDER_PREFLIGHT_LIMIT")
     try:
-        connection.request("GET", "/api/tags")
+        value = parse(raw)
+    except (Refused, ValueError, UnicodeError, RecursionError):
+        raise Refused("PROVIDER_PREFLIGHT_SHAPE") from None
+    require(type(value) is dict and type(value.get("models")) is list, "PROVIDER_PREFLIGHT_SHAPE")
+    rows = value["models"]
+    require(len(rows) <= PROVIDER_MAX_MODELS, "PROVIDER_PREFLIGHT_LIMIT")
+    names = set()
+    for row in rows:
+        require(type(row) is dict and type(row.get("name")) is str
+                and re.fullmatch(r"[A-Za-z0-9_.:/-]{1,96}", row["name"]) is not None,
+                "PROVIDER_PREFLIGHT_SHAPE")
+        require(row["name"] not in names, "PROVIDER_PREFLIGHT_SHAPE")
+        names.add(row["name"])
+    return names
+
+
+def _provider_models(connection, path, configured):
+    require(path in {"/api/tags", "/api/ps"}, "PROVIDER_PREFLIGHT_SHAPE")
+    response, failed = None, True
+    try:
+        connection.request("GET", path)
         response = connection.getresponse()
-        require(response.status == 200, "PROVIDER_PREFLIGHT_HTTP")
-        installed = parse(response.read(262145))
-        require(isinstance(installed, dict) and isinstance(installed.get("models"), list), "PROVIDER_PREFLIGHT_SHAPE")
-        names = {row.get("name") for row in installed["models"] if isinstance(row, dict) and isinstance(row.get("name"), str)}
-        require(set(models) <= names, "MODEL_NOT_INSTALLED")
-        connection.request("GET", "/api/ps")
-        response = connection.getresponse()
-        require(response.status == 200, "PROVIDER_PREFLIGHT_HTTP")
-        loaded = parse(response.read(262145))
-        require(isinstance(loaded, dict) and isinstance(loaded.get("models"), list), "PROVIDER_PREFLIGHT_SHAPE")
-        require(all(isinstance(row, dict) and row.get("name") in models for row in loaded["models"]), "OTHER_MODEL_LOADED")
-        return {"installed_models": len(models), "loaded_approved_models": len(loaded["models"]), "inference_requests": 0}
+        require(type(response.status) is int and response.status == 200, "PROVIDER_PREFLIGHT_HTTP")
+        names = _provider_names(response.read(PROVIDER_MAX_BYTES + 1))
+        if path == "/api/tags":
+            require(configured <= names, "MODEL_NOT_INSTALLED")
+        else:
+            require(names <= configured, "OTHER_MODEL_LOADED")
+        failed = False
+        return len(names)
     finally:
-        connection.close()
+        if response is not None:
+            try:
+                response.close()
+            except _PROVIDER_IO_ERRORS:
+                if not failed:
+                    raise Refused("PROVIDER_PREFLIGHT_CLEANUP") from None
+
+
+def provider(models):
+    require(type(models) is list and 1 <= len(models) <= 8, "PROVIDER_PREFLIGHT_SHAPE")
+    require(all(type(name) is str and re.fullmatch(r"[A-Za-z0-9_.:/-]{1,96}", name) is not None
+                for name in models), "PROVIDER_PREFLIGHT_SHAPE")
+    configured = frozenset(models)
+    require(len(configured) == len(models), "PROVIDER_PREFLIGHT_SHAPE")
+    connection, failed = None, True
+    try:
+        try:
+            # The timeout applies to blocking operations, not total elapsed time.
+            connection = http.client.HTTPConnection("127.0.0.1", 11434, timeout=5)
+            _provider_models(connection, "/api/tags", configured)
+            loaded = _provider_models(connection, "/api/ps", configured)
+        except TimeoutError:
+            raise Refused("PROVIDER_PREFLIGHT_TIMEOUT") from None
+        except (http.client.HTTPException, ValueError):
+            raise Refused("PROVIDER_PREFLIGHT_PROTOCOL") from None
+        except OSError:
+            raise Refused("PROVIDER_PREFLIGHT_CONNECTION") from None
+        failed = False
+        return {"installed_models": len(configured), "loaded_approved_models": loaded, "inference_requests": 0}
+    finally:
+        if connection is not None:
+            try:
+                connection.close()
+            except _PROVIDER_IO_ERRORS:
+                if not failed:
+                    raise Refused("PROVIDER_PREFLIGHT_CLEANUP") from None
 
 
 def doctor(models, jdk_home=None):
