@@ -13,6 +13,7 @@ from pathlib import Path
 from agent import Refused, parse, require
 from isolation import check as isolated_check
 from java_check import validate_jdk
+from preflight_worker import CORE_REASONS, supervise
 from workbench import HERE, init_demo, load_config
 
 
@@ -51,7 +52,17 @@ def _provider_names(raw):
     return names
 
 
-def _provider_models(connection, path, configured):
+def _provider_reason(error):
+    if isinstance(error, Refused):
+        return str(error) if str(error) in CORE_REASONS else "PROVIDER_PREFLIGHT_PROTOCOL"
+    if isinstance(error, TimeoutError):
+        return "PROVIDER_PREFLIGHT_TIMEOUT"
+    if isinstance(error, (http.client.HTTPException, ValueError)):
+        return "PROVIDER_PREFLIGHT_PROTOCOL"
+    return "PROVIDER_PREFLIGHT_CONNECTION"
+
+
+def _provider_models(connection, path, configured, notify):
     require(path in {"/api/tags", "/api/ps"}, "PROVIDER_PREFLIGHT_SHAPE")
     response, failed = None, True
     try:
@@ -65,34 +76,54 @@ def _provider_models(connection, path, configured):
             require(names <= configured, "OTHER_MODEL_LOADED")
         failed = False
         return len(names)
+    except (Refused, *_PROVIDER_IO_ERRORS) as error:
+        reason = _provider_reason(error)
+        notify(reason)
+        raise Refused(reason) from None
     finally:
         if response is not None:
             try:
                 response.close()
             except _PROVIDER_IO_ERRORS:
                 if not failed:
+                    notify("PROVIDER_PREFLIGHT_CLEANUP")
                     raise Refused("PROVIDER_PREFLIGHT_CLEANUP") from None
 
 
-def provider(models):
+def _provider_configured(models):
     require(type(models) is list and 1 <= len(models) <= 8, "PROVIDER_PREFLIGHT_SHAPE")
     require(all(type(name) is str and re.fullmatch(r"[A-Za-z0-9_.:/-]{1,96}", name) is not None
                 for name in models), "PROVIDER_PREFLIGHT_SHAPE")
     configured = frozenset(models)
     require(len(configured) == len(models), "PROVIDER_PREFLIGHT_SHAPE")
+    return configured
+
+
+def _provider_query(models, notify_primary=None):
+    """Pure query seam; the public provider() supplies the owned-process bound."""
+    configured = _provider_configured(models)
+    notified = False
+    def notify(reason):
+        nonlocal notified
+        if notified or notify_primary is None:
+            return
+        notified = True
+        try:
+            notify_primary(reason)
+        except (OSError, ValueError):
+            # A broken parent channel must not replace the original failure.
+            pass
     connection, failed = None, True
     try:
         try:
-            # The timeout applies to blocking operations, not total elapsed time.
+            # Socket operations retain their own timeout inside the worker.
             connection = http.client.HTTPConnection("127.0.0.1", 11434, timeout=5)
-            _provider_models(connection, "/api/tags", configured)
-            loaded = _provider_models(connection, "/api/ps", configured)
-        except TimeoutError:
-            raise Refused("PROVIDER_PREFLIGHT_TIMEOUT") from None
-        except (http.client.HTTPException, ValueError):
-            raise Refused("PROVIDER_PREFLIGHT_PROTOCOL") from None
-        except OSError:
-            raise Refused("PROVIDER_PREFLIGHT_CONNECTION") from None
+            _provider_models(connection, "/api/tags", configured, notify)
+            loaded = _provider_models(connection, "/api/ps", configured, notify)
+        except (Refused, *_PROVIDER_IO_ERRORS) as error:
+            reason = _provider_reason(error)
+            notify(reason)
+            raise Refused(reason) from None
         failed = False
         return {"installed_models": len(configured), "loaded_approved_models": loaded, "inference_requests": 0}
     finally:
@@ -101,7 +132,13 @@ def provider(models):
                 connection.close()
             except _PROVIDER_IO_ERRORS:
                 if not failed:
+                    notify("PROVIDER_PREFLIGHT_CLEANUP")
                     raise Refused("PROVIDER_PREFLIGHT_CLEANUP") from None
+
+
+def provider(models):
+    configured = _provider_configured(models)
+    return supervise(sorted(configured))
 
 
 def doctor(models, jdk_home=None):
@@ -171,5 +208,10 @@ if __name__ == "__main__":
     try:
         main()
     except (Refused, OSError, ValueError, subprocess.SubprocessError, http.client.HTTPException) as error:
-        print(json.dumps({"status": "REFUSED", "reason": str(error) if isinstance(error, Refused) else "PREREQUISITE_OR_STARTUP_FAILED"}))
+        report = {"status": "REFUSED", "reason": str(error) if isinstance(error, Refused) else "PREREQUISITE_OR_STARTUP_FAILED"}
+        diagnostics = getattr(error, "preflight_diagnostics", None)
+        if (type(diagnostics) is dict and set(diagnostics) == {"deadline_expired", "forced_stop", "worker_reaped"}
+                and all(type(value) is bool for value in diagnostics.values())):
+            report["preflight_diagnostics"] = diagnostics
+        print(json.dumps(report))
         raise SystemExit(2) from None

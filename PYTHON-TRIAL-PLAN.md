@@ -1,8 +1,9 @@
 # Prepared Python repair trial - NOT RUN
 
 This is a portable plan for a later, separately approved model trial. Version
-0.30 qualifies fake-only preflight behavior; it does not authorize a live
-provider check or inference. No model is selected for the prepared private case.
+0.30 qualified fake-only metadata behavior. Version 0.31 adds a supervised
+preflight deadline; its offline evidence does not authorize a live provider
+check or inference. No model is selected for the prepared private case.
 Real configurations, paths, tasks, checks, histories and receipts stay private.
 
 Use the existing invented arithmetic example, not a real project. The only
@@ -35,8 +36,12 @@ trial. The original uncertain Java trial stays held and unqualified.
 After that separate approval, configure only the selected model and make one
 model-enabled `launch.py --check-only` observation on the fresh workspace. It
 also invokes the launcher's native prerequisite checks, so permission must cover
-those checks as well. Its provider stage uses only `GET /api/tags` and
-`GET /api/ps`, with no retry, download, unload or inference. A scripted-only
+those checks as well. Its provider stage uses one owned metadata worker with a
+ten-second work budget and separate one-second stop/reap allowance. Process
+creation and operating-system scheduling are not a hard real-time guarantee;
+an uncertain worker exit remains a refusal. It uses only `GET /api/tags` and
+`GET /api/ps`, with no retry, download, unload or inference. These bounds apply
+to metadata preflight, not to the later inference request budget. A scripted-only
 doctor PASS with an empty model list does not qualify model readiness.
 
 The preflight can establish only the bounded metadata contract documented in

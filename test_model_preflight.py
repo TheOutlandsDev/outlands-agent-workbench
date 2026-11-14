@@ -1,7 +1,8 @@
 """Fake-only model preflight contracts; no provider, check or process is run.
 
-The CLI cases call main() in process with fixed-tool/isolated-check fakes. They
-do not exercise a native CLI process, a real model, a server or a global timeout.
+The HTTP cases exercise the pure query, not its process supervisor. CLI cases
+call main() with fixed-tool/isolated-check fakes and an in-process query bridge.
+They do not exercise a native CLI process, a real model or a server.
 Cleanup counters describe application calls, not HTTP library internal closes.
 """
 
@@ -22,6 +23,7 @@ import launch
 from agent import Refused
 
 
+QUERY = getattr(launch, "_provider_query", launch.provider)
 MODEL = "invented-model:unit"
 OTHER = "invented-other:unit"
 LIMIT = 262144
@@ -147,7 +149,7 @@ class OfflineCase(unittest.TestCase):
 
     def refuses(self, code, models=None):
         with self.assertRaises(Refused) as caught:
-            launch.provider([MODEL] if models is None else models)
+            QUERY([MODEL] if models is None else models)
         self.assertEqual(str(caught.exception), code)
 
 
@@ -155,7 +157,7 @@ class ModelPreflightTests(OfflineCase):
     def test_success_counts_empty_and_approved_loaded_models(self):
         for approved, loaded in (([MODEL], []), ([MODEL], [MODEL]), ([MODEL, OTHER], [OTHER, MODEL])):
             with self.subTest(loaded=loaded), self.transport(tags=payload(approved + ["invented-installed-extra"]), ps=payload(loaded)) as (connection, _):
-                self.assertEqual(launch.provider(approved), {
+                self.assertEqual(QUERY(approved), {
                     "installed_models": len(approved), "loaded_approved_models": len(loaded), "inference_requests": 0,
                 })
                 self.assertEqual(connection.requests, [("GET", "/api/tags"), ("GET", "/api/ps")])
@@ -165,7 +167,7 @@ class ModelPreflightTests(OfflineCase):
     def test_extra_api_fields_are_accepted(self):
         raw = json.dumps({"models": [{"name": MODEL, "size": 7, "details": {"family": "invented"}}], "next": None}).encode()
         with self.transport(tags=raw, ps=raw):
-            self.assertEqual(launch.provider([MODEL])["loaded_approved_models"], 1)
+            self.assertEqual(QUERY([MODEL])["loaded_approved_models"], 1)
 
     def test_missing_installed_model_stops_before_loaded_query(self):
         with self.transport(tags=payload([OTHER])) as (connection, _):
@@ -227,7 +229,7 @@ class ModelPreflightTests(OfflineCase):
     def test_api_row_limit_is_bounded_before_membership(self):
         maximum = [MODEL] + ["invented-%03d" % n for n in range(255)]
         with self.transport(tags=payload(maximum)):
-            self.assertEqual(launch.provider([MODEL])["installed_models"], 1)
+            self.assertEqual(QUERY([MODEL])["installed_models"], 1)
         for endpoint in ("/api/tags", "/api/ps"):
             raw = payload(maximum + ["invented-over-limit"])
             with self.subTest(endpoint=endpoint), self.transport(**({"tags": raw} if endpoint == "/api/tags" else {"ps": raw})):
@@ -242,7 +244,7 @@ class ModelPreflightTests(OfflineCase):
                     if extra:
                         self.refuses(PREFIX + "LIMIT")
                     else:
-                        self.assertEqual(launch.provider([MODEL])["inference_requests"], 0)
+                        self.assertEqual(QUERY([MODEL])["inference_requests"], 0)
 
     def test_configured_models_are_validated_before_connection(self):
         invalid = (None, MODEL, (MODEL,), [], [MODEL, MODEL], [None], [True], [17],
@@ -250,14 +252,14 @@ class ModelPreflightTests(OfflineCase):
         for index, models in enumerate(invalid):
             with self.subTest(case=index), self.transport() as (_, factory):
                 with self.assertRaises(Refused) as caught:
-                    launch.provider(models)
+                    QUERY(models)
                 self.assertEqual(str(caught.exception), PREFIX + "SHAPE")
                 factory.assert_not_called()
 
     def test_configured_count_and_name_length_boundaries(self):
         names = ["x" * 96] + ["invented-%d" % n for n in range(7)]
         with self.transport(tags=payload(names), ps=payload(names)):
-            self.assertEqual(launch.provider(names), {"installed_models": 8, "loaded_approved_models": 8, "inference_requests": 0})
+            self.assertEqual(QUERY(names), {"installed_models": 8, "loaded_approved_models": 8, "inference_requests": 0})
 
     def _fault_at_stages(self, make_error, code):
         stages = [("constructor", None)] + [(stage, endpoint) for endpoint in ("/api/tags", "/api/ps") for stage in ("request", "getresponse", "read")]
@@ -329,7 +331,7 @@ class ModelPreflightTests(OfflineCase):
                 options = {"constructor_error": error} if stage == "constructor" else {"faults": faults}
                 with self.subTest(stage=stage, kind=type(error).__name__), self.transport(**options):
                     with self.assertRaises(type(error)) as caught:
-                        launch.provider([MODEL])
+                        QUERY([MODEL])
                     self.assertIs(caught.exception, error)
 
 
@@ -375,7 +377,8 @@ def existing_workspace(parent, models):
 class ModelPreflightCliTests(OfflineCase):
     @contextmanager
     def doctor_fakes(self):
-        with patch("launch.version", return_value="git version 2.34.1") as version, \
+        with patch("launch.supervise", side_effect=QUERY, create=True), \
+                patch("launch.version", return_value="git version 2.34.1") as version, \
                 patch("launch.isolated_check", return_value=ISOLATION_PASS) as isolated, \
                 patch("launch.validate_jdk", side_effect=AssertionError("no JDK in this fixture")) as jdk, \
                 patch("launch.init_demo", side_effect=AssertionError("check-only must not initialize")) as initialize, \

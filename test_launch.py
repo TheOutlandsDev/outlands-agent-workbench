@@ -8,9 +8,11 @@ from unittest.mock import Mock, patch
 
 from agent import Refused
 from launch import doctor, main, provider
+import launch
 
 
 PASS = {"exit_code": 0, "tests_ran": 1, "timed_out": False, "output_limited": False, "infrastructure_error": False}
+QUERY = getattr(launch, "_provider_query", provider)
 
 
 class LaunchTests(unittest.TestCase):
@@ -49,7 +51,7 @@ class LaunchTests(unittest.TestCase):
         ps.read.return_value = b'{"models":[]}'
         connection.getresponse.side_effect = [tag, ps]
         with patch("launch.http.client.HTTPConnection", return_value=connection):
-            self.assertEqual(provider(["fictional-model"])["inference_requests"], 0)
+            self.assertEqual(QUERY(["fictional-model"])["inference_requests"], 0)
         self.assertEqual([c.args for c in connection.request.call_args_list], [("GET", "/api/tags"), ("GET", "/api/ps")])
 
     def test_missing_model_refused_without_download(self):
@@ -57,7 +59,7 @@ class LaunchTests(unittest.TestCase):
         response.read.return_value = b'{"models":[]}'
         connection.getresponse.return_value = response
         with patch("launch.http.client.HTTPConnection", return_value=connection), self.assertRaisesRegex(Refused, "MODEL_NOT_INSTALLED"):
-            provider(["fictional-model"])
+            QUERY(["fictional-model"])
         self.assertEqual(connection.request.call_count, 1)
 
     @patch("launch.doctor", return_value={"status": "PASS"})
